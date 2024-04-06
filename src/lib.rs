@@ -23,7 +23,7 @@ impl IntoPy<PyObject> for RustyCelType {
             RustyCelType(Value::UInt(u64)) => u64.into_py(py),
             RustyCelType(Value::Float(f)) => f.into_py(py),
             RustyCelType(Value::Timestamp(ts)) => ts.into_py(py),
-            RustyCelType(Value::String(arcStr)) => arcStr.as_ref().into_py(py),
+            RustyCelType(Value::String(s)) => s.as_ref().into_py(py),
             RustyCelType(Value::List(val)) => {
                 let list = val
                     .as_ref()
@@ -45,11 +45,10 @@ impl IntoPy<PyObject> for RustyCelType {
                 val.map.as_ref().into_iter().for_each(|(k, v)| {
                     // Key is an enum with String, Uint, Int and Bool variants. Value is any RustyCelType
                     let key = match k {
-                        Key::String(arcStr) => arcStr.as_ref().into_py(py),
+                        Key::String(s) => s.as_ref().into_py(py),
                         Key::Uint(u64) => u64.into_py(py),
                         Key::Int(i64) => i64.into_py(py),
                         Key::Bool(b) => b.into_py(py),
-                        _ => panic!("Invalid key type in Map"),
                     };
                     let value = RustyCelType(v.clone()).into_py(py);
                     python_dict
@@ -71,7 +70,7 @@ struct RustyPyType<'a>(&'a PyAny);
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CelError {
-    ConversionError(String)
+    ConversionError(String),
 }
 
 impl fmt::Display for CelError {
@@ -99,7 +98,7 @@ impl TryIntoValue for RustyPyType<'_> {
 
                 // TODO Deal with container types (List, Dict etc)
 
-                    // } else if let Ok(value) = pyobject.extract::<PyList>() {
+                // } else if let Ok(value) = pyobject.extract::<PyList>() {
                 //     let list = value
                 //         .iter()
                 //         .map(|item| RustyPyType((*item)).try_into_value().expect("Failed to convert PyList to Value"))
@@ -114,12 +113,13 @@ impl TryIntoValue for RustyPyType<'_> {
                 //     }
                 //     Ok(Value::Map(map.into()))
                 } else {
-                    Err(CelError::ConversionError("Failed to convert PyAny to Value".to_string()))
+                    Err(CelError::ConversionError(
+                        "Failed to convert PyAny to Value".to_string(),
+                    ))
                 }
             }
         };
         val
-
     }
 }
 
@@ -152,7 +152,6 @@ fn evaluate(src: String, context: Option<&PyDict>) -> PyResult<RustyCelType> {
                     let key = key.extract::<String>().unwrap();
                     // Each value is of type PyAny, we need to try to extract into a Value
                     // and then add it to the CEL context
-
 
                     let wrapped_value = RustyPyType(value);
                     match wrapped_value.try_into_value() {
