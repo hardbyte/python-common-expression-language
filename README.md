@@ -1,0 +1,43 @@
+
+# Common Expression Language (CEL)
+
+The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, 
+speed, and safety. CEL is primarily used for evaluating expressions in a variety of applications,
+such as policy evaluation, state machine transitions, and graph traversals.
+
+This Python package wraps the Rust implementation [cel-interpreter](https://crates.io/crates/cel-interpreter).
+
+Basic usage:
+
+```python
+from cel import evaluate
+expression = "age > 21"
+result = evaluate(expression, {"age": 18})
+print(result)  # False
+```
+
+
+## Command line interface
+
+The package also provides a command line interface for evaluating CEL expressions:
+
+```bash
+$ python -m cel '1 + 2'
+3
+```
+
+
+## Future work
+
+Ability to add Python functions to the Context object:
+
+```python
+from cel import evaluate, Context
+
+def is_adult(age):
+    return age > 21
+
+context = Context()
+context.add_function("is_adult", is_adult)
+print(evaluate("is_adult(age)", {"age": 18}, context))  # False
+```
