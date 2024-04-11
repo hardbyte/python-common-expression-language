@@ -16,18 +16,21 @@ result = evaluate(expression, {"age": 18})
 print(result)  # False
 ```
 
+Simply pass the CEL expression and a dictionary of context to the `evaluate` function. The function
+returns the result of the expression evaluation converted to Python primitive types.
 
-## Command line interface
+## Future work
 
-The package also provides a command line interface for evaluating CEL expressions:
+### Command line interface
+
+The package (plans to) also provides a command line interface for evaluating CEL expressions:
 
 ```bash
 $ python -m cel '1 + 2'
 3
 ```
 
-
-## Future work
+### Custom Python Functions
 
 Ability to add Python functions to the Context object:
 

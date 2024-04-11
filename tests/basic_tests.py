@@ -30,6 +30,16 @@ def test_return_null():
 def test_timestamp():
     assert cel.evaluate("timestamp('1996-12-19T16:39:57-08:00')") == datetime.datetime(1996, 12, 19, 16, 39, 57, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=57600)))
 
+def test_duration():
+    assert cel.evaluate("duration('24h')") == datetime.timedelta(hours=24)
+
+
+def test_timestamp_context():
+    now = datetime.datetime.now()
+    assert cel.evaluate("now", {'now': now}) == now
+
+def test_size():
+    assert cel.evaluate("size([1, 2, 3])") == 3
 
 def test_basic_expressions_evaluate(valid_simple_expression):
     result = cel.evaluate(valid_simple_expression)

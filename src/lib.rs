@@ -3,11 +3,13 @@ use cel_interpreter::{Context, Program, Value};
 use log::debug;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyTuple};
+use pyo3::types::{PyDateTime, PyDelta, PyDeltaAccess, PyDict, PyList, PyTuple};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
+use pyo3::chrono;
+use pyo3::ffi::PyDateTime_Delta;
 
 #[derive(Debug)]
 struct RustyCelType(Value);
@@ -94,6 +96,11 @@ impl TryIntoValue for RustyPyType<'_> {
                     Ok(Value::Float(value))
                 } else if let Ok(value) = pyobject.extract::<bool>() {
                     Ok(Value::Bool(value))
+                // TODO: Implement these conversions
+                    // } else if let Ok(value) = pyobject.downcast::<PyDateTime>() {
+                //     Ok(Value::Timestamp(value.into()))
+                // } else if let Ok(value) = pyobject.downcast::<PyDelta>() {
+                //     Ok(Value::Duration(value.into()))
                 } else if let Ok(value) = pyobject.extract::<String>() {
                     Ok(Value::String(value.into()))
                 } else if let Ok(value) = pyobject.downcast::<PyList>() {
@@ -172,7 +179,8 @@ fn evaluate(src: String, context: Option<&PyDict>) -> PyResult<RustyCelType> {
         Ok(program) => {
             let mut environment = Context::default();
 
-            environment.add_function("add", |a: i64, b: i64| a + b);
+            // Custom functions can be added to the environment
+            //environment.add_function("add", |a: i64, b: i64| a + b);
 
             // Add any variables from the passed in Dict context
             if let Some(context) = context {
