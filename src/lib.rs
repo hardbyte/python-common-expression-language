@@ -3,10 +3,11 @@ use cel_interpreter::{Context, Program, Value};
 use log::debug;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PyTuple};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
+use std::sync::Arc;
 
 #[derive(Debug)]
 struct RustyCelType(Value);
@@ -80,7 +81,7 @@ impl fmt::Display for CelError {
 }
 impl Error for CelError {}
 
-/// We can't implement TryIntoValue for PyAny, so we implement for our wrapper type
+/// We can't implement TryIntoValue for PyAny, so we implement for our wrapper RustyPyType
 impl TryIntoValue for RustyPyType<'_> {
     type Error = CelError;
 
@@ -95,23 +96,49 @@ impl TryIntoValue for RustyPyType<'_> {
                     Ok(Value::Bool(value))
                 } else if let Ok(value) = pyobject.extract::<String>() {
                     Ok(Value::String(value.into()))
+                } else if let Ok(value) = pyobject.downcast::<PyList>() {
+                        let list = value
+                            .iter()
+                            .map(|item| RustyPyType(item).try_into_value())
+                            .collect::<Result<Vec<Value>, Self::Error>>();
+                        list.map(|v| Value::List(Arc::new(v)))
+                } else if let Ok(value) = pyobject.downcast::<PyTuple>() {
+                    let list = value
+                        .iter()
+                        .map(|item| RustyPyType(item).try_into_value())
+                        .collect::<Result<Vec<Value>, Self::Error>>();
+                    list.map(|v| Value::List(Arc::new(v)))
+                } else if let Ok(value) = pyobject.downcast::<PyDict>() {
+                    let mut map: HashMap<Key, Value> = HashMap::new();
+                    for (key, value) in value.into_iter() {
+                        let key = if let Ok(k) = key.extract::<i64>() {
+                            Key::Int(k)
+                        } else if let Ok(k) = key.extract::<u64>() {
+                            Key::Uint(k)
+                        } else if let Ok(k) = key.extract::<bool>() {
+                            Key::Bool(k)
+                        } else if let Ok(k) = key.extract::<String>() {
+                            Key::String(k.into())
+                        } else {
+                            return Err(CelError::ConversionError(
+                                "Failed to convert PyDict key to Key".to_string(),
+                            ));
+                        };
+                        if let Ok(dict_value) = RustyPyType(value).try_into_value() {
+                            map.insert(
+                                key,
+                                dict_value,
+                            );
+                        } else {
+                            return Err(CelError::ConversionError(
+                                "Failed to convert PyDict value to Value".to_string(),
+                            ));
 
-                // TODO Deal with container types (List, Dict etc)
-
-                // } else if let Ok(value) = pyobject.extract::<PyList>() {
-                //     let list = value
-                //         .iter()
-                //         .map(|item| RustyPyType((*item)).try_into_value().expect("Failed to convert PyList to Value"))
-                //         .collect::<Vec<Value>>();
-                //     Ok(Value::List(list.into()))
-                // } else if let Ok(value) = pyobject.extract::<PyDict>() {
-                //     let mut map:HashMap<Key, Value> = HashMap::new();
-                //     for (key, value) in value.into_iter() {
-                //         let key = key.extract::<String>()?;
-                //
-                //         map.insert(Key::String(key.into()), RustyPyType(*value).try_into_value().expect("Failed to convert PyDict to Value"));
-                //     }
-                //     Ok(Value::Map(map.into()))
+                        }
+                    }
+                    Ok(Value::Map(map.into()))
+                } else if let Ok(value) = pyobject.extract::<Vec<u8>>() {
+                    Ok(Value::Bytes(value.into()))
                 } else {
                     Err(CelError::ConversionError(
                         "Failed to convert PyAny to Value".to_string(),
@@ -135,8 +162,8 @@ fn evaluate(src: String, context: Option<&PyDict>) -> PyResult<RustyCelType> {
     // Handle the result of the compilation
     match program {
         Err(compile_error) => {
-            println!("An error occurred during compilation");
-            println!("compile_error: {:?}", compile_error);
+            debug!("An error occurred during compilation");
+            debug!("compile_error: {:?}", compile_error);
             // compile_error
             //     .into_iter()
             //     .for_each(|e| println!("Parse error: {:?}", e));
@@ -144,11 +171,13 @@ fn evaluate(src: String, context: Option<&PyDict>) -> PyResult<RustyCelType> {
         }
         Ok(program) => {
             let mut environment = Context::default();
+
             environment.add_function("add", |a: i64, b: i64| a + b);
 
             // Add any variables from the passed in Dict context
             if let Some(context) = context {
                 for (key, value) in context {
+                    debug!("Adding context '{:?}'", key);
                     let key = key.extract::<String>().unwrap();
                     // Each value is of type PyAny, we need to try to extract into a Value
                     // and then add it to the CEL context
@@ -156,35 +185,19 @@ fn evaluate(src: String, context: Option<&PyDict>) -> PyResult<RustyCelType> {
                     let wrapped_value = RustyPyType(value);
                     match wrapped_value.try_into_value() {
                         Ok(value) => {
+                            debug!("Converted value: {:?}", value);
                             environment
                                 .add_variable(key, value)
                                 .expect("Failed to add variable to context");
                         }
                         Err(error) => {
-                            println!("An error occurred during conversion");
-                            println!("Conversion error: {:?}", error);
+                            debug!("An error occurred during context conversion");
+                            debug!("Conversion error: {:?}", error);
+                            debug!("Key: {:?}", key);
+
                             return Err(PyValueError::new_err("Conversion Error"));
                         }
                     }
-
-                    // This direct way is a bit hacky, need to find a better way to do this with traits
-                    // if let Ok(value) = value.extract::<i64>() {
-                    //     environment
-                    //         .add_variable(key, Value::Int(value))
-                    //         .expect("Failed to add variable to context");
-                    // } else if let Ok(value) = value.extract::<f64>() {
-                    //     environment
-                    //         .add_variable(key, value)
-                    //         .expect("Failed to add variable to context");
-                    // } else if let Ok(value) = value.extract::<bool>() {
-                    //     environment
-                    //         .add_variable(key, value)
-                    //         .expect("Failed to add variable to context");
-                    // } else if let Ok(value) = value.extract::<String>() {
-                    //     environment
-                    //         .add_variable(key, value)
-                    //         .expect("Failed to add variable to context");
-                    // }
                 }
             }
 
