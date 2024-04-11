@@ -19,7 +19,20 @@ print(result)  # False
 Simply pass the CEL expression and a dictionary of context to the `evaluate` function. The function
 returns the result of the expression evaluation converted to Python primitive types.
 
+CEL supports a variety of operators, functions, and types
+
+```python
+evaluate(
+    'resource.name.startsWith("/groups/" + claim.group)', 
+    {
+        "resource": {"name": "/groups/hardbyte"},
+        "claim": {"group": "hardbyte"}
+    }
+)
+```
 ## Future work
+
+Support for converting Python datetime objects and timedeltas into CEL types.
 
 ### Command line interface
 

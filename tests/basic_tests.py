@@ -77,3 +77,9 @@ def test_bytes_context_expression():
     assert result == 2
 
 
+def test_nested_context_expression():
+    result = cel.evaluate('resource.name.startsWith("/groups/" + claim.group)', {
+        "resource": {"name": "/groups/hardbyte"},
+        "claim": {"group": "hardbyte"}
+    })
+    assert result == True
