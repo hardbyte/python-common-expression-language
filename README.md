@@ -7,6 +7,11 @@ such as policy evaluation, state machine transitions, and graph traversals.
 
 This Python package wraps the Rust implementation [cel-interpreter](https://crates.io/crates/cel-interpreter).
 
+Install from PyPI:
+```
+pip install common-expression-language
+```
+
 Basic usage:
 
 ```python
@@ -36,13 +41,14 @@ Support for converting Python datetime objects and timedeltas into CEL types.
 
 ### Command line interface
 
-The package (plans to) also provides a command line interface for evaluating CEL expressions:
+The package (plans to) provides a command line interface for evaluating CEL expressions:
 
 ```bash
 $ python -m cel '1 + 2'
 3
 ```
 
+### Separate compilation and Execution steps
 ### Custom Python Functions
 
 Ability to add Python functions to the Context object:
