@@ -45,6 +45,10 @@ def test_timestamp_context_with_timezone():
     assert cel.evaluate("now", {'now': now}) == now
 
 
+def test_timestamp_add_duration():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cel.evaluate("start_time + duration('1h')", {'start_time': now}) == now + datetime.timedelta(hours=1)
+
 def test_timestamp_context_without_timezone():
     now = datetime.datetime.now()
     assert cel.evaluate("now", {'now': now})

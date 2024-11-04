@@ -16,6 +16,7 @@ Basic usage:
 
 ```python
 from cel import evaluate
+
 expression = "age > 21"
 result = evaluate(expression, {"age": 18})
 print(result)  # False
@@ -34,10 +35,10 @@ evaluate(
         "claim": {"group": "hardbyte"}
     }
 )
+True
 ```
 ## Future work
 
-Support for converting Python datetime objects and timedeltas into CEL types.
 
 ### Command line interface
 
