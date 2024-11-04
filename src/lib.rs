@@ -210,7 +210,7 @@ fn evaluate(src: String, evaluation_context: Option<&PyAny>) -> PyResult<RustyCe
             // Add any variables from the passed in Dict context
             if let Some(context) = context {
                 for (key, value) in context {
-                    debug!("Adding context '{:?}'", key);
+                    debug!("Adding context {:?}", key);
                     let key = key.extract::<String>().unwrap();
                     // Each value is of type PyAny, we need to try to extract into a Value
                     // and then add it to the CEL context
