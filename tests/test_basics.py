@@ -81,11 +81,26 @@ def test_tuple_context_expression():
     result = cel.evaluate("foo[1]", {"foo": (2, 3, 4)})
     assert result == 3
 
+def test_bytes_size():
+    result = cel.evaluate("size(b'hello')")
+    assert result == 5
 
-@pytest.mark.xfail()
-def test_bytes_context_expression():
-    result = cel.evaluate("data[1]", {"data": b'hello'})
-    assert result == 2
+
+def test_bytes_inequality():
+    result = cel.evaluate("b'hello' != b'world'")
+    assert result == True
+
+def test_bytes_equality_via_context():
+    result = cel.evaluate("b'hello' == foo", {'foo': b'hello'})
+    assert result
+
+
+@pytest.mark.xfail
+def test_bytes_concatenation_context():
+    part1 = b'hello'
+    part2 = b'world'
+    result = cel.evaluate("part1 + b' ' + part2", {"part1": part1, "part2": part2})
+    assert result == b'hello world'
 
 
 def test_nested_context_expression():
