@@ -1,15 +1,18 @@
 use cel_interpreter::objects::{Key, TryIntoValue};
 use cel_interpreter::{Context, Program, Value};
-use log::debug;
+use log::{debug, info, warn};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDateTime, PyDelta, PyDeltaAccess, PyDict, PyList, PyTuple};
+
+use chrono::{DateTime, Duration as ChronoDuration, Offset, TimeZone, Utc};
+use pyo3::types::PyDelta;
+use pyo3::types::{PyBytes, PyDateTime, PyDict, PyList, PyTuple};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
-use pyo3::chrono;
-use pyo3::ffi::PyDateTime_Delta;
 
 #[derive(Debug)]
 struct RustyCelType(Value);
@@ -25,8 +28,12 @@ impl IntoPy<PyObject> for RustyCelType {
             RustyCelType(Value::Int(i64)) => i64.into_py(py),
             RustyCelType(Value::UInt(u64)) => u64.into_py(py),
             RustyCelType(Value::Float(f)) => f.into_py(py),
-            RustyCelType(Value::Timestamp(ts)) => ts.into_py(py),
-            RustyCelType(Value::String(s)) => s.as_ref().into_py(py),
+            RustyCelType(Value::Timestamp(ts)) => {
+                debug!("Converting a fixed offset datetime to python type");
+                ts.into_py(py)
+            }
+            RustyCelType(Value::Duration(d)) => d.into_py(py),
+            RustyCelType(Value::String(s)) => s.as_ref().to_string().into_py(py),
             RustyCelType(Value::List(val)) => {
                 let list = val
                     .as_ref()
@@ -35,11 +42,7 @@ impl IntoPy<PyObject> for RustyCelType {
                     .collect::<Vec<PyObject>>();
                 list.into_py(py)
             }
-            RustyCelType(Value::Bytes(val)) => {
-                let bytes = val;
-                bytes.as_ref().as_slice().into_py(py)
-            }
-            RustyCelType(Value::Duration(d)) => d.into_py(py),
+            RustyCelType(Value::Bytes(val)) => PyBytes::new_bound(py, &val).into_py(py),
 
             RustyCelType(Value::Map(val)) => {
                 // Create a PyDict with the converted Python key and values.
@@ -78,7 +81,9 @@ pub enum CelError {
 
 impl fmt::Display for CelError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Cel Error")
+        match self {
+            CelError::ConversionError(msg) => write!(f, "Conversion Error: {}", msg),
+        }
     }
 }
 impl Error for CelError {}
@@ -90,25 +95,39 @@ impl TryIntoValue for RustyPyType<'_> {
     fn try_into_value(self) -> Result<Value, Self::Error> {
         let val = match self {
             RustyPyType(pyobject) => {
-                if let Ok(value) = pyobject.extract::<i64>() {
+                if let Ok(value) = pyobject.extract::<bool>() {
+                    Ok(Value::Bool(value))
+                } else if let Ok(value) = pyobject.extract::<i64>() {
                     Ok(Value::Int(value))
                 } else if let Ok(value) = pyobject.extract::<f64>() {
                     Ok(Value::Float(value))
-                } else if let Ok(value) = pyobject.extract::<bool>() {
-                    Ok(Value::Bool(value))
-                // TODO: Implement these conversions
-                    // } else if let Ok(value) = pyobject.downcast::<PyDateTime>() {
-                //     Ok(Value::Timestamp(value.into()))
-                // } else if let Ok(value) = pyobject.downcast::<PyDelta>() {
-                //     Ok(Value::Duration(value.into()))
+                } else if let Ok(value) = pyobject.extract::<DateTime<chrono::FixedOffset>>() {
+                    Ok(Value::Timestamp(value))
+                } else if let Ok(value) = pyobject.extract::<chrono::NaiveDateTime>() {
+                    // Handle naive datetime - assuming the naive datetime is in local time
+                    let local_timezone = chrono::Local;
+                    if let Some(datetime_local) =
+                        local_timezone.from_local_datetime(&value).single()
+                    {
+                        let datetime_fixed: DateTime<chrono::FixedOffset> =
+                            datetime_local.with_timezone(&datetime_local.offset().fix());
+                        Ok(Value::Timestamp(datetime_fixed))
+                    } else {
+                        // Ambiguous or invalid local datetime
+                        Err(CelError::ConversionError(
+                            "Ambiguous or invalid local datetime".to_string(),
+                        ))
+                    }
+                } else if let Ok(value) = pyobject.extract::<ChronoDuration>() {
+                    Ok(Value::Duration(value))
                 } else if let Ok(value) = pyobject.extract::<String>() {
                     Ok(Value::String(value.into()))
                 } else if let Ok(value) = pyobject.downcast::<PyList>() {
-                        let list = value
-                            .iter()
-                            .map(|item| RustyPyType(item).try_into_value())
-                            .collect::<Result<Vec<Value>, Self::Error>>();
-                        list.map(|v| Value::List(Arc::new(v)))
+                    let list = value
+                        .iter()
+                        .map(|item| RustyPyType(item).try_into_value())
+                        .collect::<Result<Vec<Value>, Self::Error>>();
+                    list.map(|v| Value::List(Arc::new(v)))
                 } else if let Ok(value) = pyobject.downcast::<PyTuple>() {
                     let list = value
                         .iter()
@@ -132,24 +151,25 @@ impl TryIntoValue for RustyPyType<'_> {
                             ));
                         };
                         if let Ok(dict_value) = RustyPyType(value).try_into_value() {
-                            map.insert(
-                                key,
-                                dict_value,
-                            );
+                            map.insert(key, dict_value);
                         } else {
                             return Err(CelError::ConversionError(
                                 "Failed to convert PyDict value to Value".to_string(),
                             ));
-
                         }
                     }
                     Ok(Value::Map(map.into()))
                 } else if let Ok(value) = pyobject.extract::<Vec<u8>>() {
                     Ok(Value::Bytes(value.into()))
                 } else {
-                    Err(CelError::ConversionError(
-                        "Failed to convert PyAny to Value".to_string(),
-                    ))
+                    Err(CelError::ConversionError(format!(
+                        "Failed to convert Python object of type {} to Value",
+                        pyobject
+                            .get_type()
+                            .name()
+                            .map(|ps| ps.to_string())
+                            .unwrap_or("<unknown>".into())
+                    )))
                 }
             }
         };
@@ -159,10 +179,15 @@ impl TryIntoValue for RustyPyType<'_> {
 
 /// Evaluate a CEL expression
 /// Returns a String representation of the result
-#[pyfunction]
-fn evaluate(src: String, context: Option<&PyDict>) -> PyResult<RustyCelType> {
+#[pyfunction(signature = (src, evaluation_context=None))]
+fn evaluate(src: String, evaluation_context: Option<&PyAny>) -> PyResult<RustyCelType> {
     debug!("Evaluating CEL expression: {}", src);
-    debug!("Context: {:?}", context);
+
+    let context: Option<&PyDict> = evaluation_context.map(|context| {
+        context
+            .downcast::<PyDict>()
+            .expect("Failed to downcast PyDict")
+    });
 
     let program = Program::compile(src.as_str());
 
@@ -200,10 +225,10 @@ fn evaluate(src: String, context: Option<&PyDict>) -> PyResult<RustyCelType> {
                         }
                         Err(error) => {
                             debug!("An error occurred during context conversion");
-                            debug!("Conversion error: {:?}", error);
-                            debug!("Key: {:?}", key);
+                            warn!("Conversion error: {:?}", error);
+                            warn!("Key: {:?}", key);
 
-                            return Err(PyValueError::new_err("Conversion Error"));
+                            return Err(PyValueError::new_err(error.to_string()));
                         }
                     }
                 }
@@ -212,8 +237,8 @@ fn evaluate(src: String, context: Option<&PyDict>) -> PyResult<RustyCelType> {
             let result = program.execute(&environment);
             match result {
                 Err(error) => {
-                    println!("An error occurred during execution");
-                    println!("Execution error: {:?}", error);
+                    warn!("An error occurred during execution");
+                    warn!("Execution error: {:?}", error);
                     // errors
                     //     .into_iter()
                     //     .for_each(|e| println!("Execution error: {:?}", e));
@@ -228,7 +253,9 @@ fn evaluate(src: String, context: Option<&PyDict>) -> PyResult<RustyCelType> {
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn cel(_py: Python, m: &PyModule) -> PyResult<()> {
+fn cel(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+    pyo3_log::init();
+
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
     Ok(())
 }
