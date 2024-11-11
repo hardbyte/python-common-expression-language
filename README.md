@@ -62,5 +62,8 @@ def is_adult(age):
 
 context = Context()
 context.add_function("is_adult", is_adult)
-print(evaluate("is_adult(age)", {"age": 18}, context))  # False
+context.update({"age": 18})
+
+evaluate("is_adult(age)", context)
+# False
 ```

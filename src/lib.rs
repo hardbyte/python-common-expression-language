@@ -1,17 +1,20 @@
+mod context;
+
 use cel_interpreter::objects::{Key, TryIntoValue};
-use cel_interpreter::{Context, Program, Value};
+use cel_interpreter::{ExecutionError, Program, Value};
 use log::{debug, info, warn};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use chrono::{DateTime, Duration as ChronoDuration, Offset, TimeZone, Utc};
-use pyo3::types::PyDelta;
+use pyo3::types::{PyDelta, PyFunction};
 use pyo3::types::{PyBytes, PyDateTime, PyDict, PyList, PyTuple};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
+use std::ops::Deref;
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -183,77 +186,88 @@ impl TryIntoValue for RustyPyType<'_> {
 fn evaluate(src: String, evaluation_context: Option<&PyAny>) -> PyResult<RustyCelType> {
     debug!("Evaluating CEL expression: {}", src);
 
-    let context: Option<&PyDict> = evaluation_context.map(|context| {
-        context
-            .downcast::<PyDict>()
-            .expect("Failed to downcast PyDict")
-    });
+    let program = Program::compile(&src)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
-    let program = Program::compile(src.as_str());
+    debug!("Compiled program: {:?}", program);
 
-    // Handle the result of the compilation
-    match program {
-        Err(compile_error) => {
-            debug!("An error occurred during compilation");
-            debug!("compile_error: {:?}", compile_error);
-            // compile_error
-            //     .into_iter()
-            //     .for_each(|e| println!("Parse error: {:?}", e));
-            return Err(PyValueError::new_err("Parse Error"));
+    debug!("Preparing context");
+    let mut environment = cel_interpreter::Context::default();
+
+    // Custom Rust functions can also be added to the environment...
+    //environment.add_function("add", |a: i64, b: i64| a + b);
+
+
+    if let Some(py_context) = evaluation_context {
+        let py_context = py_context.extract::<PyRef<context::Context>>()?;
+
+        // Add any variables from the passed in Python context
+        for (name, value) in &py_context.variables {
+            environment.add_variable(name.clone(), value.clone())
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         }
-        Ok(program) => {
-            let mut environment = Context::default();
 
-            // Custom functions can be added to the environment
-            //environment.add_function("add", |a: i64, b: i64| a + b);
+        // Add functions
+        for (name, py_function) in &py_context.functions {
 
-            // Add any variables from the passed in Dict context
-            if let Some(context) = context {
-                for (key, value) in context {
-                    debug!("Adding context {:?}", key);
-                    let key = key.extract::<String>().unwrap();
-                    // Each value is of type PyAny, we need to try to extract into a Value
-                    // and then add it to the CEL context
+            let function_name = name.clone();
 
-                    let wrapped_value = RustyPyType(value);
-                    match wrapped_value.try_into_value() {
-                        Ok(value) => {
-                            debug!("Converted value: {:?}", value);
-                            environment
-                                .add_variable(key, value)
-                                .expect("Failed to add variable to context");
-                        }
-                        Err(error) => {
-                            debug!("An error occurred during context conversion");
-                            warn!("Conversion error: {:?}", error);
-                            warn!("Key: {:?}", key);
-
-                            return Err(PyValueError::new_err(error.to_string()));
-                        }
+            environment.add_function(&name, move |ftx: &cel_interpreter::FunctionContext| -> cel_interpreter::ResolveResult  {
+                Python::with_gil(|py| {
+                    // Convert arguments from Expression in ftx.args to PyObjects
+                    let mut py_args = Vec::new();
+                    for arg_expr in &ftx.args {
+                        let arg_value = ftx.ptx.resolve(arg_expr)?;
+                        let py_arg = RustyCelType(arg_value).into_py(py);
+                        py_args.push(py_arg);
                     }
-                }
-            }
+                    let py_args = PyTuple::new_bound(py, py_args);
 
-            let result = program.execute(&environment);
-            match result {
-                Err(error) => {
-                    warn!("An error occurred during execution");
-                    warn!("Execution error: {:?}", error);
-                    // errors
-                    //     .into_iter()
-                    //     .for_each(|e| println!("Execution error: {:?}", e));
-                    Err(PyValueError::new_err("Execution Error"))
-                }
+                    // Call the Python function
+                    // let py_result = py_function.call1(py, py_args)
+                    //     .map_err(|e|  ExecutionError::FunctionError {
+                    //         function: function_name.clone(),
+                    //         message: e.to_string(),
+                    //     })?;
+                    // // Convert the PyObject to &PyAny
+                    // let py_result_ref = py_result.as_ref(py);
+                    //
+                    // // Convert the result back to Value
+                    // let value = RustyPyType(py_result_ref).try_into_value().map_err(|e| {
+                    //     ExecutionError::FunctionError {
+                    //         function: function_name.clone(),
+                    //         message: e.to_string(),
+                    //     }
+                    // })?;
+                    // Ok(value)
 
-                Ok(value) => return Ok(RustyCelType(value)),
-            }
+                    ftx.error("Function arguments are not yet supported").into()
+
+                })
+
+            });
         }
     }
+
+    let result = program.execute(&environment);
+    match result {
+        Err(error) => {
+            warn!("An error occurred during execution");
+            warn!("Execution error: {:?}", error);
+            // errors
+            //     .into_iter()
+            //     .for_each(|e| println!("Execution error: {:?}", e));
+            Err(PyValueError::new_err("Execution Error"))
+        }
+
+        Ok(value) => return Ok(RustyCelType(value)),
+    }
+
 }
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn cel(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn cel<'py>(py: Python<'py>, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
 
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
