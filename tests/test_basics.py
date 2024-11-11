@@ -9,6 +9,15 @@ def test_invalid_expression_raises_parse_value_error():
         result = cel.evaluate("1 +")
 
 
+def test_readme_example():
+    assert cel.evaluate(
+        'resource.name.startsWith("/groups/" + claim.group)',
+        {
+            "resource": {"name": "/groups/hardbyte"},
+            "claim": {"group": "hardbyte"}
+        }
+    )
+
 def test_hello_world():
     assert cel.evaluate("'Hello ' + name", {'name': "World"}) == "Hello World"
 

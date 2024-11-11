@@ -37,22 +37,23 @@ evaluate(
 )
 True
 ```
-## Future work
 
-
-### Command line interface
-
-The package (plans to) provides a command line interface for evaluating CEL expressions:
-
-```bash
-$ python -m cel '1 + 2'
-3
-```
-
-### Separate compilation and Execution steps
 ### Custom Python Functions
 
-Ability to add Python functions to the Context object:
+This Python library supports user defined Python functions
+in the context:
+
+```python
+from cel import evaluate
+
+def is_adult(age):
+    return age > 21
+
+evaluate("is_adult(age)", {'is_adult': is_adult, 'age': 18})
+# False
+```
+
+You can also explicitly create a Context object:
 
 ```python
 from cel import evaluate, Context
@@ -67,3 +68,19 @@ context.update({"age": 18})
 evaluate("is_adult(age)", context)
 # False
 ```
+
+
+## Future work
+
+
+### Command line interface
+
+The package (plans to) provides a command line interface for evaluating CEL expressions:
+
+```bash
+$ python -m cel '1 + 2'
+3
+```
+
+### Separate compilation and Execution steps
+

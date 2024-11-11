@@ -1,8 +1,9 @@
-use std::collections::HashMap;
 use cel_interpreter::objects::TryIntoValue;
 use cel_interpreter::Value;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyFunction};
+use pyo3::types::{PyDict, PyTuple};
+use std::collections::HashMap;
+use pyo3::exceptions::PyValueError;
 
 #[pyo3::pyclass]
 pub struct Context {
@@ -12,13 +13,34 @@ pub struct Context {
 
 #[pyo3::pymethods]
 impl Context {
+
     #[new]
-    fn new() -> Self {
-        Context {
+    pub fn new(variables: Option<&PyDict>, functions: Option<&PyDict>) -> PyResult<Self> {
+        let mut context = Context {
             variables: HashMap::new(),
             functions: HashMap::new(),
-        }
+        };
+
+        if let Some(variables) = variables {
+            //context.variables.extend(variables.clone());
+            for (k, v) in variables {
+                let key = k.extract::<String>().map_err(|_| {
+                    PyValueError::new_err("Keys must be strings")
+                });
+                key.map(|key| context.add_variable(key, v))??;
+
+            }
+        };
+
+        if let Some(functions) = functions {
+            context.update(functions)?;
+        };
+
+
+
+        Ok(context)
     }
+
 
     fn add_function(&mut self, name: String, function: Py<PyAny>) {
         self.functions.insert(name, function);
@@ -26,21 +48,38 @@ impl Context {
 
     pub fn add_variable(&mut self, name: String, value: &PyAny) -> PyResult<()> {
         let value = crate::RustyPyType(value).try_into_value().map_err(|e| {
-            pyo3::exceptions::PyValueError::new_err(format!("Failed to convert variable '{}': {}", name, e))
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "Failed to convert variable '{}': {}",
+                name, e
+            ))
         })?;
         self.variables.insert(name, value);
         Ok(())
     }
 
-    fn update(&mut self, variables: &PyDict) -> PyResult<()> {
-        for (key, value) in variables {
-            let key = key.extract::<String>()?;
-            let value = crate::RustyPyType(value)
-                .try_into_value()
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    pub fn update(&mut self, variables: &PyDict) -> PyResult<()> {
 
-            self.variables.insert(key, value);
+        for (key, value) in variables {
+            // Attempt to extract the key as a String
+            let key = key.extract::<String>().map_err(|_| {
+                PyValueError::new_err("Keys must be strings")
+            })?;
+
+            if value.is_callable() {
+                // Value is a function, add it to the functions hashmap
+                let py_function = value.to_object(value.py());
+                self.functions.insert(key, py_function);
+            } else {
+                // Value is a variable, add it to the variables hashmap
+                let value = crate::RustyPyType(value)
+                    .try_into_value()
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+
+                self.variables.insert(key, value);
+            }
+
         }
+
         Ok(())
     }
 }

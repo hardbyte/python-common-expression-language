@@ -9,7 +9,7 @@ name = "cel"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.22.6", features = ["chrono", "gil-refs"]}
+pyo3 = { version = "0.22.6", features = ["chrono", "gil-refs", "py-clone"]}
 cel-interpreter = {  version = "0.9.0", features = ["chrono", "json", "regex"] }
 log = "0.4.22"
 pyo3-log = "0.11.0"
