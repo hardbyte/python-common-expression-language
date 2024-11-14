@@ -1,9 +1,9 @@
 use cel_interpreter::objects::TryIntoValue;
 use cel_interpreter::Value;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 use std::collections::HashMap;
-use pyo3::exceptions::PyValueError;
 
 #[pyo3::pyclass]
 pub struct Context {
@@ -13,7 +13,6 @@ pub struct Context {
 
 #[pyo3::pymethods]
 impl Context {
-
     #[new]
     pub fn new(variables: Option<&PyDict>, functions: Option<&PyDict>) -> PyResult<Self> {
         let mut context = Context {
@@ -24,11 +23,10 @@ impl Context {
         if let Some(variables) = variables {
             //context.variables.extend(variables.clone());
             for (k, v) in variables {
-                let key = k.extract::<String>().map_err(|_| {
-                    PyValueError::new_err("Keys must be strings")
-                });
+                let key = k
+                    .extract::<String>()
+                    .map_err(|_| PyValueError::new_err("Keys must be strings"));
                 key.map(|key| context.add_variable(key, v))??;
-
             }
         };
 
@@ -36,11 +34,8 @@ impl Context {
             context.update(functions)?;
         };
 
-
-
         Ok(context)
     }
-
 
     fn add_function(&mut self, name: String, function: Py<PyAny>) {
         self.functions.insert(name, function);
@@ -58,12 +53,11 @@ impl Context {
     }
 
     pub fn update(&mut self, variables: &PyDict) -> PyResult<()> {
-
         for (key, value) in variables {
             // Attempt to extract the key as a String
-            let key = key.extract::<String>().map_err(|_| {
-                PyValueError::new_err("Keys must be strings")
-            })?;
+            let key = key
+                .extract::<String>()
+                .map_err(|_| PyValueError::new_err("Keys must be strings"))?;
 
             if value.is_callable() {
                 // Value is a function, add it to the functions hashmap
@@ -77,7 +71,6 @@ impl Context {
 
                 self.variables.insert(key, value);
             }
-
         }
 
         Ok(())

@@ -186,8 +186,12 @@ impl TryIntoValue for RustyPyType<'_> {
 fn evaluate(src: String, evaluation_context: Option<&PyAny>) -> PyResult<RustyCelType> {
     debug!("Evaluating CEL expression: {}", src);
 
-    let program = Program::compile(&src)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Failed to compile expression '{}': {}", src, e)))?;
+    let program = Program::compile(&src).map_err(|e| {
+        PyValueError::new_err(format!(
+            "Failed to compile expression '{}': {}",
+            src, e
+        ))
+    })?;
 
     debug!("Compiled program: {:?}", program);
 
@@ -205,20 +209,22 @@ fn evaluate(src: String, evaluation_context: Option<&PyAny>) -> PyResult<RustyCe
             // Clone variables and functions into our local Context
             ctx.variables = py_context_ref.variables.clone();
             ctx.functions = py_context_ref.functions.clone();
-
         } else if let Ok(py_dict) = evaluation_context.extract::<&PyDict>() {
             // User passed in a dict - let's process variables and functions from the dict
             ctx.update(&py_dict)?;
         } else {
-            return Err(PyValueError::new_err("evaluation_context must be a Context object or a dict"))
+            return Err(PyValueError::new_err(
+                "evaluation_context must be a Context object or a dict",
+            ));
         };
-
 
         // Add any variables from the passed in Python context
         for (name, value) in &ctx.variables {
             environment
                 .add_variable(name.clone(), value.clone())
-                .map_err(|e| PyValueError::new_err(format!("Failed to add variable '{}': {}", name, e)))?;
+                .map_err(|e| {
+                    PyValueError::new_err(format!("Failed to add variable '{}': {}", name, e))
+                })?;
         }
 
         // Add functions
@@ -244,11 +250,12 @@ fn evaluate(src: String, evaluation_context: Option<&PyAny>) -> PyResult<RustyCe
                         let py_args = PyTuple::new_bound(py, py_args);
 
                         // Call the Python function
-                        let py_result = py_function.call1(py, py_args)
-                            .map_err(|e|  ExecutionError::FunctionError {
+                        let py_result = py_function.call1(py, py_args).map_err(|e| {
+                            ExecutionError::FunctionError {
                                 function: name.clone(),
                                 message: e.to_string(),
-                            })?;
+                            }
+                        })?;
                         // Convert the PyObject to &PyAny
                         let py_result_ref = py_result.as_ref(py);
 
@@ -265,7 +272,6 @@ fn evaluate(src: String, evaluation_context: Option<&PyAny>) -> PyResult<RustyCe
             );
         }
     }
-
 
     let result = program.execute(&environment);
     match result {
