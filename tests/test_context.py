@@ -16,6 +16,10 @@ def test_context_vars_implicit():
     context = cel.Context({'a': 10})
     assert cel.evaluate("a", context) == 10
 
+def test_context_vars_none_value():
+    context = cel.Context({'a': None})
+    assert cel.evaluate("a", context) == None
+
 
 def test_adding_to_context():
     context = cel.Context()
@@ -73,3 +77,26 @@ def test_updating_explicit_context():
         'b': 2,
     })
     assert cel.evaluate("custom_function(a, b)", context) == 42
+
+def test_nested_context_none():
+
+    context = {
+        'spec': {
+            'type': 'dns',
+            'nameserver': None,
+            'host': 'github.com',
+            'timeout': 30.0,
+            'pattern': "\ndata['response-code'] == 'NOERROR' &&\nsize(data['A']) >= 1 && \n(timestamp(data["
+        },
+        'data': {
+            'canonical_name': 'github.com.',
+            'expiration': 1732097106.7902246,
+            'response': 'id 25\nopcode QUERY\nrcode NOERROR\nflags QR RD RA\nedns 0\npayload 65494\n;QUESTION\ng',
+            'A': ['4.237.22.38'],
+            'response-code': 'NOERROR',
+            'startTimestamp': '2024-11-20T10:04:59.789017+00:00',
+            'endTimestamp': '2024-11-20T10:04:59.790298+00:00'
+        }
+    }
+
+    context = cel.Context(variables=context)

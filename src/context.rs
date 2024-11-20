@@ -25,7 +25,7 @@ impl Context {
             for (k, v) in variables {
                 let key = k
                     .extract::<String>()
-                    .map_err(|_| PyValueError::new_err("Keys must be strings"));
+                    .map_err(|_| PyValueError::new_err("Variable name must be strings"));
                 key.map(|key| context.add_variable(key, v))??;
             }
         };

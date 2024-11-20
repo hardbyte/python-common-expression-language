@@ -70,6 +70,13 @@ evaluate("is_adult(age)", context)
 ```
 
 
+## Testing
+
+```shell
+uv run pytest --log-cli-level=debug
+```
+
+
 ## Future work
 
 

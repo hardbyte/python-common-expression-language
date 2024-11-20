@@ -7,7 +7,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use chrono::{DateTime, Duration as ChronoDuration, Offset, TimeZone, Utc};
-use pyo3::types::{PyBytes, PyDateTime, PyDict, PyList, PyTuple};
+use pyo3::types::{PyBytes, PyDateTime, PyDict, PyList, PyNone, PyTuple};
 use pyo3::types::{PyDelta, PyFunction};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -98,7 +98,9 @@ impl TryIntoValue for RustyPyType<'_> {
     fn try_into_value(self) -> Result<Value, Self::Error> {
         let val = match self {
             RustyPyType(pyobject) => {
-                if let Ok(value) = pyobject.extract::<bool>() {
+                if pyobject.is_none() {
+                    Ok(Value::Null)
+                } else if let Ok(value) = pyobject.extract::<bool>() {
                     Ok(Value::Bool(value))
                 } else if let Ok(value) = pyobject.extract::<i64>() {
                     Ok(Value::Int(value))
@@ -140,7 +142,11 @@ impl TryIntoValue for RustyPyType<'_> {
                 } else if let Ok(value) = pyobject.downcast::<PyDict>() {
                     let mut map: HashMap<Key, Value> = HashMap::new();
                     for (key, value) in value.into_iter() {
-                        let key = if let Ok(k) = key.extract::<i64>() {
+                        let key = if key.is_none() {
+                            return Err(CelError::ConversionError(
+                                "None cannot be used as a key in dictionaries".to_string(),
+                            ));
+                        } else if let Ok(k) = key.extract::<i64>() {
                             Key::Int(k)
                         } else if let Ok(k) = key.extract::<u64>() {
                             Key::Uint(k)
