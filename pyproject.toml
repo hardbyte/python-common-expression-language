@@ -1,6 +1,10 @@
 
 [project]
 name = "common-expression-language"
+description = "Python bindings for the Common Expression Language (CEL)"
+authors = [
+    {name = "Brian Thorne", email = "brian@hardbyte.nz"}
+]
 requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Rust",
@@ -11,8 +15,12 @@ dynamic = ["version"]
 dependencies = [
 ]
 
+[project.urls]
+Homepage = "https://github.com/hardbyte/python-common-expression-language"
+Repository = "https://github.com/hardbyte/python-common-expression-language"
+
 [build-system]
-requires = ["maturin>=1.5,<2.0"]
+requires = ["maturin>=1.8,<2.0"]
 build-backend = "maturin"
 
 
@@ -21,7 +29,7 @@ features = ["pyo3/extension-module"]
 
 [tool.uv]
 dev-dependencies = [
-    "pytest>=8.3.3",
-    "maturin>=1.7.4",
-    "pip>=24.3.1",
+    "pytest>=8.4.1",
+    "maturin>=1.8.0",
+    "pip>=25.0.0",
 ]

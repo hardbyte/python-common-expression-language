@@ -15,6 +15,3 @@ def test_readme_custom_function_example():
 
     assert cel.evaluate("is_adult(age)", {'is_adult': is_adult, 'age': 18}) == False
     assert cel.evaluate("is_adult(age)", {'is_adult': is_adult, 'age': 32}) == True
-
-
-
