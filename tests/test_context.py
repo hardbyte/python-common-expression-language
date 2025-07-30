@@ -2,8 +2,6 @@ import pytest
 import cel
 
 
-
-
 def test_create_empty_context():
     context = cel.Context()
 
@@ -55,7 +53,6 @@ def test_context_init_vars_and_funcs():
     assert cel.evaluate("f(a, 2)", context) == 12
 
 
-
 def test_custom_function_with_explicit_context():
     def custom_function(a, b):
         return a + b
@@ -63,7 +60,6 @@ def test_custom_function_with_explicit_context():
     context = cel.Context()
     context.add_function('custom_function', custom_function)
     assert cel.evaluate("custom_function(1, 2)", context) == 3
-
 
 
 def test_updating_explicit_context():
@@ -78,20 +74,19 @@ def test_updating_explicit_context():
     })
     assert cel.evaluate("custom_function(a, b)", context) == 42
 
-def test_nested_context_none():
 
+def test_nested_context_none():
+    """Test that nested context with None values works correctly"""
     context = {
         'spec': {
             'type': 'dns',
             'nameserver': None,
             'host': 'github.com',
             'timeout': 30.0,
-            'pattern': "\ndata['response-code'] == 'NOERROR' &&\nsize(data['A']) >= 1 && \n(timestamp(data["
         },
         'data': {
             'canonical_name': 'github.com.',
             'expiration': 1732097106.7902246,
-            'response': 'id 25\nopcode QUERY\nrcode NOERROR\nflags QR RD RA\nedns 0\npayload 65494\n;QUESTION\ng',
             'A': ['4.237.22.38'],
             'response-code': 'NOERROR',
             'startTimestamp': '2024-11-20T10:04:59.789017+00:00',
@@ -99,4 +94,10 @@ def test_nested_context_none():
         }
     }
 
-    context = cel.Context(variables=context)
+    cel_context = cel.Context(variables=context)
+    
+    # Test that we can access nested values and None
+    assert cel.evaluate("spec.nameserver", cel_context) is None
+    assert cel.evaluate("spec.host", cel_context) == 'github.com'
+    assert cel.evaluate("data['response-code']", cel_context) == 'NOERROR'
+    assert cel.evaluate("size(data.A)", cel_context) == 1

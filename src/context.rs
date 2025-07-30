@@ -2,7 +2,7 @@ use cel_interpreter::objects::TryIntoValue;
 use cel_interpreter::Value;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyTuple};
+use pyo3::types::PyDict;
 use std::collections::HashMap;
 
 #[pyo3::pyclass]
@@ -14,7 +14,8 @@ pub struct Context {
 #[pyo3::pymethods]
 impl Context {
     #[new]
-    pub fn new(variables: Option<&PyDict>, functions: Option<&PyDict>) -> PyResult<Self> {
+    #[pyo3(signature = (variables=None, functions=None))]
+    pub fn new(variables: Option<&Bound<'_, PyDict>>, functions: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
         let mut context = Context {
             variables: HashMap::new(),
             functions: HashMap::new(),
@@ -26,7 +27,7 @@ impl Context {
                 let key = k
                     .extract::<String>()
                     .map_err(|_| PyValueError::new_err("Variable name must be strings"));
-                key.map(|key| context.add_variable(key, v))??;
+                key.map(|key| context.add_variable(key, &v))??;
             }
         };
 
@@ -41,8 +42,8 @@ impl Context {
         self.functions.insert(name, function);
     }
 
-    pub fn add_variable(&mut self, name: String, value: &PyAny) -> PyResult<()> {
-        let value = crate::RustyPyType(value).try_into_value().map_err(|e| {
+    pub fn add_variable(&mut self, name: String, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let value = crate::RustyPyType(&value).try_into_value().map_err(|e| {
             pyo3::exceptions::PyValueError::new_err(format!(
                 "Failed to convert variable '{}': {}",
                 name, e
@@ -52,7 +53,7 @@ impl Context {
         Ok(())
     }
 
-    pub fn update(&mut self, variables: &PyDict) -> PyResult<()> {
+    pub fn update(&mut self, variables: &Bound<'_, PyDict>) -> PyResult<()> {
         for (key, value) in variables {
             // Attempt to extract the key as a String
             let key = key
@@ -65,7 +66,7 @@ impl Context {
                 self.functions.insert(key, py_function);
             } else {
                 // Value is a variable, add it to the variables hashmap
-                let value = crate::RustyPyType(value)
+                let value = crate::RustyPyType(&value)
                     .try_into_value()
                     .map_err(|e| PyValueError::new_err(e.to_string()))?;
 

@@ -5,7 +5,8 @@ import pytest
 import cel
 
 def test_invalid_expression_raises_parse_value_error():
-    with pytest.raises(ValueError):
+    """Test that invalid expressions raise proper ValueError"""
+    with pytest.raises(ValueError, match="Failed to parse expression"):
         result = cel.evaluate("1 +")
 
 
@@ -108,11 +109,38 @@ def test_bytes_equality_via_context():
     assert result
 
 
-@pytest.mark.xfail
+@pytest.mark.xfail(reason="cel-interpreter 0.10.0 does not implement bytes concatenation (CEL spec requires it)")
 def test_bytes_concatenation_context():
+    """CEL spec requires bytes concatenation with + operator, but cel-interpreter 0.10.0 doesn't implement it"""
     part1 = b'hello'
     part2 = b'world'
     result = cel.evaluate("part1 + b' ' + part2", {"part1": part1, "part2": part2})
+    assert result == b'hello world'
+
+
+def test_bytes_concatenation_direct():
+    """Test direct bytes concatenation (CEL spec requires this but cel-interpreter 0.10.0 doesn't support it)"""
+    with pytest.raises(ValueError, match="Unsupported binary operator"):
+        cel.evaluate("b'hello' + b'world'")
+
+
+def test_bytes_string_conversion():
+    """Test bytes <-> string conversion functions that ARE supported by CEL"""
+    # Convert string to bytes
+    result = cel.evaluate('bytes("hello")')
+    assert result == b'hello'
+    
+    # Convert bytes to string
+    result = cel.evaluate('string(b"hello")')
+    assert result == "hello"
+
+
+def test_bytes_concatenation_workaround():
+    """Test workaround for bytes concatenation using string conversion"""
+    part1 = b'hello'
+    part2 = b'world'
+    # Workaround: convert to strings, concatenate, then convert back to bytes
+    result = cel.evaluate('bytes(string(part1) + " " + string(part2))', {"part1": part1, "part2": part2})
     assert result == b'hello world'
 
 
