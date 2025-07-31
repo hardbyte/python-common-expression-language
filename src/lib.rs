@@ -68,7 +68,7 @@ impl<'py> IntoPyObject<'py> for RustyCelType {
             }
 
             // Turn everything else into a String:
-            nonprimitive => format!("{:?}", nonprimitive).into_pyobject(py)?.into_any(),
+            nonprimitive => format!("{nonprimitive:?}").into_pyobject(py)?.into_any(),
         };
         Ok(obj)
     }
@@ -85,7 +85,7 @@ pub enum CelError {
 impl fmt::Display for CelError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CelError::ConversionError(msg) => write!(f, "Conversion Error: {}", msg),
+            CelError::ConversionError(msg) => write!(f, "Conversion Error: {msg}"),
         }
     }
 }
@@ -96,77 +96,66 @@ fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
     match error {
         ExecutionError::UndeclaredReference(name) => {
             PyRuntimeError::new_err(format!(
-                "Undefined variable or function: '{}'. Check that the variable is defined in the context or that the function name is spelled correctly.", 
-                name
+                "Undefined variable or function: '{name}'. Check that the variable is defined in the context or that the function name is spelled correctly."
             ))
         },
         ExecutionError::UnsupportedBinaryOperator(op, left_type, right_type) => {
-            let left_type_str = format!("{:?}", left_type);
-            let right_type_str = format!("{:?}", right_type);
+            let left_type_str = format!("{left_type:?}");
+            let right_type_str = format!("{right_type:?}");
             match *op {
                 "add" => {
                     if (left_type_str.contains("Int") && right_type_str.contains("UInt")) ||
                        (left_type_str.contains("UInt") && right_type_str.contains("Int")) {
                         PyTypeError::new_err(format!(
-                            "Cannot mix signed and unsigned integers in arithmetic: {:?} + {:?}. Use explicit conversion: int(value) or uint(value)",
-                            left_type, right_type
+                            "Cannot mix signed and unsigned integers in arithmetic: {left_type:?} + {right_type:?}. Use explicit conversion: int(value) or uint(value)"
                         ))
                     } else {
                         PyTypeError::new_err(format!(
-                            "Unsupported addition operation: {:?} + {:?}. Check that both operands are compatible types (int+int, double+double, string+string, etc.)",
-                            left_type, right_type
+                            "Unsupported addition operation: {left_type:?} + {right_type:?}. Check that both operands are compatible types (int+int, double+double, string+string, etc.)"
                         ))
                     }
                 },
                 "mul" => {
                     PyTypeError::new_err(format!(
-                        "Unsupported multiplication operation: {:?} * {:?}. Ensure both operands are numeric and of compatible types. Use explicit conversion if needed: double(value)*double(value)",
-                        left_type, right_type
+                        "Unsupported multiplication operation: {left_type:?} * {right_type:?}. Ensure both operands are numeric and of compatible types. Use explicit conversion if needed: double(value)*double(value)"
                     ))
                 },
                 "sub" => {
                     PyTypeError::new_err(format!(
-                        "Unsupported subtraction operation: {:?} - {:?}. Ensure both operands are numeric and of compatible types.",
-                        left_type, right_type
+                        "Unsupported subtraction operation: {left_type:?} - {right_type:?}. Ensure both operands are numeric and of compatible types."
                     ))
                 },
                 "div" => {
                     PyTypeError::new_err(format!(
-                        "Unsupported division operation: {:?} / {:?}. Ensure both operands are numeric and of compatible types.",
-                        left_type, right_type
+                        "Unsupported division operation: {left_type:?} / {right_type:?}. Ensure both operands are numeric and of compatible types."
                     ))
                 },
                 _ => {
                     PyTypeError::new_err(format!(
-                        "Unsupported operation '{}' between {:?} and {:?}. Check the CEL specification for supported operations between these types.",
-                        op, left_type, right_type
+                        "Unsupported operation '{op}' between {left_type:?} and {right_type:?}. Check the CEL specification for supported operations between these types."
                     ))
                 }
             }
         },
         ExecutionError::FunctionError { function, message } => {
             PyRuntimeError::new_err(format!(
-                "Function '{}' error: {}. Check function arguments and their types.", 
-                function, message
+                "Function '{function}' error: {message}. Check function arguments and their types."
             ))
         },
         _ => {
             // Fallback for any other execution errors - provide helpful message based on error content
-            let error_str = format!("{:?}", error);
+            let error_str = format!("{error:?}");
             if error_str.contains("UndeclaredReference") {
                 PyRuntimeError::new_err(format!(
-                    "Undefined variable or function. Check that all variables are defined in the context and function names are spelled correctly. Error: {}", 
-                    error
+                    "Undefined variable or function. Check that all variables are defined in the context and function names are spelled correctly. Error: {error}"
                 ))
             } else if error_str.contains("UnsupportedBinaryOperator") {
                 PyTypeError::new_err(format!(
-                    "Unsupported operation between incompatible types. Check the CEL specification for supported operations. Error: {}", 
-                    error
+                    "Unsupported operation between incompatible types. Check the CEL specification for supported operations. Error: {error}"
                 ))
             } else {
                 PyValueError::new_err(format!(
-                    "CEL execution error: {}. This may indicate an unsupported operation or invalid expression.", 
-                    error
+                    "CEL execution error: {error}. This may indicate an unsupported operation or invalid expression."
                 ))
             }
         }
@@ -312,7 +301,7 @@ fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
 
         // Extract the integer
         let integer_str = &result[adjusted_start..adjusted_end];
-        let float_str = format!("{}.0", integer_str);
+        let float_str = format!("{integer_str}.0");
 
         // Replace in the result string
         result.replace_range(adjusted_start..adjusted_end, &float_str);
@@ -404,13 +393,13 @@ impl TryIntoValue for RustyPyType<'_> {
                 } else if let Ok(value) = pyobject.extract::<Vec<u8>>() {
                     Ok(Value::Bytes(value.into()))
                 } else {
+                    let type_name = pyobject
+                        .get_type()
+                        .name()
+                        .map(|ps| ps.to_string())
+                        .unwrap_or("<unknown>".into());
                     Err(CelError::ConversionError(format!(
-                        "Failed to convert Python object of type {} to Value",
-                        pyobject
-                            .get_type()
-                            .name()
-                            .map(|ps| ps.to_string())
-                            .unwrap_or("<unknown>".into())
+                        "Failed to convert Python object of type {type_name} to Value"
                     )))
                 }
             }
@@ -478,12 +467,11 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
     let program = panic::catch_unwind(|| Program::compile(&processed_src))
         .map_err(|_| {
             PyValueError::new_err(format!(
-                "Failed to parse expression '{}': Invalid syntax",
-                src
+                "Failed to parse expression '{src}': Invalid syntax"
             ))
         })?
         .map_err(|e| {
-            PyValueError::new_err(format!("Failed to compile expression '{}': {}", src, e))
+            PyValueError::new_err(format!("Failed to compile expression '{src}': {e}"))
         })?;
 
     debug!("Compiled program: {:?}", program);
