@@ -3,7 +3,7 @@ mod context;
 use cel_interpreter::objects::{Key, TryIntoValue};
 use cel_interpreter::{ExecutionError, Program, Value};
 use log::{debug, warn};
-use pyo3::exceptions::{PyRuntimeError, PySyntaxError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::BoundObject;
 use std::panic;
