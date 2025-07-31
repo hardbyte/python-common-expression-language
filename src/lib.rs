@@ -495,7 +495,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
             environment
                 .add_variable(name.clone(), value.clone())
                 .map_err(|e| {
-                    PyValueError::new_err(format!("Failed to add variable '{}': {}", name, e))
+                    PyValueError::new_err(format!("Failed to add variable '{name}': {e}"))
                 })?;
         }
 
@@ -521,7 +521,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                                 .map_err(|e| {
                                     ExecutionError::function_error(
                                         "argument_conversion",
-                                        format!("Failed to convert argument: {}", e),
+                                        format!("Failed to convert argument: {e}"),
                                     )
                                 })?
                                 .into_any()
@@ -531,7 +531,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                         let py_args = PyTuple::new(py, py_args).map_err(|e| {
                             ExecutionError::function_error(
                                 "tuple_creation",
-                                format!("Failed to create tuple: {}", e),
+                                format!("Failed to create tuple: {e}"),
                             )
                         })?;
 
@@ -549,7 +549,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                         let value = RustyPyType(py_result_ref).try_into_value().map_err(|e| {
                             ExecutionError::FunctionError {
                                 function: name.clone(),
-                                message: format!("Error calling function '{}': {}", name, e),
+                                message: format!("Error calling function '{name}': {e}"),
                             }
                         })?;
                         Ok(value)
@@ -563,7 +563,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
     match result {
         Err(error) => {
             warn!("An error occurred during execution");
-            warn!("Execution error: {:?}", error);
+            warn!("Execution error: {error:?}");
             Err(map_execution_error_to_python(&error))
         }
 
