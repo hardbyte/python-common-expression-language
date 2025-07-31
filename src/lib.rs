@@ -284,7 +284,7 @@ fn should_skip_integer_conversion(expr: &str, start: usize, _end: usize) -> bool
 
 /// Always preprocesses expression to promote integer literals to floats (used when context has mixed types)
 fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
-    debug!("Always preprocessing expression: {}", expr);
+    debug!("Always preprocessing expression: {expr}");
 
     // Convert all integer literals to floats
     // This is a more comprehensive approach than operator-by-operator processing
@@ -309,7 +309,7 @@ fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
         // Update offset for subsequent replacements (we added ".0", so +2)
         offset += 2;
     }
-    debug!("Final processed expression: {}", result);
+    debug!("Final processed expression: {result}");
     result
 }
 
@@ -412,7 +412,7 @@ impl TryIntoValue for RustyPyType<'_> {
 /// Returns a String representation of the result
 #[pyfunction(signature = (src, evaluation_context=None))]
 fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<RustyCelType> {
-    debug!("Evaluating CEL expression: {}", src);
+    debug!("Evaluating CEL expression: {src}");
 
     // Preprocess expression for better mixed int/float arithmetic compatibility
     // First check if expression itself has mixed literals

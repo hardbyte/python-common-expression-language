@@ -94,8 +94,7 @@ impl Context {
     pub fn add_variable(&mut self, name: String, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let value = crate::RustyPyType(value).try_into_value().map_err(|e| {
             pyo3::exceptions::PyValueError::new_err(format!(
-                "Failed to convert variable '{}': {}",
-                name, e
+                "Failed to convert variable '{name}': {e}"
             ))
         })?;
         self.variables.insert(name, value);
