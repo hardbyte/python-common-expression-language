@@ -27,13 +27,14 @@ def valid_simple_expression(request):
 
 
 expression_context_pairs = [
-    ["a + 2", { 'a': 1 }, 3],
-    ["a > 2", { 'a': 11.5 }, True],
-    ["a == 3", { 'a': 3 }, True],
-    ["b * 2", { 'b': 3.14 }, 6.28],
-    ["name", { 'name': "alice" }, "alice"],
-    ["a[1]", { 'a': [1, 2, 3] }, 2],
+    ["a + 2", {"a": 1}, 3],
+    ["a > 2", {"a": 11.5}, True],
+    ["a == 3", {"a": 3}, True],
+    ["b * 2", {"b": 3.14}, 6.28],
+    ["name", {"name": "alice"}, "alice"],
+    ["a[1]", {"a": [1, 2, 3]}, 2],
 ]
+
 
 # Valid expressions with context fixture
 @pytest.fixture(params=expression_context_pairs)

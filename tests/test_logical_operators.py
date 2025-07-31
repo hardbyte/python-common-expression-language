@@ -4,6 +4,7 @@ Test logical operators in CEL expressions.
 This module tests logical AND (&&), OR (||), and NOT (!) operators,
 including short-circuit evaluation behavior.
 """
+
 import pytest
 import cel
 
@@ -41,7 +42,7 @@ class TestLogicalOperators:
         # NOT has higher precedence than AND/OR
         assert cel.evaluate("!false && true") is True
         assert cel.evaluate("!false || false") is True
-        
+
         # AND has higher precedence than OR
         assert cel.evaluate("true || false && false") is True
         assert cel.evaluate("false && false || true") is True
@@ -56,7 +57,7 @@ class TestLogicalOperators:
     def test_logical_with_variables(self):
         """Test logical operators with context variables."""
         context = {"a": True, "b": False, "x": 5, "y": 10}
-        
+
         assert cel.evaluate("a && !b", context) is True
         assert cel.evaluate("b || a", context) is True
         assert cel.evaluate("x < y && a", context) is True
@@ -68,9 +69,9 @@ class TestLogicalOperators:
         context = {
             "get_true": lambda: True,
             "get_false": lambda: False,
-            "should_not_call": lambda: pytest.fail("Should not be called due to short-circuit")
+            "should_not_call": lambda: pytest.fail("Should not be called due to short-circuit"),
         }
-        
+
         # False && anything should short-circuit
         assert cel.evaluate("false && should_not_call()", context) is False
         assert cel.evaluate("get_false() && should_not_call()", context) is False
@@ -81,21 +82,21 @@ class TestLogicalOperators:
         context = {
             "get_true": lambda: True,
             "get_false": lambda: False,
-            "should_not_call": lambda: pytest.fail("Should not be called due to short-circuit")
+            "should_not_call": lambda: pytest.fail("Should not be called due to short-circuit"),
         }
-        
-        # True || anything should short-circuit  
+
+        # True || anything should short-circuit
         assert cel.evaluate("true || should_not_call()", context) is True
         assert cel.evaluate("get_true() || should_not_call()", context) is True
 
     def test_complex_logical_expressions(self):
         """Test complex logical expressions with multiple operators."""
         context = {"a": 1, "b": 2, "c": 3, "d": 4}
-        
+
         # Complex AND/OR combinations
         assert cel.evaluate("a < b && b < c && c < d", context) is True
         assert cel.evaluate("a > b || b < c || c > d", context) is True
-        
+
         # Mixed with parentheses
         assert cel.evaluate("(a < b && b < c) || (c > d)", context) is True
         assert cel.evaluate("!(a > b) && (b < c)", context) is True
@@ -103,7 +104,7 @@ class TestLogicalOperators:
     def test_logical_with_null_values(self):
         """Test logical operators with null values."""
         context = {"null_val": None, "true_val": True, "false_val": False}
-        
+
         # In CEL, null is generally falsy, but exact behavior may vary
         # These tests verify current behavior
         try:
@@ -115,28 +116,28 @@ class TestLogicalOperators:
 
     def test_logical_type_coercion(self):
         """Test logical operators with type coercion.
-        
+
         Note: This CEL implementation appears to do type coercion rather than
         raising errors for non-boolean operands.
         """
-        # Document current behavior: non-empty strings are truthy  
+        # Document current behavior: non-empty strings are truthy
         assert cel.evaluate("'string' && true") is True
         # Empty strings are falsy
         assert cel.evaluate("'' && true") is False
-        
-        # Document current behavior: OR returns first truthy value  
+
+        # Document current behavior: OR returns first truthy value
         assert cel.evaluate("42 || false") == 42
         # 0 is falsy, so OR returns the second operand (true)
         assert cel.evaluate("0 || true") is True
-        
+
         # Test NOT with various types
         assert cel.evaluate("!'string'") is False  # String is truthy
-        assert cel.evaluate("!42") is False       # Number is truthy
+        assert cel.evaluate("!42") is False  # Number is truthy
 
     def test_logical_in_conditionals(self):
         """Test logical operators in conditional expressions."""
         context = {"x": 5, "y": 10}
-        
+
         assert cel.evaluate("x < y && y > 0 ? 'positive' : 'negative'", context) == "positive"
         assert cel.evaluate("x > y || y < 0 ? 'true' : 'false'", context) == "false"
         assert cel.evaluate("!(x > y) ? 'correct' : 'wrong'", context) == "correct"

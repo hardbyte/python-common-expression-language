@@ -2,11 +2,12 @@
 Aarithmetic operations tests for CEL bindings.
 
 - Basic arithmetic operations (+ - * / %)
-- Mixed-type arithmetic (int/float combinations)  
+- Mixed-type arithmetic (int/float combinations)
 - Arithmetic with context variables
 - Edge cases and precedence
 - String concatenation (a form of arithmetic)
 """
+
 import datetime
 import pytest
 import cel
@@ -37,16 +38,13 @@ class TestBasicArithmetic:
 
     def test_string_concatenation(self):
         """Test string concatenation with + operator."""
-        assert cel.evaluate("'Hello ' + name", {'name': "World"}) == "Hello World"
+        assert cel.evaluate("'Hello ' + name", {"name": "World"}) == "Hello World"
 
     def test_complex_string_concatenation(self):
         """Test complex string concatenation from context."""
         result = cel.evaluate(
             'resource.name.startsWith("/groups/" + claim.group)',
-            {
-                "resource": {"name": "/groups/hardbyte"},
-                "claim": {"group": "hardbyte"}
-            }
+            {"resource": {"name": "/groups/hardbyte"}, "claim": {"group": "hardbyte"}},
         )
         assert result is True
 
@@ -100,11 +98,11 @@ class TestMixedTypeArithmetic:
         python_result = 3.14 * 2
         cel_result = cel.evaluate("3.14 * 2")
         assert cel_result == python_result
-        
+
         python_result = 2 * 3.14
         cel_result = cel.evaluate("2 * 3.14")
         assert cel_result == python_result
-        
+
         python_result = 10.5 + 5
         cel_result = cel.evaluate("10.5 + 5")
         assert cel_result == python_result
@@ -115,17 +113,14 @@ class TestArithmeticWithContext:
 
     def test_mixed_arithmetic_with_context(self):
         """Test mixed arithmetic with variables from context."""
-        context = {
-            'pi': 3.14159,
-            'radius': 2
-        }
+        context = {"pi": 3.14159, "radius": 2}
         result = cel.evaluate("pi * radius * radius", context)
         assert abs(result - 12.56636) < 0.00001
 
     def test_datetime_arithmetic_context(self):
         """Test datetime arithmetic operations with context."""
         now = datetime.datetime.now(datetime.timezone.utc)
-        result = cel.evaluate("start_time + duration('1h')", {'start_time': now})
+        result = cel.evaluate("start_time + duration('1h')", {"start_time": now})
         expected = now + datetime.timedelta(hours=1)
         assert result == expected
 
@@ -178,10 +173,10 @@ class TestArithmeticEdgeCases:
         """Test that spacing doesn't affect mixed arithmetic."""
         result = cel.evaluate("3.14*2")  # No spaces
         assert result == 6.28
-        
+
         result = cel.evaluate("3.14 * 2")  # With spaces
         assert result == 6.28
-        
+
         result = cel.evaluate("3.14  *  2")  # Extra spaces
         assert result == 6.28
 
@@ -190,11 +185,11 @@ class TestArithmeticEdgeCases:
         # Zero cases
         assert cel.evaluate("0.0 * 5") == 0.0
         assert cel.evaluate("5 * 0.0") == 0.0
-        
+
         # One cases
         assert cel.evaluate("1.0 * 7") == 7.0
         assert cel.evaluate("7 * 1.0") == 7.0
-        
+
         # Large numbers
         result = cel.evaluate("1000000.0 * 2")
         assert result == 2000000.0
@@ -208,23 +203,27 @@ class TestArithmeticEdgeCases:
 class TestBytesArithmetic:
     """Test bytes operations and concatenation."""
 
-    @pytest.mark.xfail(reason="cel-interpreter 0.10.0 does not implement bytes concatenation (CEL spec requires it)")
+    @pytest.mark.xfail(
+        reason="cel-interpreter 0.10.0 does not implement bytes concatenation (CEL spec requires it)"
+    )
     def test_bytes_concatenation_context(self):
         """CEL spec requires bytes concatenation with + operator, but cel-interpreter 0.10.0 doesn't implement it."""
-        part1 = b'hello'
-        part2 = b'world'
+        part1 = b"hello"
+        part2 = b"world"
         result = cel.evaluate("part1 + b' ' + part2", {"part1": part1, "part2": part2})
-        assert result == b'hello world'
+        assert result == b"hello world"
 
     def test_bytes_concatenation_not_supported(self):
         """Test direct bytes concatenation (CEL spec requires this but cel-interpreter 0.10.0 doesn't support it)."""
-        with pytest.raises(ValueError, match="Unsupported binary operator"):
+        with pytest.raises(TypeError, match="Unsupported addition operation"):
             cel.evaluate("b'hello' + b'world'")
 
     def test_bytes_concatenation_workaround(self):
         """Test bytes concatenation workaround using string conversion."""
-        part1 = b'hello'
-        part2 = b'world'
+        part1 = b"hello"
+        part2 = b"world"
         # Workaround: convert to strings, concatenate, then convert back to bytes
-        result = cel.evaluate('bytes(string(part1) + " " + string(part2))', {"part1": part1, "part2": part2})
-        assert result == b'hello world'
+        result = cel.evaluate(
+            'bytes(string(part1) + " " + string(part2))', {"part1": part1, "part2": part2}
+        )
+        assert result == b"hello world"

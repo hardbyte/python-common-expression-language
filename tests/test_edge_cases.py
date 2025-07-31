@@ -1,4 +1,5 @@
 """Test edge cases and error conditions that don't fit in other test categories"""
+
 import pytest
 import datetime
 import cel
