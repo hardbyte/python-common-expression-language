@@ -1,4 +1,5 @@
 import cel
+
 expressions = [
     "1 + 2",
     "1 > 2",
@@ -20,5 +21,4 @@ expressions = [
 
 for ex in expressions:
     result = cel.evaluate(ex)
-    print(ex, '=>', result, type(result))
-
+    print(ex, "=>", result, type(result))
