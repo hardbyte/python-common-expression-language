@@ -5,10 +5,11 @@ use cel_interpreter::{ExecutionError, Program, Value};
 use log::{debug, warn};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::BoundObject;
 use std::panic;
 
 use chrono::{DateTime, Duration as ChronoDuration, Offset, TimeZone};
-use pyo3::types::{PyBytes, PyDict, PyList, PyTuple};
+use pyo3::types::{PyBool, PyBytes, PyDict, PyList, PyTuple};
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -18,57 +19,62 @@ use std::sync::Arc;
 #[derive(Debug)]
 struct RustyCelType(Value);
 
-impl IntoPy<PyObject> for RustyCelType {
-    fn into_py(self, py: Python<'_>) -> PyObject {
-        // Just use the native rust type's existing
-        // IntoPy implementation
-        match self {
+impl<'py> IntoPyObject<'py> for RustyCelType {
+    type Target = PyAny;
+    type Output = Bound<'py, Self::Target>;
+    type Error = PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        let obj = match self {
             // Primitive Types
-            RustyCelType(Value::Null) => py.None(),
-            RustyCelType(Value::Bool(b)) => b.into_py(py),
-            RustyCelType(Value::Int(i64)) => i64.into_py(py),
-            RustyCelType(Value::UInt(u64)) => u64.into_py(py),
-            RustyCelType(Value::Float(f)) => f.into_py(py),
+            RustyCelType(Value::Null) => py.None().into_bound(py),
+            RustyCelType(Value::Bool(b)) => {
+                PyBool::new(py, b).into_bound().into_any()
+            }
+            RustyCelType(Value::Int(i64)) => i64.into_pyobject(py)?.into_any(),
+            RustyCelType(Value::UInt(u64)) => u64.into_pyobject(py)?.into_any(),
+            RustyCelType(Value::Float(f)) => f.into_pyobject(py)?.into_any(),
             RustyCelType(Value::Timestamp(ts)) => {
                 debug!("Converting a fixed offset datetime to python type");
-                ts.into_py(py)
+                ts.into_pyobject(py)?.into_any()
             }
-            RustyCelType(Value::Duration(d)) => d.into_py(py),
-            RustyCelType(Value::String(s)) => s.as_ref().to_string().into_py(py),
+            RustyCelType(Value::Duration(d)) => d.into_pyobject(py)?.into_any(),
+            RustyCelType(Value::String(s)) => s.as_ref().to_string().into_pyobject(py)?.into_any(),
             RustyCelType(Value::List(val)) => {
-                let list = val
-                    .as_ref()
-                    .into_iter()
-                    .map(|v| RustyCelType(v.clone()).into_py(py))
-                    .collect::<Vec<PyObject>>();
-                list.into_py(py)
+                let list = PyList::empty(py);
+                for v in val.as_ref().into_iter() {
+                    let item = RustyCelType(v.clone()).into_pyobject(py)?;
+                    list.append(&item)?;
+                }
+                list.into_any()
             }
-            RustyCelType(Value::Bytes(val)) => PyBytes::new_bound(py, &val).into_py(py),
+            RustyCelType(Value::Bytes(val)) => PyBytes::new(py, &val).into_any(),
 
             RustyCelType(Value::Map(val)) => {
                 // Create a PyDict with the converted Python key and values.
-                let python_dict = PyDict::new_bound(py);
+                let python_dict = PyDict::new(py);
 
-                val.map.as_ref().into_iter().for_each(|(k, v)| {
+                for (k, v) in val.map.as_ref().into_iter() {
                     // Key is an enum with String, Uint, Int and Bool variants. Value is any RustyCelType
                     let key = match k {
-                        Key::String(s) => s.as_ref().into_py(py),
-                        Key::Uint(u64) => u64.into_py(py),
-                        Key::Int(i64) => i64.into_py(py),
-                        Key::Bool(b) => b.into_py(py),
+                        Key::String(s) => s.as_ref().into_pyobject(py)?.into_any(),
+                        Key::Uint(u64) => u64.into_pyobject(py)?.into_any(),
+                        Key::Int(i64) => i64.into_pyobject(py)?.into_any(),
+                        Key::Bool(b) => {
+                            PyBool::new(py, *b).into_bound().into_any()
+                        }
                     };
-                    let value = RustyCelType(v.clone()).into_py(py);
-                    python_dict
-                        .set_item(key, value)
-                        .expect("Failed to set item in Python dict");
-                });
+                    let value = RustyCelType(v.clone()).into_pyobject(py)?;
+                    python_dict.set_item(&key, &value)?;
+                }
 
-                python_dict.into()
+                python_dict.into_any()
             }
 
             // Turn everything else into a String:
-            nonprimitive => format!("{:?}", nonprimitive).into_py(py),
-        }
+            nonprimitive => format!("{:?}", nonprimitive).into_pyobject(py)?.into_any(),
+        };
+        Ok(obj)
     }
 }
 
@@ -435,10 +441,13 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                         let mut py_args = Vec::new();
                         for arg_expr in &ftx.args {
                             let arg_value = ftx.ptx.resolve(arg_expr)?;
-                            let py_arg = RustyCelType(arg_value).into_py(py);
+                            let py_arg = RustyCelType(arg_value).into_pyobject(py)
+                                .map_err(|e| ExecutionError::function_error("argument_conversion", format!("Failed to convert argument: {}", e)))?
+                                .into_any().unbind();
                             py_args.push(py_arg);
                         }
-                        let py_args = PyTuple::new_bound(py, py_args);
+                        let py_args = PyTuple::new(py, py_args)
+                            .map_err(|e| ExecutionError::function_error("tuple_creation", format!("Failed to create tuple: {}", e)))?;
 
                         // Call the Python function
                         let py_result = py_function.call1(py, py_args).map_err(|e| {
