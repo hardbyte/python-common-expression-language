@@ -470,9 +470,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                 "Failed to parse expression '{src}': Invalid syntax"
             ))
         })?
-        .map_err(|e| {
-            PyValueError::new_err(format!("Failed to compile expression '{src}': {e}"))
-        })?;
+        .map_err(|e| PyValueError::new_err(format!("Failed to compile expression '{src}': {e}")))?;
 
     debug!("Compiled program: {:?}", program);
 
