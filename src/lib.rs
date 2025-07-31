@@ -3,7 +3,7 @@ mod context;
 use cel_interpreter::objects::{Key, TryIntoValue};
 use cel_interpreter::{ExecutionError, Program, Value};
 use log::{debug, warn};
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::BoundObject;
 use std::panic;
@@ -68,7 +68,7 @@ impl<'py> IntoPyObject<'py> for RustyCelType {
             }
 
             // Turn everything else into a String:
-            nonprimitive => format!("{:?}", nonprimitive).into_pyobject(py)?.into_any(),
+            nonprimitive => format!("{nonprimitive:?}").into_pyobject(py)?.into_any(),
         };
         Ok(obj)
     }
@@ -85,11 +85,82 @@ pub enum CelError {
 impl fmt::Display for CelError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CelError::ConversionError(msg) => write!(f, "Conversion Error: {}", msg),
+            CelError::ConversionError(msg) => write!(f, "Conversion Error: {msg}"),
         }
     }
 }
 impl Error for CelError {}
+
+/// Enhanced error handling that maps CEL execution errors to appropriate Python exceptions
+fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
+    match error {
+        ExecutionError::UndeclaredReference(name) => {
+            PyRuntimeError::new_err(format!(
+                "Undefined variable or function: '{name}'. Check that the variable is defined in the context or that the function name is spelled correctly."
+            ))
+        },
+        ExecutionError::UnsupportedBinaryOperator(op, left_type, right_type) => {
+            let left_type_str = format!("{left_type:?}");
+            let right_type_str = format!("{right_type:?}");
+            match *op {
+                "add" => {
+                    if (left_type_str.contains("Int") && right_type_str.contains("UInt")) ||
+                       (left_type_str.contains("UInt") && right_type_str.contains("Int")) {
+                        PyTypeError::new_err(format!(
+                            "Cannot mix signed and unsigned integers in arithmetic: {left_type:?} + {right_type:?}. Use explicit conversion: int(value) or uint(value)"
+                        ))
+                    } else {
+                        PyTypeError::new_err(format!(
+                            "Unsupported addition operation: {left_type:?} + {right_type:?}. Check that both operands are compatible types (int+int, double+double, string+string, etc.)"
+                        ))
+                    }
+                },
+                "mul" => {
+                    PyTypeError::new_err(format!(
+                        "Unsupported multiplication operation: {left_type:?} * {right_type:?}. Ensure both operands are numeric and of compatible types. Use explicit conversion if needed: double(value)*double(value)"
+                    ))
+                },
+                "sub" => {
+                    PyTypeError::new_err(format!(
+                        "Unsupported subtraction operation: {left_type:?} - {right_type:?}. Ensure both operands are numeric and of compatible types."
+                    ))
+                },
+                "div" => {
+                    PyTypeError::new_err(format!(
+                        "Unsupported division operation: {left_type:?} / {right_type:?}. Ensure both operands are numeric and of compatible types."
+                    ))
+                },
+                _ => {
+                    PyTypeError::new_err(format!(
+                        "Unsupported operation '{op}' between {left_type:?} and {right_type:?}. Check the CEL specification for supported operations between these types."
+                    ))
+                }
+            }
+        },
+        ExecutionError::FunctionError { function, message } => {
+            PyRuntimeError::new_err(format!(
+                "Function '{function}' error: {message}. Check function arguments and their types."
+            ))
+        },
+        _ => {
+            // Fallback for any other execution errors - provide helpful message based on error content
+            let error_str = format!("{error:?}");
+            if error_str.contains("UndeclaredReference") {
+                PyRuntimeError::new_err(format!(
+                    "Undefined variable or function. Check that all variables are defined in the context and function names are spelled correctly. Error: {error}"
+                ))
+            } else if error_str.contains("UnsupportedBinaryOperator") {
+                PyTypeError::new_err(format!(
+                    "Unsupported operation between incompatible types. Check the CEL specification for supported operations. Error: {error}"
+                ))
+            } else {
+                PyValueError::new_err(format!(
+                    "CEL execution error: {error}. This may indicate an unsupported operation or invalid expression."
+                ))
+            }
+        }
+    }
+}
 
 /// Analyzes context for mixed int/float usage and returns whether to promote integers to floats
 fn should_promote_integers_to_floats(variables: &HashMap<String, Value>) -> bool {
@@ -213,7 +284,7 @@ fn should_skip_integer_conversion(expr: &str, start: usize, _end: usize) -> bool
 
 /// Always preprocesses expression to promote integer literals to floats (used when context has mixed types)
 fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
-    debug!("Always preprocessing expression: {}", expr);
+    debug!("Always preprocessing expression: {expr}");
 
     // Convert all integer literals to floats
     // This is a more comprehensive approach than operator-by-operator processing
@@ -230,7 +301,7 @@ fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
 
         // Extract the integer
         let integer_str = &result[adjusted_start..adjusted_end];
-        let float_str = format!("{}.0", integer_str);
+        let float_str = format!("{integer_str}.0");
 
         // Replace in the result string
         result.replace_range(adjusted_start..adjusted_end, &float_str);
@@ -238,7 +309,7 @@ fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
         // Update offset for subsequent replacements (we added ".0", so +2)
         offset += 2;
     }
-    debug!("Final processed expression: {}", result);
+    debug!("Final processed expression: {result}");
     result
 }
 
@@ -322,13 +393,13 @@ impl TryIntoValue for RustyPyType<'_> {
                 } else if let Ok(value) = pyobject.extract::<Vec<u8>>() {
                     Ok(Value::Bytes(value.into()))
                 } else {
+                    let type_name = pyobject
+                        .get_type()
+                        .name()
+                        .map(|ps| ps.to_string())
+                        .unwrap_or("<unknown>".into());
                     Err(CelError::ConversionError(format!(
-                        "Failed to convert Python object of type {} to Value",
-                        pyobject
-                            .get_type()
-                            .name()
-                            .map(|ps| ps.to_string())
-                            .unwrap_or("<unknown>".into())
+                        "Failed to convert Python object of type {type_name} to Value"
                     )))
                 }
             }
@@ -341,7 +412,7 @@ impl TryIntoValue for RustyPyType<'_> {
 /// Returns a String representation of the result
 #[pyfunction(signature = (src, evaluation_context=None))]
 fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<RustyCelType> {
-    debug!("Evaluating CEL expression: {}", src);
+    debug!("Evaluating CEL expression: {src}");
 
     // Preprocess expression for better mixed int/float arithmetic compatibility
     // First check if expression itself has mixed literals
@@ -388,7 +459,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
             // Always preprocess the expression when we're promoting types
             // This handles cases where context has floats but expression has integer literals
             processed_src = preprocess_expression_for_mixed_arithmetic_always(&src);
-            debug!("Processed expression: {} -> {}", src, processed_src);
+            debug!("Processed expression: {src} -> {processed_src}");
         }
     }
 
@@ -396,15 +467,12 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
     let program = panic::catch_unwind(|| Program::compile(&processed_src))
         .map_err(|_| {
             PyValueError::new_err(format!(
-                "Failed to parse expression '{}': Invalid syntax",
-                src
+                "Failed to parse expression '{src}': Invalid syntax"
             ))
         })?
-        .map_err(|e| {
-            PyValueError::new_err(format!("Failed to compile expression '{}': {}", src, e))
-        })?;
+        .map_err(|e| PyValueError::new_err(format!("Failed to compile expression '{src}': {e}")))?;
 
-    debug!("Compiled program: {:?}", program);
+    debug!("Compiled program: {program:?}");
 
     // Add variables and functions if we have a context
     if evaluation_context.is_some() {
@@ -413,7 +481,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
             environment
                 .add_variable(name.clone(), value.clone())
                 .map_err(|e| {
-                    PyValueError::new_err(format!("Failed to add variable '{}': {}", name, e))
+                    PyValueError::new_err(format!("Failed to add variable '{name}': {e}"))
                 })?;
         }
 
@@ -439,7 +507,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                                 .map_err(|e| {
                                     ExecutionError::function_error(
                                         "argument_conversion",
-                                        format!("Failed to convert argument: {}", e),
+                                        format!("Failed to convert argument: {e}"),
                                     )
                                 })?
                                 .into_any()
@@ -449,7 +517,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                         let py_args = PyTuple::new(py, py_args).map_err(|e| {
                             ExecutionError::function_error(
                                 "tuple_creation",
-                                format!("Failed to create tuple: {}", e),
+                                format!("Failed to create tuple: {e}"),
                             )
                         })?;
 
@@ -467,7 +535,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                         let value = RustyPyType(py_result_ref).try_into_value().map_err(|e| {
                             ExecutionError::FunctionError {
                                 function: name.clone(),
-                                message: format!("Error calling function '{}': {}", name, e),
+                                message: format!("Error calling function '{name}': {e}"),
                             }
                         })?;
                         Ok(value)
@@ -481,8 +549,8 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
     match result {
         Err(error) => {
             warn!("An error occurred during execution");
-            warn!("Execution error: {:?}", error);
-            Err(PyValueError::new_err(format!("Execution Error: {}", error)))
+            warn!("Execution error: {error:?}");
+            Err(map_execution_error_to_python(&error))
         }
 
         Ok(value) => Ok(RustyCelType(value)),

@@ -15,26 +15,26 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import typer
-from rich.console import Console
-from rich.syntax import Syntax
-from rich.table import Table
-from rich.panel import Panel
-from typing_extensions import Annotated
 
 # Prompt toolkit imports for enhanced REPL
 from prompt_toolkit import PromptSession
-from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.history import FileHistory
 from prompt_toolkit.lexers import PygmentsLexer
 from prompt_toolkit.styles import Style
+from pygments import token
 
 # Pygments imports for syntax highlighting
 from pygments.lexer import RegexLexer
-from pygments import token
+from rich.console import Console
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.table import Table
+from typing_extensions import Annotated
 
 try:
     from . import cel
@@ -74,6 +74,9 @@ class CELLexer(RegexLexer):
             # String literals
             (r'"([^"\\]|\\.)*"', token.String.Double),
             (r"'([^'\\]|\\.)*'", token.String.Single),
+            # Byte literals
+            (r'b"([^"\\]|\\.)*"', token.String.Affix),
+            (r"b'([^'\\]|\\.)*'", token.String.Affix),
             # Numeric literals
             (r"\b[0-9]+\.[0-9]*([eE][+-]?[0-9]+)?\b", token.Number.Float),
             (r"\b[0-9]+[eE][+-]?[0-9]+\b", token.Number.Float),
@@ -109,126 +112,63 @@ class CELFormatter:
     """Enhanced formatter using Rich for beautiful output."""
 
     @staticmethod
-    def format_result(result: Any, format_type: str = "auto") -> str:
-        """Format result based on output format type (returns string for backward compatibility)."""
+    def display(console_obj: Console, result: Any, format_type: str = "auto") -> None:
+        """Main entry point for displaying results - uses Rich renderables for efficiency."""
+        rich_renderable = CELFormatter.get_rich_renderable(result, format_type)
+        console_obj.print(rich_renderable)
+
+    @staticmethod
+    def get_rich_renderable(result: Any, format_type: str = "auto") -> Any:
+        """Returns a Rich renderable object for the given result and format type."""
         if format_type == "json":
-            return CELFormatter._to_json(result)
+            json_str = json.dumps(result, indent=2, default=str, ensure_ascii=False)
+            return Syntax(json_str, "json", theme="monokai", line_numbers=False)
         elif format_type == "pretty":
-            return CELFormatter._to_pretty(result)
+            return CELFormatter._get_pretty_renderable(result)
         elif format_type == "python":
             return repr(result)
         else:  # auto
-            return CELFormatter._auto_format(result)
+            return CELFormatter._get_auto_renderable(result)
 
     @staticmethod
-    def display_result(
-        console_obj: Console, result: Any, format_type: str = "auto"
-    ) -> None:
-        """Display result directly to console (more efficient, no string capture)."""
-        if format_type == "json":
-            CELFormatter._display_json(console_obj, result)
-        elif format_type == "pretty":
-            CELFormatter._display_pretty(console_obj, result)
-        elif format_type == "python":
-            console_obj.print(repr(result))
-        else:  # auto
-            CELFormatter._display_auto(console_obj, result)
-
-    @staticmethod
-    def _to_json(result: Any) -> str:
-        """Convert result to JSON with Rich syntax highlighting."""
-        try:
-            json_str = json.dumps(result, indent=2, default=str, ensure_ascii=False)
-            # Use Rich to display with syntax highlighting
-            syntax = Syntax(json_str, "json", theme="monokai", line_numbers=False)
+    def format_result(result: Any, format_type: str = "auto") -> str:
+        """Format result as string (for backward compatibility and testing)."""
+        rich_renderable = CELFormatter.get_rich_renderable(result, format_type)
+        # For Rich objects, we need to capture their output
+        if hasattr(rich_renderable, "__rich__") or hasattr(rich_renderable, "__rich_console__"):
             with console.capture() as capture:
-                console.print(syntax)
+                console.print(rich_renderable)
             return capture.get()
-        except (TypeError, ValueError):
-            return json.dumps(str(result), indent=2)
+        return str(rich_renderable)
 
     @staticmethod
-    def _to_pretty(result: Any) -> str:
-        """Pretty format result with Rich styling."""
-        type_name = type(result).__name__
-
+    def _get_pretty_renderable(result: Any) -> Any:
+        """Get Rich renderable for pretty-formatted result."""
         if isinstance(result, dict):
-            table = Table(
-                title="Dictionary Result", show_header=True, header_style="bold magenta"
-            )
+            table = Table(title="Dictionary Result", show_header=True, header_style="bold magenta")
             table.add_column("Key", style="cyan")
             table.add_column("Value", style="green")
             for k, v in result.items():
                 table.add_row(str(k), str(v))
-            with console.capture() as capture:
-                console.print(table)
-            return capture.get()
+            return table
         elif isinstance(result, list):
-            table = Table(
-                title="List Result", show_header=True, header_style="bold magenta"
-            )
+            table = Table(title="List Result", show_header=True, header_style="bold magenta")
             table.add_column("Index", style="cyan")
             table.add_column("Value", style="green")
             for i, v in enumerate(result):
                 table.add_row(str(i), str(v))
-            with console.capture() as capture:
-                console.print(table)
-            return capture.get()
-        else:
-            # Use f-string as suggested
-            return f"{result} ({type_name})"
-
-    @staticmethod
-    def _auto_format(result: Any) -> str:
-        """Auto-format based on result type."""
-        if isinstance(result, (dict, list)) and len(str(result)) > 100:
-            return CELFormatter._to_pretty(result)
-        return str(result)
-
-    # Direct display methods (more efficient, no string capture)
-    @staticmethod
-    def _display_json(console_obj: Console, result: Any) -> None:
-        """Display JSON result with syntax highlighting directly to console."""
-        try:
-            json_str = json.dumps(result, indent=2, default=str, ensure_ascii=False)
-            syntax = Syntax(json_str, "json", theme="monokai", line_numbers=False)
-            console_obj.print(syntax)
-        except (TypeError, ValueError):
-            console_obj.print(json.dumps(str(result), indent=2))
-
-    @staticmethod
-    def _display_pretty(console_obj: Console, result: Any) -> None:
-        """Display pretty formatted result directly to console."""
-        if isinstance(result, dict):
-            table = Table(
-                title="Dictionary Result", show_header=True, header_style="bold magenta"
-            )
-            table.add_column("Key", style="cyan")
-            table.add_column("Value", style="green")
-            for k, v in result.items():
-                table.add_row(str(k), str(v))
-            console_obj.print(table)
-        elif isinstance(result, list):
-            table = Table(
-                title="List Result", show_header=True, header_style="bold magenta"
-            )
-            table.add_column("Index", style="cyan")
-            table.add_column("Value", style="green")
-            for i, v in enumerate(result):
-                table.add_row(str(i), str(v))
-            console_obj.print(table)
+            return table
         else:
             # Use f-string as suggested
             type_name = type(result).__name__
-            console_obj.print(f"{result} ({type_name})")
+            return f"{result} ({type_name})"
 
     @staticmethod
-    def _display_auto(console_obj: Console, result: Any) -> None:
-        """Auto-display based on result type directly to console."""
+    def _get_auto_renderable(result: Any) -> Any:
+        """Get Rich renderable for auto-formatted result."""
         if isinstance(result, (dict, list)) and len(str(result)) > 100:
-            CELFormatter._display_pretty(console_obj, result)
-        else:
-            console_obj.print(str(result))
+            return CELFormatter._get_pretty_renderable(result)
+        return str(result)
 
 
 class CELEvaluator:
@@ -269,12 +209,22 @@ class EnhancedCELREPL:
     def __init__(self, evaluator: CELEvaluator, history_limit: int = 10):
         """Initialize REPL with enhanced features."""
         self.evaluator = evaluator
-        self.history: List[Tuple[str, Any]] = []
+        self.history: list[Tuple[str, Any]] = []
         self.history_limit = history_limit
 
-        # CEL keywords and functions for completion
-        cel_keywords = ["true", "false", "null", "if", "else", "in", "and", "or", "not"]
-        cel_functions = [
+        # CEL keywords and functions for completion - stored as instance variables
+        self.cel_keywords = [
+            "true",
+            "false",
+            "null",
+            "if",
+            "else",
+            "in",
+            "and",
+            "or",
+            "not",
+        ]
+        self.cel_functions = [
             "size",
             "has",
             "timestamp",
@@ -286,17 +236,22 @@ class EnhancedCELREPL:
             "bytes",
         ]
 
+        # Command dispatch dictionary for cleaner organization
+        self.commands = {
+            "help": self._show_help,
+            "context": self._show_context,
+            "history": self._show_history,
+        }
+
         # Setup prompt session with history, autocompletion, and syntax highlighting
         history_file = Path.home() / ".cel_history"
         self.session: PromptSession[str] = PromptSession(
             history=FileHistory(str(history_file)),
             auto_suggest=AutoSuggestFromHistory(),
-            completer=WordCompleter(
-                cel_keywords + cel_functions + list(self.evaluator.context.keys())
-            ),
             complete_while_typing=True,
             lexer=PygmentsLexer(CELLexer),  # Add real-time syntax highlighting
         )
+        self._update_completer()
 
         # Rich styling for the REPL
         self.style = Style.from_dict(
@@ -327,20 +282,17 @@ class EnhancedCELREPL:
                     continue
 
                 # Handle REPL commands
-                if expression.strip().lower() in ["exit", "quit"]:
+                command_parts = expression.strip().lower().split()
+                command = command_parts[0] if command_parts else ""
+
+                if command in ["exit", "quit"]:
                     console.print("[yellow]Goodbye![/yellow]")
                     break
-                elif expression.strip().lower() == "help":
-                    self._show_help()
+                elif command in self.commands:
+                    self.commands[command]()
                     continue
-                elif expression.strip().lower() == "context":
-                    self._show_context()
-                    continue
-                elif expression.strip().lower() == "history":
-                    self._show_history()
-                    continue
-                elif expression.strip().lower().startswith("load "):
-                    filename = expression.strip()[5:].strip()
+                elif command == "load" and len(command_parts) > 1:
+                    filename = " ".join(command_parts[1:])  # Handle filenames with spaces
                     self._load_context(filename)
                     continue
 
@@ -349,8 +301,8 @@ class EnhancedCELREPL:
                 result = self.evaluator.evaluate(expression)
                 eval_time = time.time() - start_time
 
-                # Display result directly to console (more efficient)
-                CELFormatter.display_result(console, result, "pretty")
+                # Display result using streamlined formatter
+                CELFormatter.display(console, result, "pretty")
 
                 # Show timing
                 console.print(f"[dim]Evaluated in {eval_time * 1000:.2f}ms[/dim]")
@@ -371,9 +323,7 @@ class EnhancedCELREPL:
 
     def _show_help(self):
         """Show enhanced REPL help."""
-        help_table = Table(
-            title="REPL Commands", show_header=True, header_style="bold magenta"
-        )
+        help_table = Table(title="REPL Commands", show_header=True, header_style="bold magenta")
         help_table.add_column("Command", style="cyan")
         help_table.add_column("Description", style="green")
 
@@ -405,9 +355,7 @@ class EnhancedCELREPL:
             console.print("[dim]No context variables set[/dim]")
             return
 
-        table = Table(
-            title="Context Variables", show_header=True, header_style="bold magenta"
-        )
+        table = Table(title="Context Variables", show_header=True, header_style="bold magenta")
         table.add_column("Variable", style="cyan")
         table.add_column("Type", style="yellow")
         table.add_column("Value", style="green")
@@ -423,9 +371,7 @@ class EnhancedCELREPL:
             console.print("[dim]No history available[/dim]")
             return
 
-        table = Table(
-            title="Expression History", show_header=True, header_style="bold magenta"
-        )
+        table = Table(title="Expression History", show_header=True, header_style="bold magenta")
         table.add_column("#", style="dim", width=3)
         table.add_column("Expression", style="cyan")
         table.add_column("Result", style="green")
@@ -441,6 +387,11 @@ class EnhancedCELREPL:
 
         console.print(table)
 
+    def _update_completer(self):
+        """Update the completer with current context variables."""
+        words = self.cel_keywords + self.cel_functions + list(self.evaluator.context.keys())
+        self.session.completer = WordCompleter(words)
+
     def _load_context(self, filename: str):
         """Load context from JSON file."""
         try:
@@ -448,34 +399,8 @@ class EnhancedCELREPL:
                 context = json.load(f)
             self.evaluator.update_context(context)
             console.print(f"[green]Loaded context from {filename}[/green]")
-
             # Update completer with new context variables
-            cel_keywords = [
-                "true",
-                "false",
-                "null",
-                "if",
-                "else",
-                "in",
-                "and",
-                "or",
-                "not",
-            ]
-            cel_functions = [
-                "size",
-                "has",
-                "timestamp",
-                "duration",
-                "int",
-                "uint",
-                "double",
-                "string",
-                "bytes",
-            ]
-            self.session.completer = WordCompleter(
-                cel_keywords + cel_functions + list(self.evaluator.context.keys())
-            )
-
+            self._update_completer()
         except Exception as e:
             console.print(f"[red]Error loading context: {e}[/red]")
 
@@ -487,10 +412,10 @@ def load_context_from_file(filename: Path) -> Dict[str, Any]:
             return json.load(f)
     except json.JSONDecodeError as e:
         console.print(f"[red]Error: Invalid JSON in {filename}: {e}[/red]")
-        raise typer.Exit(1)
-    except FileNotFoundError:
+        raise typer.Exit(1) from e
+    except FileNotFoundError as e:
         console.print(f"[red]Error: Context file '{filename}' not found[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 def evaluate_expressions_from_file(
@@ -500,13 +425,11 @@ def evaluate_expressions_from_file(
     try:
         with open(filename, "r") as f:
             expressions = [
-                line.strip()
-                for line in f
-                if line.strip() and not line.strip().startswith("#")
+                line.strip() for line in f if line.strip() and not line.strip().startswith("#")
             ]
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         console.print(f"[red]Error: Expression file '{filename}' not found[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     if not expressions:
         console.print("[yellow]No expressions found in file[/yellow]")
@@ -539,9 +462,7 @@ def evaluate_expressions_from_file(
         syntax = Syntax(json_output, "json", theme="monokai")
         console.print(syntax)
     else:
-        table = Table(
-            title="Expression Results", show_header=True, header_style="bold magenta"
-        )
+        table = Table(title="Expression Results", show_header=True, header_style="bold magenta")
         table.add_column("#", style="dim", width=3)
         table.add_column("Expression", style="cyan")
         table.add_column("Result", style="green")
@@ -559,18 +480,14 @@ def evaluate_expressions_from_file(
                 result_str = str(result["result"])
                 if len(result_str) > 50:
                     result_str = result_str[:47] + "..."
-                table.add_row(
-                    str(i), result["expression"], result_str, f"{result['time_ms']:.2f}"
-                )
+                table.add_row(str(i), result["expression"], result_str, f"{result['time_ms']:.2f}")
 
         console.print(table)
 
 
 @app.command()
 def main(
-    expression: Annotated[
-        Optional[str], typer.Argument(help="CEL expression to evaluate")
-    ] = None,
+    expression: Annotated[Optional[str], typer.Argument(help="CEL expression to evaluate")] = None,
     context: Annotated[
         Optional[str], typer.Option("-c", "--context", help="Context as JSON string")
     ] = None,
@@ -582,18 +499,12 @@ def main(
         Optional[Path],
         typer.Option("--file", help="Read expressions from file (one per line)"),
     ] = None,
-    output: Annotated[
-        str, typer.Option("-o", "--output", help="Output format")
-    ] = "auto",
+    output: Annotated[str, typer.Option("-o", "--output", help="Output format")] = "auto",
     interactive: Annotated[
         bool, typer.Option("-i", "--interactive", help="Start interactive REPL mode")
     ] = False,
-    timing: Annotated[
-        bool, typer.Option("-t", "--timing", help="Show evaluation timing")
-    ] = False,
-    verbose: Annotated[
-        bool, typer.Option("-v", "--verbose", help="Verbose output")
-    ] = False,
+    timing: Annotated[bool, typer.Option("-t", "--timing", help="Show evaluation timing")] = False,
+    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Verbose output")] = False,
 ):
     """
     Evaluate CEL expressions with enhanced CLI experience.
@@ -623,7 +534,7 @@ def main(
             eval_context = json.loads(context)
         except json.JSONDecodeError as e:
             console.print(f"[red]Error: Invalid JSON in context: {e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     if context_file:
         file_context = load_context_from_file(context_file)
@@ -631,7 +542,6 @@ def main(
 
     # Initialize evaluator
     evaluator = CELEvaluator(eval_context)
-    formatter = CELFormatter()
 
     # Interactive mode
     if interactive:
@@ -658,16 +568,8 @@ def main(
         result = evaluator.evaluate(expression)
         eval_time = time.time() - start_time
 
-        # Format and output result
-        if output == "json":
-            syntax = Syntax(
-                json.dumps(result, indent=2, default=str), "json", theme="monokai"
-            )
-            console.print(syntax)
-        elif output == "pretty":
-            console.print(formatter._to_pretty(result))
-        else:
-            console.print(str(result))
+        # Format and output result using streamlined formatter
+        CELFormatter.display(console, result, output)
 
         # Show timing if requested
         if timing or verbose:
@@ -682,7 +584,7 @@ def main(
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 def cli_entry():
