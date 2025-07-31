@@ -28,9 +28,7 @@ impl<'py> IntoPyObject<'py> for RustyCelType {
         let obj = match self {
             // Primitive Types
             RustyCelType(Value::Null) => py.None().into_bound(py),
-            RustyCelType(Value::Bool(b)) => {
-                PyBool::new(py, b).into_bound().into_any()
-            }
+            RustyCelType(Value::Bool(b)) => PyBool::new(py, b).into_bound().into_any(),
             RustyCelType(Value::Int(i64)) => i64.into_pyobject(py)?.into_any(),
             RustyCelType(Value::UInt(u64)) => u64.into_pyobject(py)?.into_any(),
             RustyCelType(Value::Float(f)) => f.into_pyobject(py)?.into_any(),
@@ -42,7 +40,7 @@ impl<'py> IntoPyObject<'py> for RustyCelType {
             RustyCelType(Value::String(s)) => s.as_ref().to_string().into_pyobject(py)?.into_any(),
             RustyCelType(Value::List(val)) => {
                 let list = PyList::empty(py);
-                for v in val.as_ref().into_iter() {
+                for v in val.as_ref().iter() {
                     let item = RustyCelType(v.clone()).into_pyobject(py)?;
                     list.append(&item)?;
                 }
@@ -54,15 +52,13 @@ impl<'py> IntoPyObject<'py> for RustyCelType {
                 // Create a PyDict with the converted Python key and values.
                 let python_dict = PyDict::new(py);
 
-                for (k, v) in val.map.as_ref().into_iter() {
+                for (k, v) in val.map.as_ref().iter() {
                     // Key is an enum with String, Uint, Int and Bool variants. Value is any RustyCelType
                     let key = match k {
                         Key::String(s) => s.as_ref().into_pyobject(py)?.into_any(),
                         Key::Uint(u64) => u64.into_pyobject(py)?.into_any(),
                         Key::Int(i64) => i64.into_pyobject(py)?.into_any(),
-                        Key::Bool(b) => {
-                            PyBool::new(py, *b).into_bound().into_any()
-                        }
+                        Key::Bool(b) => PyBool::new(py, *b).into_bound().into_any(),
                     };
                     let value = RustyCelType(v.clone()).into_pyobject(py)?;
                     python_dict.set_item(&key, &value)?;
@@ -128,22 +124,24 @@ fn find_integer_literals(expr: &str) -> Vec<(usize, usize)> {
     let chars: Vec<char> = expr.chars().collect();
     let len = chars.len();
     let mut i = 0;
-    
+
     while i < len {
-        if chars[i].is_ascii_digit() || (chars[i] == '.' && i + 1 < len && chars[i + 1].is_ascii_digit()) {
+        if chars[i].is_ascii_digit()
+            || (chars[i] == '.' && i + 1 < len && chars[i + 1].is_ascii_digit())
+        {
             let start = i;
-            
+
             // Handle numbers that start with decimal point (like .456789)
             let starts_with_decimal = chars[i] == '.';
             if starts_with_decimal {
                 i += 1; // Skip the initial '.'
             }
-            
+
             // Skip all digits
             while i < len && chars[i].is_ascii_digit() {
                 i += 1;
             }
-            
+
             // Check if this is already a float (has decimal point) - but only if it didn't start with one
             if !starts_with_decimal && i < len && chars[i] == '.' {
                 // This is already a float, skip the decimal part
@@ -153,7 +151,7 @@ fn find_integer_literals(expr: &str) -> Vec<(usize, usize)> {
                 }
                 continue;
             }
-            
+
             // Check if this is scientific notation (e.g., 123e4)
             if i < len && (chars[i] == 'e' || chars[i] == 'E') {
                 // Skip scientific notation
@@ -166,37 +164,37 @@ fn find_integer_literals(expr: &str) -> Vec<(usize, usize)> {
                 }
                 continue;
             }
-            
+
             // Skip this if it starts with decimal point (already a float)
             if starts_with_decimal {
                 continue;
             }
-            
+
             // Check if this integer is in a context where it shouldn't be converted to float
             // e.g., array indices [2], or other contexts where integers are expected
             if should_skip_integer_conversion(expr, start, i) {
                 continue;
             }
-            
+
             // This is an integer literal that should be converted
             matches.push((start, i));
         } else {
             i += 1;
         }
     }
-    
+
     matches
 }
 
 /// Check if an integer at the given position should not be converted to float
 fn should_skip_integer_conversion(expr: &str, start: usize, _end: usize) -> bool {
     let chars: Vec<char> = expr.chars().collect();
-    
+
     // Check if this integer is used as an array/list index [integer]
     if start > 0 && chars[start - 1] == '[' {
         return true;
     }
-    
+
     // Check if this integer is immediately after a '[' with possible whitespace
     let mut check_pos = start;
     while check_pos > 0 {
@@ -209,42 +207,40 @@ fn should_skip_integer_conversion(expr: &str, start: usize, _end: usize) -> bool
             break;
         }
     }
-    
+
     false
 }
-
 
 /// Always preprocesses expression to promote integer literals to floats (used when context has mixed types)
 fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
     debug!("Always preprocessing expression: {}", expr);
-    
-    // Convert all integer literals to floats 
+
+    // Convert all integer literals to floats
     // This is a more comprehensive approach than operator-by-operator processing
     let mut result = expr.to_string();
-    
+
     // Use regex-like approach to find integer literals and convert them to floats
     // This approach modifies the string directly, which is more reliable
     let mut offset = 0;
     let original_result = result.clone();
-    
+
     for (match_start, match_end) in find_integer_literals(&original_result) {
         let adjusted_start = match_start + offset;
         let adjusted_end = match_end + offset;
-        
+
         // Extract the integer
         let integer_str = &result[adjusted_start..adjusted_end];
         let float_str = format!("{}.0", integer_str);
-        
+
         // Replace in the result string
         result.replace_range(adjusted_start..adjusted_end, &float_str);
-        
+
         // Update offset for subsequent replacements (we added ".0", so +2)
         offset += 2;
     }
     debug!("Final processed expression: {}", result);
     result
 }
-
 
 /// We can't implement TryIntoValue for PyAny, so we implement for our wrapper RustyPyType
 impl TryIntoValue for RustyPyType<'_> {
@@ -372,7 +368,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
             ctx.functions = py_context_ref.functions.clone();
         } else if let Ok(py_dict) = evaluation_context.downcast::<PyDict>() {
             // User passed in a dict - let's process variables and functions from the dict
-            ctx.update(&py_dict)?;
+            ctx.update(py_dict)?;
         } else {
             return Err(PyValueError::new_err(
                 "evaluation_context must be a Context object or a dict",
@@ -381,14 +377,14 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
 
         // Smart numeric coercion for mixed int/float arithmetic compatibility
         variables_for_env = ctx.variables.clone();
-        
+
         // Check if we should promote integers to floats for better compatibility
-        let should_promote = should_promote_integers_to_floats(&variables_for_env) || 
-                           expression_has_mixed_numeric_literals(&src);
-        
+        let should_promote = should_promote_integers_to_floats(&variables_for_env)
+            || expression_has_mixed_numeric_literals(&src);
+
         if should_promote {
             promote_integers_in_context(&mut variables_for_env);
-            
+
             // Always preprocess the expression when we're promoting types
             // This handles cases where context has floats but expression has integer literals
             processed_src = preprocess_expression_for_mixed_arithmetic_always(&src);
@@ -397,24 +393,21 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
     }
 
     // Use panic::catch_unwind to handle parser panics gracefully
-    let program = panic::catch_unwind(|| {
-        Program::compile(&processed_src)
-    }).map_err(|_| {
-        PyValueError::new_err(format!(
-            "Failed to parse expression '{}': Invalid syntax",
-            src
-        ))
-    })?.map_err(|e| {
-        PyValueError::new_err(format!(
-            "Failed to compile expression '{}': {}",
-            src, e
-        ))
-    })?;
+    let program = panic::catch_unwind(|| Program::compile(&processed_src))
+        .map_err(|_| {
+            PyValueError::new_err(format!(
+                "Failed to parse expression '{}': Invalid syntax",
+                src
+            ))
+        })?
+        .map_err(|e| {
+            PyValueError::new_err(format!("Failed to compile expression '{}': {}", src, e))
+        })?;
 
     debug!("Compiled program: {:?}", program);
 
     // Add variables and functions if we have a context
-    if let Some(_) = evaluation_context {
+    if evaluation_context.is_some() {
         // Add any variables from the processed context
         for (name, value) in &variables_for_env {
             environment
@@ -441,13 +434,24 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                         let mut py_args = Vec::new();
                         for arg_expr in &ftx.args {
                             let arg_value = ftx.ptx.resolve(arg_expr)?;
-                            let py_arg = RustyCelType(arg_value).into_pyobject(py)
-                                .map_err(|e| ExecutionError::function_error("argument_conversion", format!("Failed to convert argument: {}", e)))?
-                                .into_any().unbind();
+                            let py_arg = RustyCelType(arg_value)
+                                .into_pyobject(py)
+                                .map_err(|e| {
+                                    ExecutionError::function_error(
+                                        "argument_conversion",
+                                        format!("Failed to convert argument: {}", e),
+                                    )
+                                })?
+                                .into_any()
+                                .unbind();
                             py_args.push(py_arg);
                         }
-                        let py_args = PyTuple::new(py, py_args)
-                            .map_err(|e| ExecutionError::function_error("tuple_creation", format!("Failed to create tuple: {}", e)))?;
+                        let py_args = PyTuple::new(py, py_args).map_err(|e| {
+                            ExecutionError::function_error(
+                                "tuple_creation",
+                                format!("Failed to create tuple: {}", e),
+                            )
+                        })?;
 
                         // Call the Python function
                         let py_result = py_function.call1(py, py_args).map_err(|e| {
@@ -460,7 +464,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                         let py_result_ref = py_result.bind(py);
 
                         // Convert the result back to Value
-                        let value = RustyPyType(&py_result_ref).try_into_value().map_err(|e| {
+                        let value = RustyPyType(py_result_ref).try_into_value().map_err(|e| {
                             ExecutionError::FunctionError {
                                 function: name.clone(),
                                 message: format!("Error calling function '{}': {}", name, e),
@@ -481,13 +485,13 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
             Err(PyValueError::new_err(format!("Execution Error: {}", error)))
         }
 
-        Ok(value) => return Ok(RustyCelType(value)),
+        Ok(value) => Ok(RustyCelType(value)),
     }
 }
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn cel<'py>(_py: Python<'py>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn cel(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
