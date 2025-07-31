@@ -13,7 +13,14 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
+    "typer>=0.12.0",
+    "rich>=13.0.0", 
+    "prompt-toolkit>=3.0.0",
+    "pygments>=2.0.0",
 ]
+
+[project.scripts]
+cel = "cel.cli:cli_entry"
 
 [project.urls]
 Homepage = "https://github.com/hardbyte/python-common-expression-language"
@@ -26,10 +33,12 @@ build-backend = "maturin"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+python-source = "python"
 
 [tool.uv]
 dev-dependencies = [
     "pytest>=8.4.1",
     "maturin>=1.8.0",
-    "pip>=25.0.0",
+    "ruff>=0.12.7",
+    "mypy>=1.17.1",
 ]
