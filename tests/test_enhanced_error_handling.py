@@ -4,8 +4,8 @@ Tests for enhanced error handling with improved error messages and exception typ
 Tests various error scenarios to ensure proper Python exception types and helpful messages.
 """
 
-import pytest
 import cel
+import pytest
 
 
 class TestEnhancedErrorHandling:

@@ -9,8 +9,9 @@ This module consolidates all datetime-related testing including:
 """
 
 import datetime
-import pytest
+
 import cel
+import pytest
 
 
 class TestDatetimeBasics:
@@ -72,14 +73,14 @@ class TestDatetimeBasics:
 
         # Verify types are preserved
         dt_result = cel.evaluate("dt", {"dt": dt})
-        assert type(dt_result) == datetime.datetime
+        assert isinstance(dt_result, datetime.datetime)
 
         delta_result = cel.evaluate("delta", {"delta": delta})
-        assert type(delta_result) == datetime.timedelta
+        assert isinstance(delta_result, datetime.timedelta)
 
         # Arithmetic should return correct types
         add_result = cel.evaluate("dt + delta", {"dt": dt, "delta": delta})
-        assert type(add_result) == datetime.datetime
+        assert isinstance(add_result, datetime.datetime)
 
 
 class TestDatetimeArithmetic:

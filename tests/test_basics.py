@@ -1,8 +1,7 @@
 import datetime
 
-import pytest
-
 import cel
+import pytest
 
 
 def test_readme_example():
@@ -13,7 +12,7 @@ def test_readme_example():
 
 
 def test_return_bool():
-    assert cel.evaluate("1 == 1") == True
+    assert cel.evaluate("1 == 1")
 
 
 def test_return_list():
@@ -25,7 +24,7 @@ def test_return_dict():
 
 
 def test_return_null():
-    assert cel.evaluate("null") == None
+    assert cel.evaluate("null") is None
 
 
 def test_timestamp():
@@ -108,7 +107,7 @@ def test_bytes_size():
 
 def test_bytes_inequality():
     result = cel.evaluate("b'hello' != b'world'")
-    assert result == True
+    assert result
 
 
 def test_bytes_equality_via_context():

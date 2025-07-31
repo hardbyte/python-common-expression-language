@@ -5,8 +5,8 @@ This module tests logical AND (&&), OR (||), and NOT (!) operators,
 including short-circuit evaluation behavior.
 """
 
-import pytest
 import cel
+import pytest
 
 
 class TestLogicalOperators:

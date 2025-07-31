@@ -5,8 +5,8 @@ These tests document known issues with the underlying CEL parser
 where invalid syntax causes Rust panics instead of proper error messages.
 """
 
-import pytest
 import cel
+import pytest
 
 
 class TestParserErrors:

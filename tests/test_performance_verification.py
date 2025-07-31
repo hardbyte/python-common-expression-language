@@ -4,8 +4,9 @@ These tests verify that our PyO3 0.25.0 optimizations maintain functionality
 while potentially improving performance.
 """
 
-import time
 import datetime
+import time
+
 import cel
 
 
@@ -78,7 +79,7 @@ def test_function_call_performance():
 
     # Test with multiple function calls
     start_time = time.time()
-    for i in range(50):  # 50 function calls
+    for _i in range(50):  # 50 function calls
         result = cel.evaluate("test_func(1, 2, 3, 4, 5)", context)
         assert result == 15
     end_time = time.time()

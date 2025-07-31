@@ -1,6 +1,5 @@
-import pytest
-
 import cel
+import pytest
 
 
 def test_custom_function():
@@ -14,5 +13,5 @@ def test_readme_custom_function_example():
     def is_adult(age):
         return age > 21
 
-    assert cel.evaluate("is_adult(age)", {"is_adult": is_adult, "age": 18}) == False
-    assert cel.evaluate("is_adult(age)", {"is_adult": is_adult, "age": 32}) == True
+    assert not cel.evaluate("is_adult(age)", {"is_adult": is_adult, "age": 18})
+    assert cel.evaluate("is_adult(age)", {"is_adult": is_adult, "age": 32})

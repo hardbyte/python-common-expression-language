@@ -5,8 +5,9 @@ This tests that docstrings and help text are available and contain
 expected information for users discovering the API.
 """
 
-import cel
 import inspect
+
+import cel
 
 
 def test_module_has_evaluate_function():

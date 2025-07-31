@@ -9,8 +9,9 @@ Aarithmetic operations tests for CEL bindings.
 """
 
 import datetime
-import pytest
+
 import cel
+import pytest
 
 
 class TestBasicArithmetic:

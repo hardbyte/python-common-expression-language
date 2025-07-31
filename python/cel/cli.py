@@ -18,23 +18,23 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import typer
-from rich.console import Console
-from rich.syntax import Syntax
-from rich.table import Table
-from rich.panel import Panel
-from typing_extensions import Annotated
 
 # Prompt toolkit imports for enhanced REPL
 from prompt_toolkit import PromptSession
-from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.history import FileHistory
 from prompt_toolkit.lexers import PygmentsLexer
 from prompt_toolkit.styles import Style
+from pygments import token
 
 # Pygments imports for syntax highlighting
 from pygments.lexer import RegexLexer
-from pygments import token
+from rich.console import Console
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.table import Table
+from typing_extensions import Annotated
 
 try:
     from . import cel
@@ -412,10 +412,10 @@ def load_context_from_file(filename: Path) -> Dict[str, Any]:
             return json.load(f)
     except json.JSONDecodeError as e:
         console.print(f"[red]Error: Invalid JSON in {filename}: {e}[/red]")
-        raise typer.Exit(1)
-    except FileNotFoundError:
+        raise typer.Exit(1) from e
+    except FileNotFoundError as e:
         console.print(f"[red]Error: Context file '{filename}' not found[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 def evaluate_expressions_from_file(
@@ -427,9 +427,9 @@ def evaluate_expressions_from_file(
             expressions = [
                 line.strip() for line in f if line.strip() and not line.strip().startswith("#")
             ]
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         console.print(f"[red]Error: Expression file '{filename}' not found[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     if not expressions:
         console.print("[yellow]No expressions found in file[/yellow]")
@@ -534,7 +534,7 @@ def main(
             eval_context = json.loads(context)
         except json.JSONDecodeError as e:
             console.print(f"[red]Error: Invalid JSON in context: {e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     if context_file:
         file_context = load_context_from_file(context_file)
@@ -584,7 +584,7 @@ def main(
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 def cli_entry():

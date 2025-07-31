@@ -13,21 +13,21 @@ import json
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
+
 import pytest
 import typer
 
-from rich.console import Console
-from rich.table import Table
-from rich.syntax import Syntax
-
 # Import CLI components
 from cel.cli import (
-    CELFormatter,
     CELEvaluator,
+    CELFormatter,
     EnhancedCELREPL,
-    load_context_from_file,
     evaluate_expressions_from_file,
+    load_context_from_file,
 )
+from rich.console import Console
+from rich.syntax import Syntax
+from rich.table import Table
 
 
 class TestCELFormatter:
@@ -396,8 +396,8 @@ class TestCLIIntegration:
 
     def test_main_app_is_typer_app(self):
         """Test that the main app is a Typer application."""
-        from cel.cli import app
         import typer
+        from cel.cli import app
 
         assert isinstance(app, typer.Typer)
 

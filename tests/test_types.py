@@ -10,8 +10,9 @@ This module consolidates all type-related testing including:
 
 import datetime
 import math
-import pytest
+
 import cel
+import pytest
 
 
 class TestBasicTypeConversion:

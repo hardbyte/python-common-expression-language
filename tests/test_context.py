@@ -1,9 +1,9 @@
-import pytest
 import cel
+import pytest
 
 
 def test_create_empty_context():
-    context = cel.Context()
+    cel.Context()
 
 
 def test_context_vars_explicit():
@@ -18,7 +18,7 @@ def test_context_vars_implicit():
 
 def test_context_vars_none_value():
     context = cel.Context({"a": None})
-    assert cel.evaluate("a", context) == None
+    assert cel.evaluate("a", context) is None
 
 
 def test_adding_to_context():
