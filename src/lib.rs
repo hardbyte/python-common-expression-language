@@ -3,7 +3,7 @@ mod context;
 use cel_interpreter::objects::{Key, TryIntoValue};
 use cel_interpreter::{ExecutionError, Program, Value};
 use log::{debug, warn};
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyRuntimeError, PySyntaxError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::BoundObject;
 use std::panic;
@@ -90,6 +90,88 @@ impl fmt::Display for CelError {
     }
 }
 impl Error for CelError {}
+
+/// Enhanced error handling that maps CEL execution errors to appropriate Python exceptions
+fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
+    match error {
+        ExecutionError::UndeclaredReference(name) => {
+            PyRuntimeError::new_err(format!(
+                "Undefined variable or function: '{}'. Check that the variable is defined in the context or that the function name is spelled correctly.", 
+                name
+            ))
+        },
+        ExecutionError::UnsupportedBinaryOperator(op, left_type, right_type) => {
+            let left_type_str = format!("{:?}", left_type);
+            let right_type_str = format!("{:?}", right_type);
+            match *op {
+                "add" => {
+                    if (left_type_str.contains("Int") && right_type_str.contains("UInt")) ||
+                       (left_type_str.contains("UInt") && right_type_str.contains("Int")) {
+                        PyTypeError::new_err(format!(
+                            "Cannot mix signed and unsigned integers in arithmetic: {:?} + {:?}. Use explicit conversion: int(value) or uint(value)",
+                            left_type, right_type
+                        ))
+                    } else {
+                        PyTypeError::new_err(format!(
+                            "Unsupported addition operation: {:?} + {:?}. Check that both operands are compatible types (int+int, double+double, string+string, etc.)",
+                            left_type, right_type
+                        ))
+                    }
+                },
+                "mul" => {
+                    PyTypeError::new_err(format!(
+                        "Unsupported multiplication operation: {:?} * {:?}. Ensure both operands are numeric and of compatible types. Use explicit conversion if needed: double(value)*double(value)",
+                        left_type, right_type
+                    ))
+                },
+                "sub" => {
+                    PyTypeError::new_err(format!(
+                        "Unsupported subtraction operation: {:?} - {:?}. Ensure both operands are numeric and of compatible types.",
+                        left_type, right_type
+                    ))
+                },
+                "div" => {
+                    PyTypeError::new_err(format!(
+                        "Unsupported division operation: {:?} / {:?}. Ensure both operands are numeric and of compatible types.",
+                        left_type, right_type
+                    ))
+                },
+                _ => {
+                    PyTypeError::new_err(format!(
+                        "Unsupported operation '{}' between {:?} and {:?}. Check the CEL specification for supported operations between these types.",
+                        op, left_type, right_type
+                    ))
+                }
+            }
+        },
+        ExecutionError::FunctionError { function, message } => {
+            PyRuntimeError::new_err(format!(
+                "Function '{}' error: {}. Check function arguments and their types.", 
+                function, message
+            ))
+        },
+        _ => {
+            // Fallback for any other execution errors - provide helpful message based on error content
+            let error_str = format!("{:?}", error);
+            if error_str.contains("UndeclaredReference") {
+                PyRuntimeError::new_err(format!(
+                    "Undefined variable or function. Check that all variables are defined in the context and function names are spelled correctly. Error: {}", 
+                    error
+                ))
+            } else if error_str.contains("UnsupportedBinaryOperator") {
+                PyTypeError::new_err(format!(
+                    "Unsupported operation between incompatible types. Check the CEL specification for supported operations. Error: {}", 
+                    error
+                ))
+            } else {
+                PyValueError::new_err(format!(
+                    "CEL execution error: {}. This may indicate an unsupported operation or invalid expression.", 
+                    error
+                ))
+            }
+        }
+    }
+}
 
 /// Analyzes context for mixed int/float usage and returns whether to promote integers to floats
 fn should_promote_integers_to_floats(variables: &HashMap<String, Value>) -> bool {
@@ -482,7 +564,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
         Err(error) => {
             warn!("An error occurred during execution");
             warn!("Execution error: {:?}", error);
-            Err(PyValueError::new_err(format!("Execution Error: {}", error)))
+            Err(map_execution_error_to_python(&error))
         }
 
         Ok(value) => Ok(RustyCelType(value)),
