@@ -1,8 +1,7 @@
 # Import the Rust extension
-from .cel import *
-
-# Import CLI functionality  
+# Import CLI functionality
 from . import cli
+from .cel import *
 
 __doc__ = cel.__doc__
 if hasattr(cel, "__all__"):
