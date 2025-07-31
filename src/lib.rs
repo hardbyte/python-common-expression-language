@@ -459,7 +459,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
             // Always preprocess the expression when we're promoting types
             // This handles cases where context has floats but expression has integer literals
             processed_src = preprocess_expression_for_mixed_arithmetic_always(&src);
-            debug!("Processed expression: {} -> {}", src, processed_src);
+            debug!("Processed expression: {src} -> {processed_src}");
         }
     }
 
@@ -472,7 +472,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
         })?
         .map_err(|e| PyValueError::new_err(format!("Failed to compile expression '{src}': {e}")))?;
 
-    debug!("Compiled program: {:?}", program);
+    debug!("Compiled program: {program:?}");
 
     // Add variables and functions if we have a context
     if evaluation_context.is_some() {
