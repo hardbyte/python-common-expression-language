@@ -62,7 +62,7 @@ impl Context {
 
             if value.is_callable() {
                 // Value is a function, add it to the functions hashmap
-                let py_function = value.to_object(value.py());
+                let py_function = value.unbind();
                 self.functions.insert(key, py_function);
             } else {
                 // Value is a variable, add it to the variables hashmap

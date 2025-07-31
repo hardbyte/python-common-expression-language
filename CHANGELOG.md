@@ -37,5 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - cel-interpreter: 0.9.0 → 0.10.0 (major version update with breaking changes)
 - log: 0.4.22 → 0.4.27
 - chrono: 0.4.38 → 0.4.41
-- PyO3 and related crates: Updated to resolve deprecation warnings
+- pyo3: 0.22.6 → 0.25.0 (major API upgrade with IntoPyObject migration)
+- pyo3-log: 0.11.0 → 0.12.1 (compatible with pyo3 0.25.0)
+
+### Notes
+- **PyO3 0.25.0 Migration**: Successfully migrated from deprecated `IntoPy` trait to new `IntoPyObject` API
+- **API Improvements**: New conversion system provides better error handling and type safety
+- **Build Status**: All 120 tests pass with current dependency versions
 
