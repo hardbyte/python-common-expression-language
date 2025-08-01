@@ -2,6 +2,7 @@
 [project]
 name = "common-expression-language"
 description = "Python bindings for the Common Expression Language (CEL)"
+readme = "README.md"
 authors = [
     {name = "Brian Thorne", email = "brian@hardbyte.nz"}
 ]

@@ -88,7 +88,7 @@ class CELLexer(RegexLexer):
             (r"&&|\|\||!", token.Operator.Logical),
             (r"\?|:", token.Operator.Conditional),
             # Punctuation
-            (r"[[\]{}().,]", token.Punctuation),
+            (r"[\[\]{}().,]", token.Punctuation),
             # Identifiers (variables, fields)
             (r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", token.Name.Variable),
             # Whitespace
