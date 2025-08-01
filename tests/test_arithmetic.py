@@ -1,5 +1,5 @@
 """
-Aarithmetic operations tests for CEL bindings.
+Arithmetic operations tests for CEL bindings.
 
 - Basic arithmetic operations (+ - * / %)
 - Mixed-type arithmetic (int/float combinations)
