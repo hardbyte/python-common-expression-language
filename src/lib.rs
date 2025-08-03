@@ -6,7 +6,7 @@ use log::{debug, warn};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::BoundObject;
-use std::panic;
+use std::panic::{self, AssertUnwindSafe};
 
 use chrono::{DateTime, Duration as ChronoDuration, Offset, TimeZone};
 use pyo3::types::{PyBool, PyBytes, PyDict, PyList, PyTuple};
@@ -284,8 +284,6 @@ fn should_skip_integer_conversion(expr: &str, start: usize, _end: usize) -> bool
 
 /// Always preprocesses expression to promote integer literals to floats (used when context has mixed types)
 fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
-    debug!("Always preprocessing expression: {expr}");
-
     // Convert all integer literals to floats
     // This is a more comprehensive approach than operator-by-operator processing
     let mut result = expr.to_string();
@@ -309,7 +307,6 @@ fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
         // Update offset for subsequent replacements (we added ".0", so +2)
         offset += 2;
     }
-    debug!("Final processed expression: {result}");
     result
 }
 
@@ -408,12 +405,125 @@ impl TryIntoValue for RustyPyType<'_> {
     }
 }
 
-/// Evaluate a CEL expression
-/// Returns a String representation of the result
+/// Evaluate a Common Expression Language (CEL) expression.
+///
+/// This is the main entry point for the CEL library. It parses, compiles, and
+/// evaluates a CEL expression within an optional context, returning the result
+/// as a native Python type.
+///
+/// CEL expressions support a wide range of operations including arithmetic,
+/// logical operations, string manipulation, list/map operations, and custom
+/// function calls. For detailed language reference, see the CEL specification
+/// documentation.
+///
+/// Args:
+///     src (str): The CEL expression to evaluate. Must be a valid CEL expression
+///         according to the CEL language specification.
+///     evaluation_context (Optional[Union[cel.Context, dict]]): An optional
+///         context for the evaluation. This can be either:
+///         - A `cel.Context` object (recommended for reusable contexts)
+///         - A standard Python dictionary containing variables and functions
+///         - None (for expressions that don't require external variables)
+///
+/// Returns:
+///     Union[bool, int, float, str, list, dict, datetime.datetime, bytes, None]:
+///         The result of the expression, automatically converted to the appropriate
+///         Python type. Common return types include:
+///         - bool: For logical expressions (e.g., "1 < 2")
+///         - int/float: For arithmetic expressions
+///         - str: For string operations
+///         - list: For list expressions and operations
+///         - dict: For map/object expressions
+///         - datetime.datetime: For timestamp operations
+///         - bytes: For byte array operations
+///         - None: For null values
+///
+/// Raises:
+///     ValueError: If the expression has a syntax error, fails to parse, or
+///         is malformed. This includes issues such as:
+///         - Unclosed quotes or parentheses
+///         - Invalid CEL syntax
+///         - Empty expressions
+///     TypeError: If an operation is attempted on incompatible types, such as:
+///         - Adding incompatible types (e.g., string + int without conversion)
+///         - Mixing signed and unsigned integers in arithmetic
+///         - Using unsupported operators between specific types
+///     RuntimeError: For evaluation errors that occur during execution:
+///         - Referencing undefined variables or functions
+///         - Errors from custom Python functions
+///         - Internal evaluation failures
+///
+/// Performance Notes:
+///     - For multiple evaluations with the same context, use a `cel.Context`
+///       object for better performance and memory efficiency.
+///     - Complex expressions are compiled once and can be cached internally.
+///
+/// Examples:
+///     Basic arithmetic and logical operations:
+///
+///     >>> from cel import evaluate
+///     >>> evaluate("1 + 2 * 3")
+///     7
+///     >>> evaluate("'Hello' + ' ' + 'World'")
+///     'Hello World'
+///     >>> evaluate("[1, 2, 3].size() > 2")
+///     True
+///
+///     Using variables from a dictionary context:
+///
+///     >>> user_data = {"name": "Alice", "age": 30, "roles": ["admin", "user"]}
+///     >>> evaluate("name + ' is ' + string(age) + ' years old'", user_data)
+///     'Alice is 30 years old'
+///     >>> evaluate("'admin' in roles", user_data)
+///     True
+///
+///     Working with nested data structures:
+///
+///     >>> context = {
+///     ...     "user": {"profile": {"name": "Bob", "verified": True}},
+///     ...     "settings": {"theme": "dark", "notifications": False}
+///     ... }
+///     >>> evaluate("user.profile.verified && settings.theme == 'dark'", context)
+///     True
+///
+///     Using custom Python functions:
+///
+///     >>> def calculate_discount(price, percentage):
+///     ...     return price * (1 - percentage / 100)
+///     >>> context = {
+///     ...     "price": 100.0,
+///     ...     "discount_rate": 15,
+///     ...     "calculate_discount": calculate_discount
+///     ... }
+///     >>> evaluate("calculate_discount(price, discount_rate)", context)
+///     85.0
+///
+///     Error handling example:
+///
+///     >>> try:
+///     ...     evaluate("undefined_variable + 5")
+///     ... except RuntimeError as e:
+///     ...     print(f"Error: {e}")
+///     Error: Undefined variable or function: 'undefined_variable'...
+///
+///     Using Context object for reusable evaluations:
+///
+///     >>> from cel import Context
+///     >>> context = Context(
+///     ...     variables={"base_url": "https://api.example.com"},
+///     ...     functions={"len": len}
+///     ... )
+///     >>> evaluate("base_url + '/users'", context)
+///     'https://api.example.com/users'
+///     >>> evaluate("len('hello world')", context)
+///     11
+///
+/// See Also:
+///     - cel.Context: For managing reusable evaluation contexts
+///     - CEL Language Guide: For comprehensive language documentation
+///     - Python API Reference: For detailed API documentation
 #[pyfunction(signature = (src, evaluation_context=None))]
 fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<RustyCelType> {
-    debug!("Evaluating CEL expression: {src}");
-
     // Preprocess expression for better mixed int/float arithmetic compatibility
     // First check if expression itself has mixed literals
     let mut processed_src = if expression_has_mixed_numeric_literals(&src) {
@@ -422,7 +532,6 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
         src.clone()
     };
 
-    debug!("Preparing context");
     let mut environment = cel_interpreter::Context::default();
     let mut ctx = context::Context::new(None, None)?;
     let mut variables_for_env = HashMap::new();
@@ -459,7 +568,6 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
             // Always preprocess the expression when we're promoting types
             // This handles cases where context has floats but expression has integer literals
             processed_src = preprocess_expression_for_mixed_arithmetic_always(&src);
-            debug!("Processed expression: {src} -> {processed_src}");
         }
     }
 
@@ -467,12 +575,10 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
     let program = panic::catch_unwind(|| Program::compile(&processed_src))
         .map_err(|_| {
             PyValueError::new_err(format!(
-                "Failed to parse expression '{src}': Invalid syntax"
+                "Failed to parse expression '{src}': Invalid syntax or malformed string"
             ))
         })?
         .map_err(|e| PyValueError::new_err(format!("Failed to compile expression '{src}': {e}")))?;
-
-    debug!("Compiled program: {program:?}");
 
     // Add variables and functions if we have a context
     if evaluation_context.is_some() {
@@ -545,7 +651,15 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
         }
     }
 
-    let result = program.execute(&environment);
+    // Use panic::catch_unwind to handle execution panics gracefully
+    // AssertUnwindSafe is needed because the environment contains function closures
+    let result =
+        panic::catch_unwind(AssertUnwindSafe(|| program.execute(&environment))).map_err(|_| {
+            PyValueError::new_err(format!(
+                "Failed to execute expression '{src}': Internal parser error"
+            ))
+        })?;
+
     match result {
         Err(error) => {
             warn!("An error occurred during execution");

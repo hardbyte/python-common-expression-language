@@ -1,24 +1,21 @@
-# Common Expression Language (CEL) for Python
+# Python CEL - Common Expression Language
 
-The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, 
-speed, and safety. CEL is primarily used for evaluating expressions in a variety of applications,
-such as policy evaluation, state machine transitions, and graph traversals.
+[![Documentation](https://img.shields.io/badge/docs-readthedocs-blue)](https://python-common-expression-language.readthedocs.io/)
+[![PyPI version](https://badge.fury.io/py/common-expression-language.svg)](https://pypi.org/project/common-expression-language/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
-This Python package wraps the Rust implementation [cel-interpreter](https://crates.io/crates/cel-interpreter) v0.10.0, providing fast and safe CEL expression evaluation with seamless Python integration.
+**Fast, Safe, and Expressive evaluation of Google's Common Expression Language (CEL) in Python, powered by Rust.**
 
-## Features
+The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, and safety. This Python package wraps the Rust implementation [cel-interpreter](https://crates.io/crates/cel-interpreter) v0.10.0, providing microsecond-level expression evaluation with seamless Python integration.
 
-✅ **Core CEL Types**: Integers (signed/unsigned), floats, booleans, strings, bytes, lists, maps, null  
-✅ **Arithmetic Operations**: `+`, `-`, `*`, `/`, `%` with mixed-type support  
-✅ **Comparison Operations**: `==`, `!=`, `<`, `>`, `<=`, `>=`  
-✅ **Logical Operations**: `&&`, `||`, `!` with short-circuit evaluation  
-✅ **String Operations**: Concatenation, indexing, `startsWith()`, `size()`  
-✅ **Collection Operations**: List/map indexing, `size()` function  
-✅ **Datetime Support**: `timestamp()` and `duration()` functions  
-✅ **Python Integration**: Custom functions, automatic type conversion  
-✅ **Performance**: Microsecond-level expression evaluation  
+## 🚀 Use Cases
 
-📋 **Compliance**: ~65% of CEL specification (see [cel-compliance.md](cel-compliance.md) for details)
+- 🛡️ **Policy Enforcement**: Define access control rules that can be updated without code changes
+- ⚙️ **Configuration Validation**: Validate complex settings with declarative rules  
+- 🔄 **Data Transformation**: Transform and filter data with safe, portable expressions
+- 📋 **Business Rules**: Implement decision logic that business users can understand
+- 🔍 **Query Filtering**: Build dynamic filters for databases and APIs
+- 🎯 **Feature Flags**: Create sophisticated feature toggle conditions
 
 ## Installation
 
@@ -33,364 +30,167 @@ uv add common-expression-language
 
 After installation, both the Python library and the `cel` command-line tool will be available.
 
+> 📖 **Full Documentation**: https://python-common-expression-language.readthedocs.io/
+
 ## Quick Start
 
-### CLI Quick Start
+### Python API
 
-For immediate CEL evaluation, use the enhanced command-line interface:
+```python
+from cel import evaluate
+
+# Simple expressions
+result = evaluate("1 + 2")  # 3
+result = evaluate("'Hello ' + 'World'")  # "Hello World"
+result = evaluate("age >= 18", {"age": 25})  # True
+
+# Complex expressions with context
+result = evaluate(
+    'user.role == "admin" && "write" in permissions',
+    {
+        "user": {"role": "admin"},
+        "permissions": ["read", "write", "delete"]
+    }
+)  # True
+```
+
+### Command Line Interface
 
 ```bash
-# Simple expressions
-cel '1 + 2'                    # → 3
-cel '"Hello " + "World"'       # → Hello World  
-cel '[1, 2, 3].size()'        # → 3
+# Simple evaluation
+cel '1 + 2'  # 3
 
 # With context
-cel 'age >= 21' --context '{"age": 25}'  # → true
+cel 'age >= 18' --context '{"age": 25}'  # true
 
-# Interactive REPL with rich features
+# Interactive REPL
 cel --interactive
 ```
 
-### Python Quick Start
+### Custom Functions
 
 ```python
-from cel import evaluate
+from cel import Context, evaluate
 
-# Simple comparison
-result = evaluate("age > 21", {"age": 18})
-print(result)  # False
+def calculate_discount(price, rate):
+    return price * rate
 
-# String operations
-result = evaluate("name.startsWith('Hello')", {"name": "Hello World"})
-print(result)  # True
+context = Context()
+context.add_function("calculate_discount", calculate_discount)
+context.add_variable("price", 100)
 
-# Arithmetic with mixed types
-result = evaluate("3.14 * radius * radius", {"radius": 2})
-print(result)  # 12.56
-
-# Collections and indexing
-result = evaluate("items[0] + items[1]", {"items": [10, 20, 30]})
-print(result)  # 30
-
-# Complex expressions
-result = evaluate(
-    'resource.name.startsWith("/groups/" + claim.group)', 
-    {
-        "resource": {"name": "/groups/hardbyte"},
-        "claim": {"group": "hardbyte"}
-    }
-)
-print(result)  # True
+result = evaluate("price - calculate_discount(price, 0.1)", context)  # 90.0
 ```
 
-### Python Type Mappings
-
-CEL expressions return native Python types:
-
-| CEL Type | Python Type | Example |
-|----------|-------------|---------|
-| `int` | `int` | `1 + 2` → `3` |
-| `uint` | `int` | `1u + 2u` → `3` |
-| `double` | `float` | `3.14 * 2` → `6.28` |
-| `bool` | `bool` | `true && false` → `False` |
-| `string` | `str` | `"hello" + " world"` → `"hello world"` |
-| `bytes` | `bytes` | `b"hello"` → `b'hello'` |
-| `list` | `list` | `[1, 2, 3]` → `[1, 2, 3]` |
-| `map` | `dict` | `{"key": "value"}` → `{'key': 'value'}` |
-| `null` | `None` | `null` → `None` |
-| `timestamp` | `datetime.datetime` | `timestamp('2024-01-01T00:00:00Z')` |
-| `duration` | `datetime.timedelta` | `duration('1h')` |
-
-### Custom Python Functions
-
-Integrate Python functions directly into CEL expressions:
-
-```python
-from cel import evaluate
-
-def is_adult(age):
-    return age >= 21
-
-def calculate_tax(amount, rate=0.1):
-    return amount * rate
-
-# Use functions in expressions
-result = evaluate("is_adult(age)", {
-    'is_adult': is_adult, 
-    'age': 18
-})
-print(result)  # False
-
-# Functions with multiple arguments
-result = evaluate("price + calculate_tax(price, 0.15)", {
-    'calculate_tax': calculate_tax,
-    'price': 100
-})
-print(result)  # 115.0
-```
-
-### Context Objects
-
-For more control, use explicit Context objects:
+### Real-World Example
 
 ```python
 from cel import evaluate, Context
 
-def is_admin(user):
-    return user.get('role') == 'admin'
+# Access control policy
+policy = """
+user.role == "admin" || 
+(resource.owner == user.id && current_hour >= 9 && current_hour <= 17)
+"""
 
 context = Context()
-context.add_function("is_admin", is_admin)
 context.update({
-    "user": {"name": "Alice", "role": "admin"},
-    "resource": "sensitive_data"
+    "user": {"id": "alice", "role": "user"},
+    "resource": {"owner": "alice"},
+    "current_hour": 14  # 2 PM
 })
 
-result = evaluate("is_admin(user)", context)
-print(result)  # True
+access_granted = evaluate(policy, context)  # True
 ```
 
-### Datetime Operations
+## Features
 
-CEL provides built-in support for timestamps and durations:
+- ✅ **Fast Evaluation**: Microsecond-level expression evaluation via Rust
+- ✅ **Rich Type System**: Integers, floats, strings, lists, maps, timestamps, durations
+- ✅ **Python Integration**: Seamless type conversion and custom function support
+- ✅ **CLI Tools**: Interactive REPL and batch processing capabilities
+- ✅ **Safety First**: Non-Turing complete, safe for untrusted expressions
 
-```python
-import datetime
-from cel import evaluate
+## Documentation
 
-# Parse timestamps
-result = evaluate("timestamp('2024-01-01T12:00:00Z')")
-print(type(result))  # <class 'datetime.datetime'>
+📚 **Complete documentation available at**: https://python-common-expression-language.readthedocs.io/
 
-# Parse durations  
-result = evaluate("duration('2h30m')")
-print(type(result))  # <class 'datetime.timedelta'>
+**🚀 Get Started:**
+- [**Installation**](docs/getting-started/installation.md) - Get up and running in 2 minutes
+- [**Quick Start**](docs/getting-started/quick-start.md) - Your first CEL expressions
 
-# Datetime arithmetic
-now = datetime.datetime.now(datetime.timezone.utc)
-result = evaluate("start_time + duration('1h')", {"start_time": now})
-print(result)  # One hour from now
+**📚 Learn CEL:**
+- [**Your First Integration**](docs/tutorials/your-first-integration.md) - Basic Python integration
+- [**Extending CEL**](docs/tutorials/extending-cel.md) - Context and custom functions
+- [**CEL Language Basics**](docs/tutorials/cel-language-basics.md) - Complete syntax reference
 
-# Comparisons
-result = evaluate("timestamp('2024-01-01T00:00:00Z') < timestamp('2024-12-31T23:59:59Z')")
-print(result)  # True
-```
+**🛠️ How-to Guides:**
+- [**Access Control Policies**](docs/how-to-guides/access-control-policies.md) - Advanced permission systems
+- [**Business Logic & Data Transformation**](docs/how-to-guides/business-logic-data-transformation.md) - Configurable rule systems
 
-## Command Line Interface
+**📖 Reference:**
+- [**Python API**](docs/reference/python-api.md) - Complete API documentation
+- [**CEL Compliance**](docs/reference/cel-compliance.md) - Supported features and status
 
-A powerful and beautiful CLI with enhanced developer experience is available for evaluating CEL expressions. Install the package and use either the `cel` command or `python -m cel`:
+### Building Documentation Locally
 
-### Basic Usage
+To build and serve the documentation locally:
 
 ```bash
-# Simple evaluation
-cel '1 + 2'
+# Install documentation dependencies
+uv sync --group docs
 
-# With context variables  
-cel 'age > 21' --context '{"age": 25}'
+# Build the documentation
+uv run --group docs mkdocs build
 
-# Load context from JSON file
-cel 'user.name' --context-file context.json
-
-# Multiple evaluation modes
-python -m cel 'timestamp("2024-01-01T00:00:00Z")' --timing
+# Serve locally with live reload
+uv run --group docs mkdocs serve
 ```
 
-### Enhanced Interactive REPL
+The documentation will be available at http://localhost:8000
 
-The CLI includes a professional interactive REPL with modern shell features:
+## Development
+
+### Testing
 
 ```bash
-# Start enhanced REPL
-cel --interactive
-```
-
-**REPL Features**:
-- 🏛️ **Persistent history** across sessions (stored in `~/.cel_history`)  
-- ⬆️ **Arrow key navigation** through command history
-- 💡 **Auto-suggestions** based on previous commands  
-- 🔤 **Auto-completion** for CEL keywords, functions, and context variables
-- 🌈 **Real-time syntax highlighting** as you type (custom CEL lexer)
-- 🎨 **Rich-powered output** formatting with tables and colors
-- 📊 **Context inspection** with beautiful tables
-- ⚡ **Built-in timing** for every expression
-
-**REPL Commands**:
-- `help` - Show available commands and CEL examples
-- `context` - Display current context variables in a formatted table
-- `history` - Show recent expression history
-- `load <file>` - Load JSON context from file
-- `exit` or `quit` - Exit the REPL
-- `Ctrl-C` - Exit the REPL
-
-### Beautiful Output Formatting  
-
-Multiple output formats with Rich-powered styling:
-
-```bash  
-# JSON with syntax highlighting
-cel '{"users": [{"name": "Alice", "age": 30}]}' --output json
-
-# Pretty tables for structured data
-cel '{"name": "Alice", "active": true, "score": 95.5}' --output pretty
-
-# Standard formats
-cel '[1, 2, 3, 4, 5]' --output python
-```
-
-### File Processing
-
-Batch process expressions from files:
-
-```bash
-# Process expressions from file
-cel --file expressions.cel --output json
-```
-
-**Example expressions.cel**:
-```
-# Comments are ignored
-1 + 2 
-"hello" + " world"
-timestamp('2024-01-01T00:00:00Z')
-```
-
-### Performance Analysis
-
-Built-in timing and verbose analysis:
-
-```bash
-# Show evaluation timing
-cel 'expensive_calculation()' --timing --context-file context.json
-
-# Verbose output with metadata
-cel 'complex_expression' --verbose --context '{"data": [1,2,3]}'
-```
-
-### CLI Features Summary
-
-✨ **Enhanced Experience**:
-- Built with **Typer** for clean, type-safe CLI definition
-- **Rich** integration for beautiful terminal output
-- **prompt_toolkit** REPL with professional shell features
-- Color-coded error messages and progress indicators
-
-🚀 **Functionality**:
-- **Multiple entry points**: `cel` command and `python -m cel`
-- **Context management**: JSON strings, files, and REPL loading
-- **Output formats**: auto, json (highlighted), pretty (tables), python
-- **Batch processing**: File-based expression evaluation
-- **Performance timing**: Built-in microsecond precision timing
-- **Error handling**: Graceful error messages with syntax highlighting
-
-📊 **Professional Output**:
-- Dictionary results displayed as formatted tables
-- JSON output with syntax highlighting
-- Progress bars for batch operations  
-- Color-coded success/error messages
-
-## Supported CEL Features
-
-### Operators
-
-- **Arithmetic**: `+`, `-`, `*`, `/`, `%`
-- **Comparison**: `==`, `!=`, `<`, `>`, `<=`, `>=` 
-- **Logical**: `&&` (AND), `||` (OR), `!` (NOT)
-- **Conditional**: `condition ? value_if_true : value_if_false`
-- **Indexing**: `list[index]`, `map["key"]`, `string[index]`
-- **Member access**: `object.field`
-
-### Built-in Functions
-
-- **`size(collection)`**: Get length of strings, lists, or maps
-- **`string(value)`**: Convert value to string representation
-- **`bytes(value)`**: Convert value to bytes
-- **`timestamp(rfc3339_string)`**: Parse RFC3339 timestamp
-- **`duration(duration_string)`**: Parse duration string
-
-### Control Flow
-
-```python
-# Ternary conditional
-result = evaluate("age >= 21 ? 'adult' : 'minor'", {"age": 25})
-print(result)  # "adult"
-
-# Short-circuit evaluation
-result = evaluate("false && expensive_function()", {"expensive_function": lambda: 1/0})
-print(result)  # False (expensive_function not called)
-```
-
-## Limitations
-
-Some CEL features are not yet implemented in the underlying cel-interpreter:
-
-❌ **Missing Features**:
-- Mixed signed/unsigned arithmetic (`1 + 2u`) - use `int(2u) + 1` or `uint(1) + 2u`
-- Bytes concatenation (`b'hello' + b'world'`) - use string conversion workaround
-- String methods: `contains()`, `endsWith()`, `indexOf()`, `replace()`, etc.
-- Macros: `has()`, `all()`, `exists()`  
-- Math functions: `math.ceil()`, `math.floor()`, `math.round()`
-- Regular expressions
-- Optional values and optional chaining
-
-⚠️ **Behavioral Notes**:
-- OR operator with non-boolean operands returns the first truthy value: `42 || false` → `42`
-- No automatic numeric type conversion between int/uint/double
-- Empty strings, empty collections, and zero values are falsy
-
-For complete details, see [cel-compliance.md](cel-compliance.md).
-
-## Testing
-
-Run the test suite:
-
-```bash
-# Using uv (recommended)
+# Run all tests
 uv run pytest
 
-# Or with regular pytest  
-pytest
-
-# With verbose output
-uv run pytest -v
-
-# With coverage
+# Run with coverage
 uv run pytest --cov=cel
+
+# Test all documentation examples (embedded code + standalone files)
+uv run --group docs pytest tests/test_docs.py -v
 ```
 
-## Performance
+### Building from Source
 
-This implementation is designed for high-performance expression evaluation:
+```bash
+# Install development dependencies
+uv sync --dev
 
-- **Expression parsing**: Handled efficiently by Rust cel-interpreter
-- **Evaluation speed**: Microsecond-level for typical expressions  
-- **Memory usage**: Optimized for frequent evaluations
-- **Type conversion**: Efficient Python ↔ Rust boundary crossing
+# Build the package
+uv run maturin develop
 
-Benchmark results on typical hardware:
-- Simple expressions (`1 + 2`): ~1-10 microseconds
-- Complex expressions with context: ~10-100 microseconds  
-- Large collection processing: Handles 10,000+ elements efficiently
+# Run tests
+uv run pytest
+```
 
 ## Contributing
 
-We welcome contributions! Areas where help is especially needed:
-
-1. **Testing**: Add test cases for edge cases and missing features
-2. **Documentation**: Improve examples and usage patterns
-3. **Performance**: Optimize type conversion and memory usage
-4. **Upstream**: Contribute to [cel-interpreter](https://crates.io/crates/cel-interpreter) for missing CEL features
-
-See [cel-compliance.md](cel-compliance.md) for detailed information about CEL specification compliance and missing features.
-
-## Resources
-
-- **CEL Homepage**: https://cel.dev/
-- **CEL Specification**: https://github.com/google/cel-spec
-- **Language Definition**: https://github.com/google/cel-spec/blob/master/doc/langdef.md
-- **cel-interpreter crate**: https://crates.io/crates/cel-interpreter
+Contributions are welcome! Please see our [documentation](https://python-common-expression-language.readthedocs.io/) for:
+- [CEL compliance status](docs/reference/cel-compliance.md)
+- Development setup and guidelines
+- Areas where help is needed
 
 ## License
 
-This project is licensed under the same terms as the original cel-inspector crate.
+This project is licensed under the same terms as the original cel-interpreter crate.
+
+## Resources
+
+- [📖 **Documentation**](https://python-common-expression-language.readthedocs.io/)
+- [🌐 **CEL Homepage**](https://cel.dev/)
+- [📋 **CEL Specification**](https://github.com/google/cel-spec)
+- [⚙️ **cel-interpreter Rust crate**](https://crates.io/crates/cel-interpreter)

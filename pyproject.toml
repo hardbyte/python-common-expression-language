@@ -44,6 +44,16 @@ dev-dependencies = [
     "mypy>=1.17.1",
 ]
 
+[dependency-groups]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings>=0.24.0",
+    "mkdocstrings-python>=1.8.0",
+    "pygments>=2.0.0",
+    "mktestdocs>=0.2.0",
+]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100

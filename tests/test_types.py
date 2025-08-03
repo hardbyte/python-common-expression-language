@@ -40,7 +40,7 @@ class TestBasicTypeConversion:
 
         # Boolean in expressions
         result = cel.evaluate("a && b", {"a": True, "b": False})
-        assert result == 0  # Note: Our CEL returns integers for logical ops
+        assert result is False  # CEL returns boolean values for logical ops
 
         result = cel.evaluate("a || b", {"a": False, "b": True})
         assert result is True
