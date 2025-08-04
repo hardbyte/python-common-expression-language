@@ -20,7 +20,7 @@ class TestParserErrors:
             cel.evaluate("'unclosed quote", {})
 
     def test_unclosed_double_quote_raises_clean_error(self):
-        """Test that unclosed double quotes raise proper ValueError exceptions.""" 
+        """Test that unclosed double quotes raise proper ValueError exceptions."""
         # Previously the original issue: 'timestamp("2024-01-01T00:00:00Z")
         # Now safely handled with panic catching
         with pytest.raises(ValueError, match="Failed to parse expression"):

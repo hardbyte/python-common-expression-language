@@ -17,9 +17,6 @@ Hard-coding these rules makes them difficult to update and test.
 
 Instead of complex if/else chains in your application code, define access policies as portable, safe expressions that can be updated without code changes.
 
-!!! tip "Start Simple"
-    If you're new to CEL access control, check out the [basic policy evaluation example](../index.md#python-integration) on the main page first.
-
 CEL enables sophisticated, multi-factor access control policies that handle complex business rules:
 
 ```python

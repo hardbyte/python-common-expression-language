@@ -43,8 +43,8 @@ jobs:
       
       - name: Install dependencies
         run: |
-          uv sync --dev
-          uv run maturin develop
+          uv sync --dev --group docs
+          #uv run maturin develop
       
       - name: Run Rust tests
         run: cargo test --verbose
