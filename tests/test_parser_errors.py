@@ -1,8 +1,9 @@
 """
 Tests for parser error handling.
 
-These tests document known issues with the underlying CEL parser
-where invalid syntax causes Rust panics instead of proper error messages.
+Tests verify that all malformed expressions raise proper ValueError exceptions
+instead of causing panics. Parser panic handling has been implemented with
+std::panic::catch_unwind to gracefully handle upstream parser issues.
 """
 
 import cel
@@ -12,21 +13,23 @@ import pytest
 class TestParserErrors:
     """Test various parser error conditions."""
 
-    def test_unclosed_single_quote_causes_panic(self):
-        """Test that unclosed single quotes cause parser panics."""
-        # This should ideally return a proper syntax error instead of panicking
+    def test_unclosed_single_quote_raises_clean_error(self):
+        """Test that unclosed single quotes raise proper ValueError exceptions."""
+        # Previously caused panics, now gracefully handled with catch_unwind
         with pytest.raises(ValueError, match="Failed to parse expression"):
             cel.evaluate("'unclosed quote", {})
 
-    def test_unclosed_double_quote_causes_panic(self):
-        """Test that unclosed double quotes cause parser panics."""
-        # The original issue: 'timestamp("2024-01-01T00:00:00Z")
+    def test_unclosed_double_quote_raises_clean_error(self):
+        """Test that unclosed double quotes raise proper ValueError exceptions."""
+        # Previously the original issue: 'timestamp("2024-01-01T00:00:00Z")
+        # Now safely handled with panic catching
         with pytest.raises(ValueError, match="Failed to parse expression"):
             cel.evaluate('"unclosed quote', {})
 
     def test_complex_unclosed_quote_in_function_call(self):
-        """Test the specific case from the user report."""
-        # This is the exact expression that caused the panic
+        """Test the specific case from the original user report."""
+        # This was the exact expression that previously caused panics
+        # Now safely returns a clean ValueError
         with pytest.raises(ValueError, match="Failed to parse expression"):
             cel.evaluate('\'timestamp("2024-01-01T00:00:00Z")', {})
 
@@ -60,7 +63,7 @@ class TestParserErrors:
 
 
 class TestParserErrorDocumentation:
-    """Document the current state of parser error handling."""
+    """Document the current state of parser error handling after panic fixes."""
 
     def test_good_syntax_works(self):
         """Verify that correct syntax still works."""
@@ -70,13 +73,13 @@ class TestParserErrorDocumentation:
         assert cel.evaluate("timestamp('2024-01-01T00:00:00Z')", {})
         assert cel.evaluate('timestamp("2024-01-01T00:00:00Z")', {})
 
-    def test_parser_panic_vs_clean_error(self):
-        """Document the difference between clean errors and panics."""
-        # This should be a clean error (undefined variable) - enhanced error handling now uses RuntimeError
+    def test_different_error_types(self):
+        """Document the different types of errors now properly handled."""
+        # Runtime error (undefined variable) - properly mapped to RuntimeError
         with pytest.raises(RuntimeError, match="Undefined variable or function"):
             cel.evaluate("undefined_variable", {})
 
-        # This causes a parser panic (invalid syntax)
+        # Parse error (invalid syntax) - previously caused panics, now clean ValueError
         with pytest.raises(ValueError, match="Failed to parse expression"):
             cel.evaluate("'unclosed", {})
 
@@ -111,14 +114,14 @@ class TestCLIErrorHandling:
 
         evaluator = CELEvaluator()
 
-        # These should pass through as-is from the underlying parser
-        # Some cause panics (quote issues), others give clean compile errors
+        # All parser errors now give clean ValueError exceptions
+        # Previously quote issues caused panics, now properly handled
         with pytest.raises(ValueError, match="Failed to parse expression"):
             evaluator.evaluate("'unclosed quote")
 
         with pytest.raises(ValueError, match="Failed to parse expression"):
             evaluator.evaluate('"unclosed quote')
 
-        # This gives a clean compile error (not a panic)
+        # This gives a clean compile error
         with pytest.raises(ValueError, match="Failed to compile expression"):
             evaluator.evaluate("(1 + 2")
