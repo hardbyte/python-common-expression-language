@@ -1,0 +1,102 @@
+site_name: Python CEL
+site_description: Common Expression Language for Python - Fast, Safe, and Simple
+site_url: https://python-cel.readthedocs.io
+repo_url: https://github.com/hardbyte/python-common-expression-language
+repo_name: hardbyte/python-common-expression-language
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [python]
+          options:
+            docstring_style: "google"
+            show_source: false
+            show_root_heading: true
+            show_category_heading: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - def_list
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quick-start.md
+  - Learning CEL:
+    - Thinking in CEL: tutorials/thinking-in-cel.md
+    - CEL Language Basics: tutorials/cel-language-basics.md
+    - Your First Integration: tutorials/your-first-integration.md
+    - Extending CEL: tutorials/extending-cel.md
+  - How-to Guides:
+    - Production Patterns & Best Practices: how-to-guides/production-patterns-best-practices.md
+    - Business Logic & Data Transformation: how-to-guides/business-logic-data-transformation.md
+    - Dynamic Query Filters: how-to-guides/dynamic-query-filters.md
+    - Access Control Policies: how-to-guides/access-control-policies.md
+    - Error Handling: how-to-guides/error-handling.md
+    - CLI Usage Recipes: how-to-guides/cli-recipes.md
+  - Reference:
+    - Python API: reference/python-api.md
+    - CLI Reference: reference/cli-reference.md
+    - CEL Compliance: reference/cel-compliance.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/hardbyte/python-common-expression-language
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/common-expression-language/
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10.6.1/dist/mermaid.min.js
+  - javascripts/mermaid-init.js
