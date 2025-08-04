@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Rust
+target/
+
+# Project specific
+site/
+*.so
