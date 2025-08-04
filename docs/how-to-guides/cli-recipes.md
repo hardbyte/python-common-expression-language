@@ -126,7 +126,7 @@ fi
 cel -i
 
 # Example session:
-CEL> :context user='{"name": "Alice", "role": "admin", "verified": true}'
+CEL> context {"user": {"name": "Alice", "role": "admin", "verified": true}}
 Context updated: user
 
 CEL> user.name
@@ -138,27 +138,29 @@ true
 CEL> user.verified && user.role in ["admin", "moderator"]
 true
 
-CEL> :load-context permissions.json
-Context loaded from permissions.json
+CEL> load permissions.json
+Loaded context from permissions.json
 
 CEL> "write" in permissions
 true
 
-CEL> :history
+CEL> history
 1: user.name
 2: user.role == "admin"
 3: user.verified && user.role in ["admin", "moderator"]
 4: "write" in permissions
 
-CEL> :exit
+CEL> exit
 ```
 
 ### Rapid Prototyping
 
 ```bash
-# Test expressions quickly
+# Test expressions quickly:
 cel -i
-CEL> :context data='{"users": [{"name": "Alice", "active": true}, {"name": "Bob", "active": false}]}'
+CEL> context {"data": {"users": [{"name": "Alice", "active": true}, {"name": "Bob", "active": false}]}}
+Context updated: data
+
 CEL> data.users.filter(u, u.active).map(u, u.name)
 ["Alice"]
 
@@ -455,9 +457,11 @@ cel --verbose 'expression' --context-file context.json
 # Validate JSON files before using them
 cat context.json | python -m json.tool
 
-# Test expressions step by step in interactive mode
+# Test expressions step by step in interactive mode:
 cel -i
-CEL> :context test_data='{"user": {"name": "Alice"}}'
+CEL> context {"user": {"name": "Alice"}}
+Context updated: user
+
 CEL> has(user)
 true
 CEL> has(user.name)
@@ -500,8 +504,11 @@ cel 'expression' --context-file "$(pwd)/context.json"
 
 # 4. Test context loading in interactive mode
 cel -i
-CEL> :load-context context.json
-CEL> :show-context
+CEL> load context.json
+Loaded context from context.json
+
+CEL> context
+{"user": {"name": "Alice"}}
 ```
 
 #### Type conversion issues
@@ -517,9 +524,11 @@ cel 'string(age) + " years"' --context '{"age": 30}'
 # Instead of: int_string > 10
 cel 'int(int_string) > 10' --context '{"int_string": "15"}'
 
-# Check types in interactive mode
+# Check types in interactive mode:
 cel -i
-CEL> :context data='{"value": "123"}'
+CEL> context {"data": {"value": "123"}}
+Context updated: data
+
 CEL> typeof(data.value)
 string
 CEL> int(data.value)

@@ -203,7 +203,7 @@ class CELEvaluator:
         return self.context.copy()
 
 
-class EnhancedCELREPL:
+class InteractiveCELREPL:
     """Enhanced REPL with prompt_toolkit features."""
 
     def __init__(self, evaluator: CELEvaluator, history_limit: int = 10):
@@ -239,7 +239,6 @@ class EnhancedCELREPL:
         # Command dispatch dictionary for cleaner organization
         self.commands = {
             "help": self._show_help,
-            "context": self._show_context,
             "history": self._show_history,
         }
 
@@ -282,12 +281,21 @@ class EnhancedCELREPL:
                     continue
 
                 # Handle REPL commands
-                command_parts = expression.strip().lower().split()
-                command = command_parts[0] if command_parts else ""
+                command_parts = expression.strip().split()
+                command = command_parts[0].lower() if command_parts else ""
 
                 if command in ["exit", "quit"]:
                     console.print("[yellow]Goodbye![/yellow]")
                     break
+                elif command == "context":
+                    if len(command_parts) > 1:
+                        # Setting context: context {"key": "value"}
+                        context_json = " ".join(command_parts[1:])
+                        self._set_context(context_json)
+                    else:
+                        # Showing context: context
+                        self._show_context()
+                    continue
                 elif command in self.commands:
                     self.commands[command]()
                     continue
@@ -329,6 +337,7 @@ class EnhancedCELREPL:
 
         help_table.add_row("help", "Show this help message")
         help_table.add_row("context", "Show current context variables")
+        help_table.add_row("context <json>", "Set context variables from JSON")
         help_table.add_row("history", "Show expression history")
         help_table.add_row("load <file>", "Load JSON context from file")
         help_table.add_row("exit/quit", "Exit the REPL")
@@ -364,6 +373,34 @@ class EnhancedCELREPL:
             table.add_row(name, type(value).__name__, str(value))
 
         console.print(table)
+
+    def _set_context(self, context_json: str):
+        """Set context variables from JSON string."""
+        try:
+            new_context = json.loads(context_json)
+            if not isinstance(new_context, dict):
+                console.print("[red]Error: Context must be a JSON object (dictionary)[/red]")
+                return
+            
+            # Update the context
+            self.evaluator.update_context(new_context)
+            
+            # Update completer with new context variables
+            self._update_completer()
+            
+            # Show what was updated
+            context_keys = list(new_context.keys())
+            if len(context_keys) == 1:
+                console.print(f"[green]Context updated: {context_keys[0]}[/green]")
+            elif len(context_keys) <= 3:
+                console.print(f"[green]Context updated: {', '.join(context_keys)}[/green]")
+            else:
+                console.print(f"[green]Context updated: {len(context_keys)} variables[/green]")
+        
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error: Invalid JSON - {e}[/red]")
+        except Exception as e:
+            console.print(f"[red]Error updating context: {e}[/red]")
 
     def _show_history(self):
         """Show expression history with Rich formatting."""
@@ -545,7 +582,7 @@ def main(
 
     # Interactive mode
     if interactive:
-        repl = EnhancedCELREPL(evaluator)
+        repl = InteractiveCELREPL(evaluator)
         repl.run()
         return
 
