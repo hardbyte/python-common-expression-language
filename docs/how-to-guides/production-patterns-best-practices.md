@@ -462,36 +462,98 @@ import time
 from cel import evaluate
 
 def benchmark_cel_performance():
-    # Simple expressions
-    simple_expr = "x + y * 2"
-    context = {"x": 10, "y": 20}
+    """Comprehensive CEL performance benchmark matching documented claims."""
     
-    iterations = 1000  # Reduced for testing
-    start_time = time.perf_counter()
+    # Test scenarios matching the performance table
+    test_cases = [
+        {
+            "name": "Simple expressions",
+            "expression": "x + y * 2",
+            "context": {"x": 10, "y": 20},
+            "expected": 50,
+            "iterations": 10000
+        },
+        {
+            "name": "Complex expressions", 
+            "expression": "user.active && user.role in ['admin', 'editor'] && has(user.permissions) && user.permissions.size() > 0",
+            "context": {
+                "user": {
+                    "active": True,
+                    "role": "admin", 
+                    "permissions": ["read", "write", "delete"]
+                }
+            },
+            "expected": True,
+            "iterations": 5000
+        },
+        {
+            "name": "Function calls",
+            "expression": "double(x) + square(y)",
+            "context": {
+                "x": 5,
+                "y": 3,
+                "double": lambda x: x * 2,
+                "square": lambda x: x * x
+            },
+            "expected": 19,  # double(5) + square(3) = 10 + 9
+            "iterations": 3000
+        }
+    ]
     
-    for _ in range(iterations):
-        result = evaluate(simple_expr, context)
+    results = []
     
-    end_time = time.perf_counter()
-    avg_time_us = ((end_time - start_time) / iterations) * 1_000_000
-    throughput = iterations / (end_time - start_time)
+    for test_case in test_cases:
+        print(f"\nBenchmarking: {test_case['name']}")
+        
+        # Verify the expression works correctly
+        result = evaluate(test_case["expression"], test_case["context"])
+        assert result == test_case["expected"], f"Expected {test_case['expected']}, got {result}"
+        
+        # Warmup
+        for _ in range(100):
+            evaluate(test_case["expression"], test_case["context"])
+        
+        # Benchmark
+        start_time = time.perf_counter()
+        for _ in range(test_case["iterations"]):
+            evaluate(test_case["expression"], test_case["context"])
+        end_time = time.perf_counter()
+        
+        # Calculate metrics
+        total_time = end_time - start_time
+        avg_time_us = (total_time / test_case["iterations"]) * 1_000_000
+        throughput = test_case["iterations"] / total_time
+        
+        result_data = {
+            "name": test_case["name"],
+            "avg_time_us": avg_time_us,
+            "throughput": throughput,
+            "iterations": test_case["iterations"]
+        }
+        results.append(result_data)
+        
+        print(f"  Average time: {avg_time_us:.1f} μs")
+        print(f"  Throughput: {throughput:,.0f} ops/sec")
     
-    # Verify the benchmark ran correctly
-    assert avg_time_us > 0
-    assert throughput > 0
-    
-    # Test that the expression actually works
-    result = evaluate(simple_expr, context)
-    assert result == 50  # 10 + 20 * 2
+    return results
 
-# Run the benchmark
-benchmark_cel_performance()
+# Run the benchmark and display results
+if __name__ == "__main__":
+    print("CEL Performance Benchmark")
+    print("=" * 40)
+    results = benchmark_cel_performance()
+    
+    print("\nSummary:")
+    print("-" * 40)
+    for result in results:
+        print(f"{result['name']:20} | {result['avg_time_us']:6.1f} μs | {result['throughput']:8,.0f} ops/sec")
 ```
 
 **Expected Results**:
-- **Modern hardware**: 5-50 μs per evaluation
-- **Simple expressions**: 50,000+ ops/sec
-- **Complex expressions**: 10,000+ ops/sec
+
+- **Simple expressions**: 5-15 μs per evaluation, 50,000+ ops/sec
+- **Complex expressions**: 15-40 μs per evaluation, 25,000+ ops/sec  
+- **Function calls**: 20-50 μs per evaluation, 20,000+ ops/sec
 
 **Learn More**: See [Performance Benchmarking Examples](https://github.com/hardbyte/python-common-expression-language/tree/main/examples/performance) for comprehensive benchmarking scripts.
 

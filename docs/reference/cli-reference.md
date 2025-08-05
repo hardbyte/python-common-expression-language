@@ -87,7 +87,7 @@ cel -i
 
 In interactive mode, you can:
 - Enter expressions directly
-- Use built-in commands (`:help`, `:context`, etc.)
+- Use built-in commands (`help`, `context`, etc.)
 - Load context from files
 - View command history
 
@@ -158,134 +158,85 @@ When in interactive mode (`cel -i`), these commands are available:
 
 ### Context Management
 
-#### `:context <var>=<value>`
-Set a context variable.
+#### `context`
+Display current context variables in a formatted table.
 
 ```
-CEL> :context name="Alice"
-Context updated: name
-
-CEL> :context age=30
-Context updated: age
-
-CEL> name + " is " + string(age)
-Alice is 30
+CEL> context
+           Context Variables           
+┏━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+┃ Variable ┃ Type ┃ Value             ┃
+┡━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
+│ user     │ dict │ {'name': 'Alice'} │
+│ debug    │ bool │ False             │
+└──────────┴──────┴───────────────────┘
 ```
 
-#### `:context <json>`
-Set multiple context variables from JSON.
+#### `context <json>`
+Set context variables from JSON object.
 
 ```
-CEL> :context {"user": {"name": "Bob", "role": "admin"}, "debug": true}
+CEL> context {"user": {"name": "Alice", "role": "admin"}, "debug": false}
 Context updated: user, debug
 
-CEL> user.role
-admin
+CEL> context {"name": "Bob", "age": 30}
+Context updated: name, age
 ```
 
-#### `:show-context`
-Display current context.
-
-```
-CEL> :show-context
-{
-  "name": "Alice",
-  "age": 30,
-  "user": {
-    "name": "Bob", 
-    "role": "admin"
-  },
-  "debug": true
-}
-```
-
-#### `:clear-context`
-Clear all context variables.
-
-```
-CEL> :clear-context
-Context cleared
-
-CEL> :show-context
-{}
-```
-
-#### `:load-context <file>`
+#### `load <file>`
 Load context from JSON file.
 
 ```
-CEL> :load-context user.json
-Context loaded from user.json
+CEL> load user.json
+Loaded context from user.json
 
-CEL> :load-context /path/to/config.json
-Context loaded from /path/to/config.json
+CEL> load /path/to/config.json
+Loaded context from /path/to/config.json
 ```
 
 ### History Management
 
-#### `:history`
+#### `history`
 Show command history.
 
 ```
-CEL> :history
+CEL> history
 1: 1 + 2
 2: "hello".size()
 3: user.name
 4: user.role == "admin"
 ```
 
-#### `:replay <n>`
-Replay command number n from history.
-
-```
-CEL> :replay 2
-4
-
-CEL> :replay -1
-true
-```
-
-**Special values**:
-- `<number>` - Replay specific command number
-- `-1` - Replay last command
-- `-2` - Replay second-to-last command, etc.
-
-#### `:clear-history`
-Clear command history.
-
-```
-CEL> :clear-history
-History cleared
-```
-
 ### Utility Commands
 
-#### `:help`
+#### `help`
 Show help message.
 
 ```
-CEL> :help
-Available commands:
-  :context <var>=<value>  - Set context variable
-  :show-context          - Show current context
-  :clear-context         - Clear all context
-  :load-context <file>   - Load context from file
-  :history              - Show command history
-  :replay <n>           - Replay command n
-  :clear-history        - Clear history
-  :help                 - Show this help
-  :exit                 - Exit REPL
+CEL> help
+                   REPL Commands                    
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Command        ┃ Description                     ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ help           │ Show this help message          │
+│ context        │ Show current context variables  │
+│ context <json> │ Set context variables from JSON │
+│ history        │ Show expression history         │
+│ load <file>    │ Load JSON context from file     │
+│ exit/quit      │ Exit the REPL                   │
+│ Ctrl-C         │ Exit the REPL                   │
+└────────────────┴─────────────────────────────────┘
 ```
 
-#### `:exit`
+#### `exit` / `quit`
 Exit the interactive REPL.
 
 ```
-CEL> :exit
+CEL> exit
 Goodbye!
 ```
 
-**Aliases**: `:quit`, `:q`, `Ctrl+D`
+**Aliases**: `quit`, `Ctrl+D`
 
 📚 **For practical usage examples, recipes, and integration patterns, see the [CLI Usage Recipes](../how-to-guides/cli-recipes.md) guide.**
 
