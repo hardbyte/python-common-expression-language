@@ -381,13 +381,13 @@ class InteractiveCELREPL:
             if not isinstance(new_context, dict):
                 console.print("[red]Error: Context must be a JSON object (dictionary)[/red]")
                 return
-            
+
             # Update the context
             self.evaluator.update_context(new_context)
-            
+
             # Update completer with new context variables
             self._update_completer()
-            
+
             # Show what was updated
             context_keys = list(new_context.keys())
             if len(context_keys) == 1:
@@ -396,7 +396,7 @@ class InteractiveCELREPL:
                 console.print(f"[green]Context updated: {', '.join(context_keys)}[/green]")
             else:
                 console.print(f"[green]Context updated: {len(context_keys)} variables[/green]")
-        
+
         except json.JSONDecodeError as e:
             console.print(f"[red]Error: Invalid JSON - {e}[/red]")
         except Exception as e:

@@ -21,7 +21,7 @@ import typer
 from cel.cli import (
     CELEvaluator,
     CELFormatter,
-    EnhancedCELREPL,
+    InteractiveCELREPL,
     evaluate_expressions_from_file,
     load_context_from_file,
 )
@@ -184,13 +184,13 @@ class TestCELEvaluator:
             evaluator.evaluate("   ")
 
 
-class TestEnhancedCELREPL:
+class TestInteractiveCELREPL:
     """Test the Enhanced REPL functionality."""
 
     def test_repl_initialization(self):
         """Test REPL initializes correctly."""
         evaluator = CELEvaluator({"test": 42})
-        repl = EnhancedCELREPL(evaluator)
+        repl = InteractiveCELREPL(evaluator)
 
         assert repl.evaluator == evaluator
         assert repl.history == []
@@ -203,27 +203,25 @@ class TestEnhancedCELREPL:
 
         # Test command dispatch dictionary
         assert "help" in repl.commands
-        assert "context" in repl.commands
         assert "history" in repl.commands
 
     def test_repl_command_dispatch(self):
         """Test that commands are properly mapped."""
         evaluator = CELEvaluator()
-        repl = EnhancedCELREPL(evaluator)
+        repl = InteractiveCELREPL(evaluator)
 
         # Test that command methods exist
         assert callable(repl.commands["help"])
-        assert callable(repl.commands["context"])
         assert callable(repl.commands["history"])
 
         assert repl.commands["help"] == repl._show_help
-        assert repl.commands["context"] == repl._show_context
+
         assert repl.commands["history"] == repl._show_history
 
     def test_update_completer(self):
         """Test that completer updates with context variables."""
         evaluator = CELEvaluator({"var1": 1, "var2": 2})
-        repl = EnhancedCELREPL(evaluator)
+        repl = InteractiveCELREPL(evaluator)
 
         # Test initial completer setup
         completer_words = repl.session.completer.words
@@ -235,7 +233,7 @@ class TestEnhancedCELREPL:
     def test_load_context_success(self):
         """Test successful context loading from file."""
         evaluator = CELEvaluator()
-        repl = EnhancedCELREPL(evaluator)
+        repl = InteractiveCELREPL(evaluator)
 
         # Create temporary JSON file
         test_context = {"name": "test", "value": 42}
@@ -261,7 +259,7 @@ class TestEnhancedCELREPL:
     def test_load_context_file_not_found(self):
         """Test context loading with non-existent file."""
         evaluator = CELEvaluator()
-        repl = EnhancedCELREPL(evaluator)
+        repl = InteractiveCELREPL(evaluator)
 
         with patch("cel.cli.console") as mock_console:
             repl._load_context("nonexistent.json")
@@ -274,7 +272,7 @@ class TestEnhancedCELREPL:
     def test_history_limit_enforcement(self):
         """Test that history is limited to prevent memory growth."""
         evaluator = CELEvaluator()
-        repl = EnhancedCELREPL(evaluator, history_limit=3)
+        repl = InteractiveCELREPL(evaluator, history_limit=3)
 
         # Manually add items to history to test limit
         for i in range(5):
@@ -440,7 +438,7 @@ class TestCLIIntegration:
     def test_repl_command_parsing_with_spaces(self):
         """Test that REPL can handle commands with spaces in arguments."""
         evaluator = CELEvaluator()
-        repl = EnhancedCELREPL(evaluator)
+        repl = InteractiveCELREPL(evaluator)
 
         # Create a temporary file with spaces in the name
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
