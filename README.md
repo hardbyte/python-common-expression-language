@@ -115,22 +115,6 @@ access_granted = evaluate(policy, context)  # True
 
 📚 **Complete documentation available at**: https://python-common-expression-language.readthedocs.io/
 
-**🚀 Get Started:**
-- [**Installation**](docs/getting-started/installation.md) - Get up and running in 2 minutes
-- [**Quick Start**](docs/getting-started/quick-start.md) - Your first CEL expressions
-
-**📚 Learn CEL:**
-- [**Your First Integration**](docs/tutorials/your-first-integration.md) - Basic Python integration
-- [**Extending CEL**](docs/tutorials/extending-cel.md) - Context and custom functions
-- [**CEL Language Basics**](docs/tutorials/cel-language-basics.md) - Complete syntax reference
-
-**🛠️ How-to Guides:**
-- [**Access Control Policies**](docs/how-to-guides/access-control-policies.md) - Advanced permission systems
-- [**Business Logic & Data Transformation**](docs/how-to-guides/business-logic-data-transformation.md) - Configurable rule systems
-
-**📖 Reference:**
-- [**Python API**](docs/reference/python-api.md) - Complete API documentation
-- [**CEL Compliance**](docs/reference/cel-compliance.md) - Supported features and status
 
 ### Building Documentation Locally
 

@@ -2,8 +2,12 @@ name: Security
 
 on:
   push:
-    branches: [main, master]
-  pull_request:
+    branches: [main]
+    paths:
+      - '**/pyproject.toml'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+
   schedule:
     # Run weekly security scans
     - cron: '0 2 * * 1'
@@ -13,6 +17,11 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      issues-reason: to create issues
+      checks: write
+      checks-reason: to create check
     steps:
       - uses: actions/checkout@v4
       
