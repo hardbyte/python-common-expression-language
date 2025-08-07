@@ -1,7 +1,7 @@
 mod context;
 
-use cel_interpreter::objects::{Key, TryIntoValue};
-use cel_interpreter::{ExecutionError, Program, Value};
+use ::cel::objects::{Key, TryIntoValue};
+use ::cel::{Context as CelContext, ExecutionError, Program, Value};
 use log::{debug, warn};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -532,7 +532,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
         src.clone()
     };
 
-    let mut environment = cel_interpreter::Context::default();
+    let mut environment = CelContext::default();
     let mut ctx = context::Context::new(None, None)?;
     let mut variables_for_env = HashMap::new();
 
@@ -591,60 +591,62 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                 })?;
         }
 
-        // Add functions
-        let collected_functions: Vec<(String, Py<PyAny>)> = Python::with_gil(|py| {
-            ctx.functions
-                .iter()
-                .map(|(name, py_function)| (name.clone(), py_function.clone_ref(py)))
-                .collect()
-        });
+        // Register Python functions
+        for (function_name, py_function) in ctx.functions.iter() {
+            // Create a wrapper function
+            let py_func_clone = Python::with_gil(|py| py_function.clone_ref(py));
+            let func_name_clone = function_name.clone();
 
-        for (name, py_function) in collected_functions.into_iter() {
+            // Register a function that takes Arguments (variadic) and returns a Value
             environment.add_function(
-                &name.clone(),
-                move |ftx: &cel_interpreter::FunctionContext| -> cel_interpreter::ResolveResult {
+                function_name,
+                move |args: ::cel::extractors::Arguments| -> Result<Value, ExecutionError> {
+                    let py_func = py_func_clone.clone();
+                    let func_name = func_name_clone.clone();
+
                     Python::with_gil(|py| {
-                        // Convert arguments from Expression in ftx.args to PyObjects
+                        // Convert CEL arguments to Python objects
                         let mut py_args = Vec::new();
-                        for arg_expr in &ftx.args {
-                            let arg_value = ftx.ptx.resolve(arg_expr)?;
-                            let py_arg = RustyCelType(arg_value)
+                        for cel_value in args.0.iter() {
+                            let py_arg = RustyCelType(cel_value.clone())
                                 .into_pyobject(py)
-                                .map_err(|e| {
-                                    ExecutionError::function_error(
-                                        "argument_conversion",
-                                        format!("Failed to convert argument: {e}"),
-                                    )
+                                .map_err(|e| ExecutionError::FunctionError {
+                                    function: func_name.clone(),
+                                    message: format!("Failed to convert argument to Python: {e}"),
                                 })?
                                 .into_any()
                                 .unbind();
                             py_args.push(py_arg);
                         }
-                        let py_args = PyTuple::new(py, py_args).map_err(|e| {
-                            ExecutionError::function_error(
-                                "tuple_creation",
-                                format!("Failed to create tuple: {e}"),
-                            )
+
+                        let py_args_tuple = PyTuple::new(py, py_args).map_err(|e| {
+                            ExecutionError::FunctionError {
+                                function: func_name.clone(),
+                                message: format!("Failed to create arguments tuple: {e}"),
+                            }
                         })?;
 
                         // Call the Python function
-                        let py_result = py_function.call1(py, py_args).map_err(|e| {
+                        let py_result = py_func.call1(py, py_args_tuple).map_err(|e| {
                             ExecutionError::FunctionError {
-                                function: name.clone(),
-                                message: e.to_string(),
+                                function: func_name.clone(),
+                                message: format!("Python function call failed: {e}"),
                             }
                         })?;
-                        // Convert the PyObject to &Bound<PyAny>
-                        let py_result_ref = py_result.bind(py);
 
-                        // Convert the result back to Value
-                        let value = RustyPyType(py_result_ref).try_into_value().map_err(|e| {
-                            ExecutionError::FunctionError {
-                                function: name.clone(),
-                                message: format!("Error calling function '{name}': {e}"),
-                            }
-                        })?;
-                        Ok(value)
+                        // Convert the result back to CEL Value
+                        let py_result_ref = py_result.bind(py);
+                        let cel_value =
+                            RustyPyType(py_result_ref).try_into_value().map_err(|e| {
+                                ExecutionError::FunctionError {
+                                    function: func_name.clone(),
+                                    message: format!(
+                                        "Failed to convert Python result to CEL value: {e}"
+                                    ),
+                                }
+                            })?;
+
+                        Ok(cel_value)
                     })
                 },
             );
@@ -671,7 +673,6 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
     }
 }
 
-/// A Python module implemented in Rust.
 #[pymodule]
 fn cel(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
