@@ -156,14 +156,14 @@ assert "record.user_id == user.id" in user_filter  # User restricted to own reco
 mixed_filters = [
     {"field": "active", "operator": "equals", "value": True},     # Boolean
     {"field": "score", "operator": "greater_than", "value": 85.5}, # Float
-    {"field": "tags", "operator": "in_list", "value": ["urgent", "sales"]}, # List
+    {"field": "category", "operator": "in_list", "value": ["urgent", "sales"]}, # Check if field value is in list
     {"field": "notes", "operator": "equals", "value": None}      # Null
 ]
 
 # This will generate correctly formatted CEL expressions:
 # record.active == true
 # record.score > 85.5  
-# record.tags in ["urgent", "sales"]
+# record.category in ["urgent", "sales"]
 # record.notes == null
 
 print("✓ Dynamic query filters working correctly")
@@ -188,14 +188,18 @@ print("✓ Dynamic query filters working correctly")
 ## Key Implementation Details
 
 ### Value Formatting
+
 The `_format_value()` method correctly handles different data types:
+
 - **Strings**: Uses `json.dumps()` for proper quoting and escaping
 - **Numbers**: Converts to string without quotes
 - **Booleans**: Converts to CEL boolean literals (`true`/`false`)
 - **None**: Converts to CEL `null` literal
 
 ### Security Layer
+
 Security filters are applied first and cannot be bypassed:
+
 - **Admin**: `"true"` - sees everything
 - **Manager**: `"record.department == user.department"` - department-scoped access
 - **User**: `"record.user_id == user.id"` - own records only

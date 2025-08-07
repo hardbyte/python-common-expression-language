@@ -8,18 +8,31 @@ Welcome to the python-common-expression-language development guide! This documen
 
 This Python package provides bindings for Google's Common Expression Language (CEL) using a Rust backend:
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Python API   │───▶│   Rust Wrapper   │───▶│   cel crate     │
-│                 │    │     (PyO3)       │    │   (upstream)    │
-├─────────────────┤    ├──────────────────┤    ├─────────────────┤
-│ • cel.evaluate  │    │ • Type conversion│    │ • CEL parser    │
-│ • Context class │    │ • Error handling │    │ • Expression    │
-│ • CLI tool      │    │ • Function calls │    │   evaluation    │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+```mermaid
+%%{init: {"flowchart": {"padding": 20}}}%%
+flowchart LR
+    subgraph Python["&nbsp;&nbsp;🐍 Python Layer&nbsp;&nbsp;"]
+        API["&nbsp;&nbsp;cel.evaluate()<br/>&nbsp;&nbsp;Context class<br/>&nbsp;&nbsp;CLI tool&nbsp;&nbsp;"]
+    end
+    
+    subgraph Rust["&nbsp;&nbsp;🦀 Rust Wrapper (PyO3)&nbsp;&nbsp;"]
+        Wrapper["&nbsp;&nbsp;Type conversion<br/>&nbsp;&nbsp;Error handling<br/>&nbsp;&nbsp;Function calls&nbsp;&nbsp;"]
+    end
+    
+    subgraph CEL["&nbsp;&nbsp;⚡ CEL Engine (upstream)&nbsp;&nbsp;"]
+        Engine["&nbsp;&nbsp;CEL parser<br/>&nbsp;&nbsp;Expression evaluation<br/>&nbsp;&nbsp;Built-in functions&nbsp;&nbsp;"]
+    end
+    
+    Python --> Rust
+    Rust --> CEL
+    
+    style Python fill:#e8f4f8,color:#2c3e50
+    style Rust fill:#fdf2e9,color:#2c3e50  
+    style CEL fill:#f0f9ff,color:#2c3e50
 ```
 
 **Key Files:**
+
 - `src/lib.rs` - Main evaluation engine and type conversions
 - `src/context.rs` - Context management and Python function integration  
 - `python/cel/` - Python module structure and CLI
@@ -85,12 +98,6 @@ uv run pytest tests/test_upstream_improvements.py  # Future compatibility
 uv run pytest --cov=cel
 ```
 
-**Test Categories:**
-- **Basic Operations** (42 tests) - Core CEL evaluation
-- **Arithmetic** (31 tests) - Math operations and mixed types
-- **Type Conversion** (23 tests) - Python ↔ CEL type mapping
-- **Context Management** (11 tests) - Variables and functions
-- **Upstream Detection** (26 tests) - Future compatibility monitoring
 
 ## Upstream Compatibility Strategy
 
@@ -160,12 +167,6 @@ When updating the `cel` crate dependency:
 5. **Update documentation** to reflect new features
 6. **Test thoroughly** to ensure no regressions
 
-Example recent upgrade (cel-interpreter 0.10.0 → cel 0.11.0):
-- Crate was renamed from `cel-interpreter` to `cel`
-- Function registration API completely changed (new `IntoFunction` trait)
-- All Python API remained backward compatible
-- 287 tests continued passing after migration
-
 ## Code Style & Conventions
 
 ### Rust Code
@@ -207,76 +208,6 @@ def add_function(self, name: str, func: Callable) -> None:
         >>> cel.evaluate("double(21)", context)
         42
     """
-```
-
-### Testing Conventions
-
-```python
-import pytest
-import cel
-
-class TestFeatureCategory:
-    """Test [specific feature] with [scope] coverage."""
-    
-    def test_specific_behavior(self):
-        """Test [what] [under what conditions]."""
-        # Arrange
-        context = {"key": "value"}
-        
-        # Act  
-        result = cel.evaluate("key", context)
-        
-        # Assert
-        assert result == "value"
-        
-    def test_error_condition(self):
-        """Test that [condition] raises [exception type]."""
-        with pytest.raises(RuntimeError, match="Undefined variable"):
-            cel.evaluate("undefined_variable")
-```
-
-## Contributing Guidelines
-
-### Development Process
-
-1. **Issue Discussion** - Open an issue to discuss significant changes
-2. **Branch Creation** - Create feature branch from main
-3. **Implementation** - Follow code style and add tests
-4. **Testing** - Ensure all tests pass (`uv run pytest`)
-5. **Documentation** - Update docs for user-facing changes
-6. **Pull Request** - Submit with clear description and examples
-
-### What We're Looking For
-
-**High Priority Contributions:**
-- **Enhanced error handling** - Better Python exception mapping
-- **Performance improvements** - Optimization of type conversions
-- **Local utility functions** - Python implementations of missing CEL functions
-- **Documentation improvements** - Examples, guides, edge cases
-
-**Upstream Contributions (cel crate):**
-- **String utilities** - `lowerAscii`, `upperAscii`, `indexOf`, etc.
-- **Type introspection** - `type()` function implementation  
-- **Mixed arithmetic** - Better signed/unsigned integer support
-- **CEL spec compliance** - OR operator boolean return values
-
-### Testing Requirements
-
-All contributions must include:
-- **Unit tests** for new functionality
-- **Integration tests** for user-facing features  
-- **Error condition tests** for edge cases
-- **Documentation tests** for examples in docs
-
-```bash
-# Full test suite (required before PR)
-uv run pytest
-
-# Documentation examples (must pass)
-uv run --group docs pytest tests/test_docs.py
-
-# Upstream compatibility (monitoring)
-uv run pytest tests/test_upstream_improvements.py
 ```
 
 ## Debugging & Troubleshooting
@@ -321,28 +252,6 @@ uv run pytest --profile tests/test_performance.py
 ## Release Process
 
 1. **Version Bump** - Update version in `pyproject.toml`
-2. **Changelog** - Document changes in `CHANGELOG.md`  
-3. **Testing** - Full test suite across Python versions
-4. **Documentation** - Update any version-specific docs
-5. **Release** - Tag and publish to PyPI via CI
+2. **Changelog** - Document changes in `CHANGELOG.md`
+3. **Release** - Create a release in GitHub to trigger publishing to PyPI
 
-## Resources
-
-### Documentation
-- **User Docs**: https://python-common-expression-language.readthedocs.io/
-- **CEL Specification**: https://github.com/google/cel-spec
-- **cel crate**: https://docs.rs/cel/latest/cel/
-
-### Development Tools
-- **PyO3 Guide**: https://pyo3.rs/
-- **maturin**: https://www.maturin.rs/
-- **Rust Book**: https://doc.rust-lang.org/book/
-
-### Community
-- **Issues**: https://github.com/hardbyte/python-common-expression-language/issues
-- **Discussions**: Use GitHub Discussions for questions and ideas
-- **CEL Community**: https://github.com/google/cel-spec/discussions
-
----
-
-Thank you for contributing to python-common-expression-language! Your efforts help provide a robust, performant CEL implementation for the Python ecosystem.

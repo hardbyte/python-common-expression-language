@@ -126,10 +126,40 @@ def check_hierarchical_access(user, resource, action):
         "user": {**user, "role_level": role_hierarchy.get(user["role"], 0)},
         "resource": resource,
         "action": action,
-        "required_level": 1  # Minimum level to access system
+        "required_level": 0  # Minimum level to access system
     }
     
     return evaluate(policy, context)
+
+# Test the hierarchical access control
+guest_user = {"role": "guest", "id": "guest1"}
+user_account = {"role": "user", "id": "user1"}
+manager_account = {"role": "manager", "id": "mgr1"}
+
+public_resource = {"public": True, "owner": "admin", "collaborators": []}
+private_resource = {"public": False, "owner": "user1", "collaborators": ["guest1"]}
+
+# Test 1: Guest accessing public resource
+result = check_hierarchical_access(guest_user, public_resource, "read")
+assert result == True, "Guest should access public resource"
+
+# Test 2: Guest accessing private resource (denied)  
+result = check_hierarchical_access(guest_user, private_resource, "write")
+assert result == False, "Guest should not write to private resource"
+
+# Test 3: User accessing owned resource
+result = check_hierarchical_access(user_account, private_resource, "write")
+assert result == True, "User should access owned resource"
+
+# Test 4: Manager can delete (role_level >= 3)
+result = check_hierarchical_access(manager_account, private_resource, "delete")
+assert result == True, "Manager should delete any resource"
+
+# Test 5: Guest as collaborator can read
+result = check_hierarchical_access(guest_user, private_resource, "read")
+assert result == True, "Guest collaborator should read resource"
+
+print("✓ Hierarchical access control working correctly")
 ```
 
 ### Time-Based Access
@@ -162,6 +192,33 @@ def check_time_based_access(user, resource, action, current_time=None):
     }
     
     return evaluate(policy, context)
+
+# Test time-based access control
+standard_user = {"role": "user", "schedule": "standard"}
+flexible_user = {"role": "user", "schedule": "flexible"}
+admin_user = {"role": "admin", "schedule": "standard"}
+test_resource = {"id": "test_doc"}
+
+# Test 1: Standard user during business hours
+business_time = datetime.now().replace(hour=14)  # 2 PM
+result = check_time_based_access(standard_user, test_resource, "read", business_time)
+assert result == True, "Standard user should access during business hours"
+
+# Test 2: Standard user after hours (denied)
+after_hours = datetime.now().replace(hour=22)  # 10 PM
+result = check_time_based_access(standard_user, test_resource, "read", after_hours)
+assert result == False, "Standard user should be denied after hours"
+
+# Test 3: Flexible user during extended hours
+result = check_time_based_access(flexible_user, test_resource, "read", after_hours)
+assert result == True, "Flexible user should access during extended hours"
+
+# Test 4: Admin always has access
+early_morning = datetime.now().replace(hour=5)  # 5 AM
+result = check_time_based_access(admin_user, test_resource, "read", early_morning)
+assert result == True, "Admin should always have access"
+
+print("✓ Time-based access control working correctly")
 ```
 
 ### Resource-Specific Policies
@@ -200,6 +257,42 @@ def check_resource_specific_access(user, resource, action):
     }
     
     return evaluate(policy, context)
+
+# Test resource-specific access control
+developer = {"role": "developer", "id": "dev1"}
+analyst = {"role": "analyst", "id": "analyst1"}
+operator = {"role": "operator", "id": "ops1"}
+
+document_resource = {"type": "document", "owner": "dev1", "public": False, "collaborators": ["analyst1"]}
+database_resource = {"type": "database", "name": "prod_db"}
+system_resource = {"type": "system", "name": "web_server"}
+
+# Test 1: Developer with database (can read/write)
+result = check_resource_specific_access(developer, database_resource, "write")
+assert result == True, "Developer should write to database"
+
+result = check_resource_specific_access(developer, database_resource, "read")
+assert result == True, "Developer should read database"
+
+# Test 2: Analyst with database (read-only)
+result = check_resource_specific_access(analyst, database_resource, "read")
+assert result == True, "Analyst should read database"
+
+result = check_resource_specific_access(analyst, database_resource, "write")
+assert result == False, "Analyst should not write to database"
+
+# Test 3: Operator with system (can read/restart)
+result = check_resource_specific_access(operator, system_resource, "restart")
+assert result == True, "Operator should restart system"
+
+# Test 4: Analyst as document collaborator
+result = check_resource_specific_access(analyst, document_resource, "read")
+assert result == True, "Analyst collaborator should read document"
+
+result = check_resource_specific_access(analyst, document_resource, "write")
+assert result == False, "Analyst collaborator should not write document"
+
+print("✓ Resource-specific access control working correctly")
 ```
 
 ## Kubernetes Validation Rules

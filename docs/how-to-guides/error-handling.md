@@ -208,6 +208,35 @@ access_granted = safe_policy_evaluation(
     context
 )
 assert access_granted is True
+
+# Test 2: Missing required context field
+incomplete_context = {
+    "user": {"id": "alice", "role": "user"}
+    # Missing "resource" field
+}
+
+result = safe_policy_evaluation('user.role == "admin"', incomplete_context)
+assert result == False, "Should deny access when required context is missing"
+
+# Test 3: Missing nested required field
+context_missing_user_id = {
+    "user": {"role": "user"},  # Missing "id" field
+    "resource": {"owner": "alice", "type": "document"}
+}
+
+result = safe_policy_evaluation('resource.owner == user.id', context_missing_user_id)
+assert result == False, "Should deny access when required nested field is missing"
+
+# Test 4: Valid policy with different outcome
+admin_context = {
+    "user": {"id": "bob", "role": "admin"},
+    "resource": {"owner": "alice", "type": "document"}
+}
+
+result = safe_policy_evaluation('user.role == "admin" || resource.owner == user.id', admin_context)
+assert result == True, "Admin should have access regardless of ownership"
+
+print("✓ Safe policy evaluation with context validation working correctly")
 ```
 
 ### 3. Input Sanitization for Untrusted Expressions {#input-sanitization-for-untrusted-expressions}
@@ -293,6 +322,29 @@ if success:
     assert result is True
 else:
     assert False, f"Validation should not have failed: {errors}"
+
+# Test 2: Invalid expression (accessing Python internals)
+dangerous_input = 'user.__class__.__name__'
+success, result, errors = safe_user_expression_eval(dangerous_input, context)
+assert success == False, "Dangerous expression should be blocked"
+assert len(errors) > 0, "Should report validation or runtime errors"
+
+# Test 3: Invalid syntax
+invalid_syntax = 'user.age >= 18 &&'
+success, result, errors = safe_user_expression_eval(invalid_syntax, context)
+assert success == False, "Invalid syntax should be rejected"
+assert len(errors) > 0, "Should report syntax errors"
+
+# Test 4: Empty expression
+success, result, errors = safe_user_expression_eval('', context)
+assert success == False, "Empty expression should be rejected"
+
+# Test 5: Undefined variable
+undefined_var = 'nonexistent_var == true'
+success, result, errors = safe_user_expression_eval(undefined_var, context)
+assert success == False, "Undefined variable should cause error"
+
+print("✓ Safe expression validation working correctly")
 ```
 
 ## Defensive Expression Patterns

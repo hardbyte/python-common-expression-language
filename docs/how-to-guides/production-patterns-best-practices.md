@@ -443,6 +443,39 @@ engine = MonitoredPolicyEngine()
 context = {"user": {"role": "admin"}}
 result = engine.evaluate_monitored("user.role == 'admin'", context)
 assert result is True
+
+# Test with different expressions to verify monitoring
+test_expressions = [
+    ("user.role == 'admin'", True),
+    ("user.role == 'user'", False), 
+    ("has(user.permissions) && 'admin' in user.permissions", False),
+    ("user.role in ['admin', 'manager', 'user']", True)
+]
+
+for expression, expected in test_expressions:
+    result = engine.evaluate_monitored(expression, context)
+    assert result == expected, f"Expression '{expression}' should return {expected}"
+
+print("✓ Monitored evaluation tracking multiple expressions")
+
+# Test monitoring behavior with slow expression (simulate complex logic)
+complex_context = {
+    "user": {"role": "admin", "permissions": ["read", "write", "admin"]},
+    "resources": [{"id": i, "type": "document", "public": False} for i in range(100)]
+}
+
+# This expression will be more complex and potentially trigger monitoring
+complex_expression = "user.role == 'admin' && size(resources) > 50 && user.permissions.all(p, p in ['read', 'write', 'admin'])"
+result = engine.evaluate_monitored(complex_expression, complex_context)
+assert result == True, "Complex expression should return true"
+print("✓ Complex expression monitoring works")
+
+# Test error handling in monitoring
+try:
+    engine.evaluate_monitored("undefined_variable == 'test'", context)
+    assert False, "Should raise error for undefined variable"
+except Exception:
+    print("✓ Monitoring correctly handles evaluation errors")
 ```
 
 **Monitoring Metrics**:

@@ -179,7 +179,7 @@ assert premium > 0
 loan_applicant = {
     "credit_score": 720,
     "monthly_income": 5000,
-    "existing_debt": 800,
+    "existing_debt": 500,  # Lower debt to pass debt-to-income ratio
     "employment_months": 30,
     "employment_type": "employed"
 }
@@ -192,6 +192,8 @@ eligibility = rules_engine.check_loan_eligibility(loan_applicant, loan_request)
 assert isinstance(eligibility, dict)
 assert "eligible" in eligibility
 assert "criteria" in eligibility
+# With $500 existing debt + $1200 loan = $1700 total (34% of income, under 36% limit)
+assert eligibility["eligible"] == True
 
 # Shipping cost calculation
 package = {"weight": 3.5}
@@ -233,7 +235,7 @@ class DataTransformationPipeline:
                 "full_name": """
                     has(input.first_name) && has(input.last_name) ?
                     input.first_name + " " + input.last_name :
-                    input.name if has(input.name) else "Unknown"
+                    has(input.name) ? input.name : "Unknown"
                 """,
                 "email": """
                     has(input.email) ? input.email :
@@ -456,6 +458,58 @@ discount_results = composable_engine.evaluate_rule_hierarchy("discount_rules", d
 assert "combined_discount" in discount_results
 assert isinstance(discount_results["combined_discount"], (int, float))
 assert discount_results["combined_discount"] >= 0
+
+# Test the individual discount calculations
+print("Testing rule composition calculations:")
+print(f"Quantity: {discount_context['quantity']} (should trigger volume discount)")
+print(f"Customer loyalty: {discount_context['customer']['loyalty_years']} years (should trigger loyalty discount)")
+
+# Verify individual discount amounts
+assert discount_results["base_discount"] == 0.0, "Base discount should be 0"
+assert discount_results["volume_discount"] == 0.05, "Volume discount should be 5% for 15+ items"
+assert discount_results["loyalty_discount"] == 0.05, "Loyalty discount should be 5% for 2-4 years"
+
+# Verify seasonal discount (behavior depends on actual date)
+seasonal_discount = discount_results["seasonal_discount"] 
+assert seasonal_discount >= 0.0, "Seasonal discount should be non-negative"
+print(f"Seasonal discount: {seasonal_discount} ({'holiday season' if seasonal_discount > 0 else 'regular season'})")
+
+# Verify combined discount calculation
+expected_combined = discount_results["base_discount"] + discount_results["volume_discount"] + discount_results["loyalty_discount"] + seasonal_discount
+expected_combined = min(expected_combined, 0.5)  # Apply 50% cap
+assert discount_results["combined_discount"] == expected_combined, f"Combined discount should be {expected_combined}"
+
+print(f"✓ Rule composition working: {discount_results['combined_discount']} total discount")
+
+# Test with customer who gets maximum discount (should be capped at 50%)
+high_loyalty_context = {
+    "quantity": 20,
+    "customer": {"loyalty_years": 10},  # Higher loyalty discount
+    "product": {"category": "electronics"}
+}
+
+high_discount_results = composable_engine.evaluate_rule_hierarchy("discount_rules", high_loyalty_context)
+assert high_discount_results["loyalty_discount"] == 0.1, "10-year customer should get 10% loyalty discount"
+
+# Calculate expected total based on actual seasonal discount
+high_seasonal = high_discount_results["seasonal_discount"]
+expected_total = min(0.0 + 0.05 + 0.1 + high_seasonal, 0.5)
+assert high_discount_results["combined_discount"] == expected_total, "Should apply discount cap correctly"
+
+print(f"✓ High loyalty customer discount: {high_discount_results['combined_discount']}")
+
+# Test risk assessment hierarchy
+risk_context = {
+    "applicant": {
+        "debt_ratio": 0.3,
+        "credit_score": 650,
+        "employment_type": "contract"
+    }
+}
+
+risk_results = composable_engine.evaluate_rule_hierarchy("risk_assessment", risk_context)
+assert "total_risk" in risk_results, "Should calculate total risk"
+print(f"✓ Risk assessment working: {risk_results['total_risk']} total risk")
 ```
 
 ### Conditional Field Mapping for Data Transformation
@@ -466,23 +520,23 @@ def create_conditional_transformer():
     
     mapping_rules = {
         "phone": """
-            has("input.phone") ? format_phone(input.phone) :
-            has("input.mobile") ? format_phone(input.mobile) :
-            has("input.telephone") ? format_phone(input.telephone) :
+            has(input.phone) ? format_phone(input.phone) :
+            has(input.mobile) ? format_phone(input.mobile) :
+            has(input.telephone) ? format_phone(input.telephone) :
             null
         """,
         
         "address": """
-            has("input.address") ? input.address :
-            (has("input.street") && has("input.city")) ? 
+            has(input.address) ? input.address :
+            (has(input.street) && has(input.city)) ? 
                 input.street + ", " + input.city + 
-                (has("input.state") ? ", " + input.state : "") +
-                (has("input.zip") ? " " + string(input.zip) : "") :
+                (has(input.state) ? ", " + input.state : "") +
+                (has(input.zip) ? " " + string(input.zip) : "") :
             null
         """,
         
         "full_address": """
-            has("user.address") ? user.address :
+            has(user.address) ? user.address :
             join_address_parts([
                 get_field("input.street", ""),
                 get_field("input.city", ""),
@@ -562,9 +616,9 @@ class DynamicRulesEngine:
         except Exception as e:
             return False, None, str(e)
     
-    def update_rule(self, rule_name, new_expression, metadata=None):
+    def update_rule(self, rule_name, new_expression, metadata=None, validation_context=None):
         """Update a rule with validation."""
-        is_valid, test_result, error = self.validate_rule(new_expression)
+        is_valid, test_result, error = self.validate_rule(new_expression, validation_context)
         
         if not is_valid:
             raise ValueError(f"Invalid rule expression: {error}")
@@ -666,10 +720,45 @@ assert tier == "gold"  # Customer with annual_spend=7500
 assert isinstance(fraud_score, (int, float))
 assert 0 <= fraud_score <= 1  # Should be between 0 and 1
 
+print(f"✓ Customer tier: {tier} (annual spend: $7500)")
+print(f"✓ Fraud score: {fraud_score} (low risk transaction)")
+
+# Test rule validation with invalid expression
+try:
+    dynamic_engine.update_rule("test_rule", "invalid && syntax")
+    assert False, "Should reject invalid syntax"
+except ValueError as e:
+    print(f"✓ Invalid rule rejected: {str(e)}")
+
+# Test rule validation with valid business rule expression
+# Provide validation context that matches the rule's expected variables
+validation_context = {"customer": {"annual_spend": 5000}}
+success = dynamic_engine.update_rule("test_rule", "customer.annual_spend > 1000", 
+                                    validation_context=validation_context)
+assert success == True, "Should accept valid business rule"
+
+# Test rule execution with new rule (customer has $7500 annual spend)
+test_result = dynamic_engine.execute_rule("test_rule", customer_data)
+assert test_result == True, "Customer with $7500 should pass $1000 threshold"
+print("✓ Dynamic rule creation and execution working")
+
 # Verify rule management functionality
 rule_info = dynamic_engine.get_rule_info("customer_tier")
 assert rule_info is not None
 assert "expression" in rule_info
+assert rule_info["metadata"]["author"] == "business_team"
+print(f"✓ Rule metadata: {rule_info['metadata']['description']}")
+
+# Test edge case: Different customer tiers
+bronze_customer_data = {**customer_data, "customer": {**customer_data["customer"], "annual_spend": 500}}
+bronze_tier = dynamic_engine.execute_rule("customer_tier", bronze_customer_data)
+assert bronze_tier == "bronze", "Low-spend customer should be bronze tier"
+
+platinum_customer_data = {**customer_data, "customer": {**customer_data["customer"], "annual_spend": 15000}}
+platinum_tier = dynamic_engine.execute_rule("customer_tier", platinum_customer_data)
+assert platinum_tier == "platinum", "High-spend customer should be platinum tier"
+
+print(f"✓ Customer tier calculation: bronze($500), gold($7500), platinum($15000)")
 ```
 
 ### Batch Transformation with Filtering
@@ -755,10 +844,32 @@ sample_records = [
 ]
 
 transformed_batch = transform_batch_with_filters(sample_records, batch_config)
-assert len(transformed_batch) >= 0  # Some records should be processed
-if len(transformed_batch) > 0:
-    assert all("user_id" in record for record in transformed_batch)
-    assert all("display_name" in record for record in transformed_batch)
+
+# Verify filtering worked correctly
+expected_valid_records = 2  # Records 1 and 4 should pass filters (have ID, active=true, non-empty email)
+assert len(transformed_batch) == expected_valid_records, f"Expected {expected_valid_records} records, got {len(transformed_batch)}"
+print(f"✓ Batch processing filtered to {len(transformed_batch)} valid records")
+
+# Verify transformations worked correctly
+for record in transformed_batch:
+    assert "user_id" in record, "Should have user_id field"
+    assert "display_name" in record, "Should have display_name field"
+    assert "tier" in record, "Should have tier field"
+    assert record["user_id"] is not None, "user_id should not be None"
+    print(f"✓ Record {record['user_id']}: {record['display_name']} ({record['tier']} tier)")
+
+# Test specific transformations for known records
+alice_record = next((r for r in transformed_batch if r["user_id"] == "1"), None)
+assert alice_record is not None, "Alice's record should be in results"
+assert alice_record["display_name"] == "Alice Smith", "Should combine first + last name"
+assert alice_record["tier"] == "premium", "Alice should be premium tier"
+
+carol_record = next((r for r in transformed_batch if r["user_id"] == "4"), None)
+assert carol_record is not None, "Carol's record should be in results"
+assert carol_record["display_name"] == "Carol D.", "Should use display_name field"
+assert carol_record["tier"] == "verified", "Carol should be verified tier"
+
+print("✓ Batch transformation with filtering working correctly")
 ```
 
 ## Why This Works
