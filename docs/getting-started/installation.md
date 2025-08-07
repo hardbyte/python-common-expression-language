@@ -9,25 +9,26 @@ Getting Python CEL up and running is quick and easy.
 
 ## Install from PyPI
 
-=== "pip"
-
-    ```bash
-    pip install common-expression-language
-    ```
-
 === "uv"
 
     ```bash
     uv add common-expression-language
     ```
 
-=== "pipx (CLI only)"
+=== "uv tool (CLI only)"
 
-    If you only want the CLI tool:
+    Install the CLI tool globally:
     
     ```bash
-    pipx install common-expression-language
+    uv tool install common-expression-language
     ```
+
+=== "pip"
+
+    ```bash
+    pip install common-expression-language
+    ```
+
 
 ## Verify Installation
 

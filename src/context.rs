@@ -1,5 +1,5 @@
-use cel_interpreter::objects::TryIntoValue;
-use cel_interpreter::Value;
+use ::cel::objects::TryIntoValue;
+use ::cel::Value;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;

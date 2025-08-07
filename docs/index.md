@@ -2,7 +2,7 @@
 
 **Fast, Safe CEL Evaluation for Python**
 
-The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, and safety. This Python package wraps the Rust implementation [cel-interpreter](https://crates.io/crates/cel-interpreter) v0.10.0, providing fast and safe CEL expression evaluation with seamless Python integration.
+The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, and safety. This Python package wraps the Rust implementation [cel](https://crates.io/crates/cel) v0.11.0, providing fast and safe CEL expression evaluation with seamless Python integration.
 
 ## Quick Start Paths
 
@@ -103,6 +103,9 @@ Safe by Design: Built on a memory-safe Rust core. The non-Turing complete nature
 ### 🎯 **Production Ready**
 200+ tests, comprehensive CLI, type safety, and ~80% CEL compliance with transparent documentation.
 
+### 🚀 **Future-Proof**
+Built on cel-rust v0.11.0 with modern architecture - upcoming features like type introspection, optional values, and enhanced string functions will work seamlessly.
+
 ### 🔧 **Developer Friendly**
 Dual interfaces (Python API + CLI), rich error messages, extensive documentation, and full IDE support.
 
@@ -114,7 +117,7 @@ Python CEL leverages a high-performance Rust core wrapped with PyO3 for seamless
 graph LR
     A[Python Application] --> B[python-cel Package]
     B --> C[PyO3 Boundary]
-    C --> D[cel-interpreter Rust Crate]
+    C --> D[cel Rust Crate]
     
     subgraph PL ["Python Layer"]
         B
@@ -205,4 +208,4 @@ Simple, readable policies that handle complex business logic.
 
 ---
 
-*Built with ❤️ using [PyO3](https://pyo3.rs/) and [cel-interpreter](https://crates.io/crates/cel-interpreter)*
+*Built with ❤️ using [PyO3](https://pyo3.rs/) and [cel](https://crates.io/crates/cel)*

@@ -78,7 +78,8 @@ nav:
     - CEL Language Basics: tutorials/cel-language-basics.md
     - Your First Integration: tutorials/your-first-integration.md
     - Extending CEL: tutorials/extending-cel.md
-  - How-to Guides:
+  - Cookbook:
+    - Recipe Index: cookbook.md
     - Production Patterns & Best Practices: how-to-guides/production-patterns-best-practices.md
     - Business Logic & Data Transformation: how-to-guides/business-logic-data-transformation.md
     - Dynamic Query Filters: how-to-guides/dynamic-query-filters.md
@@ -89,6 +90,8 @@ nav:
     - Python API: reference/python-api.md
     - CLI Reference: reference/cli-reference.md
     - CEL Compliance: reference/cel-compliance.md
+  - Development:
+    - Contributing & Developer Guide: contributing.md
 
 extra:
   social:

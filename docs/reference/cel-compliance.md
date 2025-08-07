@@ -4,9 +4,9 @@ This document tracks the compliance of this Python CEL implementation with the [
 
 ## Summary
 
-- **Implementation**: Based on [`cel-interpreter`](https://crates.io/crates/cel-interpreter) v0.10.0 Rust crate
+- **Implementation**: Based on [`cel`](https://crates.io/crates/cel) v0.11.0 Rust crate (formerly cel-interpreter)
 - **Estimated Compliance**: ~80% of CEL specification features.
-- **Test Coverage**: 200+ tests across 12 test files including comprehensive CLI testing
+- **Test Coverage**: 300+ tests across 15+ test files including comprehensive CLI testing and upstream improvement detection
 
 
 ## Python Type Mappings
@@ -147,7 +147,8 @@ count + 1       // If count=5, stays as 5 + 1 → 6
 ### ❌ Actually Missing CEL Specification Features
 
 #### 1. String Utility Functions (Upstream Priority: HIGH)
-- **Status**: Not implemented in cel-interpreter v0.10.0
+- **Status**: Not implemented in cel v0.11.0
+- **Detection**: ✅ Comprehensive detection for all missing functions
 - **Missing functions**:
   - `lowerAscii()` - lowercase conversion
   - `upperAscii()` - uppercase conversion  
@@ -167,10 +168,11 @@ count + 1       // If count=5, stays as 5 + 1 → 6
 ```
 
 **Impact**: Medium - useful for string processing
-**Recommendation**: Contribute to cel-interpreter upstream
+**Recommendation**: Contribute to cel crate upstream
 
 #### 2. Mixed Signed/Unsigned Integer Arithmetic  
 - **Status**: Partially supported  
+- **Detection**: ✅ Comprehensive detection for mixed operations
 - **CEL Spec**: Supports both `int` and `uint` types with `u` suffix (`1u`, `42u`)
 - **Our Implementation**: 
   - ✅ Unsigned literals work: `1u`, `42u` → Python `int`
@@ -180,39 +182,45 @@ count + 1       // If count=5, stays as 5 + 1 → 6
 - **Impact**: Medium - requires careful type management in expressions
 
 #### 3. Type Introspection Function (Upstream Priority: HIGH)
-- **Status**: Not implemented in cel-interpreter v0.10.0
+- **Status**: Not implemented in cel v0.11.0, but foundation exists
+- **Detection**: ✅ Full detection with expected behavior tests
 - **Missing function**: `type(value) -> string`
 - **CEL Spec**: Should return runtime type as string
 - **Example**: `type(42)` should return `"int"`
 - **Our Implementation**: Throws "Undeclared reference to 'type'"
+- **Recent Progress**: Upstream has introduced comprehensive type system infrastructure
 - **Impact**: Medium - useful for dynamic type checking
-- **Recommendation**: Contribute to cel-interpreter upstream
+- **Recommendation**: This function may be available in future releases
 
 #### 4. Mixed-Type Arithmetic in Macros (Upstream Priority: MEDIUM)
 - **Status**: Type coercion issues in collection operations
 - **Problem**: `[1,2,3].map(x, x * 2)` fails with "Unsupported binary operator 'mul': Int(1), Float(2.0)"
 - **Impact**: Medium - affects advanced collection processing
 - **Workaround**: Ensure type consistency in macro expressions
-- **Recommendation**: Better type coercion in cel-interpreter
+- **Recommendation**: Better type coercion in cel crate
 
 #### 5. Bytes Concatenation (Upstream Priority: LOW)
-- **Status**: Not implemented in cel-interpreter v0.10.0
+- **Status**: Not implemented in cel v0.11.0
 - **CEL Spec**: `b'hello' + b'world'` should return `b'helloworld'`
 - **Our Implementation**: Throws "Unsupported binary operator" error
 - **Workaround**: `bytes(string(part1) + string(part2))`
 - **Impact**: Low - rarely used in practice
 
 #### 6. Advanced Built-ins (Upstream Priority: LOW)
+- **Detection**: ✅ Full detection for all missing functions
 **Missing functions**:
 - Math: `ceil()`, `floor()`, `round()` - Mathematical functions
 - Collection: Enhanced `in` operator behaviors
 - URL/IP: `isURL()`, `isIP()` - Validation functions (available in some CEL implementations)
 
 #### 7. Optional Values (Future Feature)
+- **Detection**: ✅ Full detection with expected behavior tests
 **Missing features**:
 - `optional.of(value)` - create optional
-- `optional.orValue(default)` - unwrap with default
+- `optional.orValue(default)` - unwrap with default  
 - `?` suffix for optional chaining
+
+**Recent Progress**: Upstream has introduced optional type infrastructure, suggesting these features may be implemented in future releases.
 
 ### ⚠️ Behavioral Differences
 
@@ -224,6 +232,7 @@ count + 1       // If count=5, stays as 5 + 1 → 6
     - **CEL Spec**: `42 || false` should return `true` (boolean)
     - **Our Implementation**: Returns `42` (original integer value)
     - **Impact**: **HIGH** - This can lead to unexpected behavior and logic errors
+    - **Detection**: ✅ We monitor for when this behavior gets fixed upstream
     
     **Examples of problematic behavior:**
     ```python
@@ -256,10 +265,39 @@ except Exception:
 - **Impact**: Low - generally intuitive behavior
 
 
+## 🔮 Future Improvements
+
+The underlying cel-rust implementation continues to evolve with improvements that will benefit this Python wrapper:
+
+### **Enhanced Type System**
+- **Type Introspection**: Infrastructure being developed for the missing `type()` function
+- **Better Type Checking**: More precise type information and operation support detection
+- **Optional Types**: Foundation exists for safer null handling with optional values
+- **Improved Error Messages**: Enhanced type information in error reporting
+
+### **Potential Future Features**
+```cel
+// May be available in future releases
+type(42)          // → "int" 
+type("hello")     // → "string"
+type([1, 2, 3])   // → "list"
+
+// Optional value handling
+optional.of(value)           // Create optional value
+value.orValue(default)       // Unwrap with default
+field?.subfield?.property    // Optional chaining
+```
+
+### **Development Benefits**
+- **Backward Compatibility**: All improvements maintain API stability
+- **Transparent Upgrades**: New features will be additive, not breaking
+- **Better Standard Library**: Infrastructure exists for implementing missing string functions
+- **CEL Spec Alignment**: Closer alignment with official CEL specification
+
 ## Performance Characteristics
 
 ### Strengths
-- **Expression parsing**: Efficiently handled by Rust cel-interpreter
+- **Expression parsing**: Efficiently handled by Rust cel crate
 - **Type conversion**: Optimized Python ↔ Rust boundaries
 - **Memory usage**: Reasonable for typical use cases
 - **Evaluation speed**: Microsecond-level evaluation times
@@ -334,10 +372,11 @@ Both the CLI tool and the core `evaluate()` function now handle all malformed in
 ## Recommendations
 
 ### High Priority (Upstream Contributions)
-1. **String utility functions** (`lowerAscii`, `upperAscii`, `indexOf`, `lastIndexOf`, `substring`, `replace`, `split`, `join`)
-2. **Type introspection function** (`type()` for runtime type checking)
+1. **String utility functions** (`lowerAscii`, `upperAscii`, `indexOf`, `lastIndexOf`, `substring`, `replace`, `split`, `join`) - ✅ **Detection Ready**
+2. **Type introspection function** (`type()` for runtime type checking) - ✅ **Detection Ready**
 3. **Better error messages** for unsupported operations
-4. **Mixed-type arithmetic** improvements in macros
+4. **Mixed-type arithmetic** improvements in macros - ✅ **Detection Ready**
+5. **OR operator CEL spec compliance** (return booleans) - ✅ **Detection Ready**
 
 ### Medium Priority (Local Improvements)
 1. **Enhanced error handling** with better Python exception mapping
@@ -346,15 +385,16 @@ Both the CLI tool and the core `evaluate()` function now handle all malformed in
 4. **Performance benchmarking** of macro operations
 
 ### Low Priority (Future Features)
-1. **Math functions** (`ceil`, `floor`, `round`) - contribute upstream
-2. **Advanced validation functions** (`isURL`, `isIP`) - domain-specific
-3. **Optional value handling** - future CEL specification feature
+1. **Math functions** (`ceil`, `floor`, `round`) - ✅ **Detection Ready**
+2. **Advanced validation functions** (`isURL`, `isIP`) - ✅ **Detection Ready**
+3. **Optional value handling** - ✅ **Detection Ready**
 
 ### Immediate Actions
 1. ✅ **Update compliance documentation** with new findings
-2. 🔄 **Implement better local error handling** (high impact, local solution)
-3. 📝 **Add tests for newly discovered working features**
-4. 🚀 **Consider upstream contributions** to cel-interpreter for missing string functions
+2. ✅ **Comprehensive upstream detection system** - All known issues monitored
+3. 🔄 **Implement better local error handling** (high impact, local solution)
+4. 📝 **Add tests for newly discovered working features**
+5. 🚀 **Consider upstream contributions** to cel crate for missing functions
 
 ## Contributing
 
@@ -364,11 +404,11 @@ When adding new features or fixing compliance issues:
 2. **Add comprehensive tests** for both positive and negative cases
 3. **Document behavior** especially if it differs from spec
 4. **Update this compliance document** with changes
-5. **Consider upstream contributions** to cel-interpreter crate
+5. **Consider upstream contributions** to cel crate
 
 ## Related Resources
 
 - **CEL Specification**: https://github.com/google/cel-spec
-- **cel-interpreter crate**: https://crates.io/crates/cel-interpreter  
+- **cel crate**: https://crates.io/crates/cel  
 - **CEL Language Definition**: https://github.com/google/cel-spec/blob/master/doc/langdef.md
 - **CEL Homepage**: https://cel.dev/
