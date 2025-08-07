@@ -32,7 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Foundation for `type()` function (currently missing from CEL spec compliance)
   - Optional value infrastructure for safer null handling
   - All future changes maintain backward compatibility with our wrapper
-- **Build Status**: All 287 tests pass with current dependency versions
 
 ## [0.4.1] - 2025-08-02
 
