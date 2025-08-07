@@ -84,14 +84,14 @@ business_hour_time = datetime.now().replace(hour=14)  # 2 PM
 access_granted = check_advanced_access_policy(
     financial_user, financial_resource, "read", business_hour_time
 )
-assert access_granted == True
+assert access_granted == True  # → Access GRANTED: Department member reading financial data during business hours
 
 # Test access after hours (should be denied for non-admin)
 after_hours_time = datetime.now().replace(hour=22)  # 10 PM
 access_denied = check_advanced_access_policy(
     financial_user, financial_resource, "read", after_hours_time
 )
-assert access_denied == False
+assert access_denied == False  # → Access DENIED: Time-based security - financial data restricted after business hours
 
 print("✓ Advanced access control policies working correctly")
 ```
@@ -141,23 +141,23 @@ private_resource = {"public": False, "owner": "user1", "collaborators": ["guest1
 
 # Test 1: Guest accessing public resource
 result = check_hierarchical_access(guest_user, public_resource, "read")
-assert result == True, "Guest should access public resource"
+assert result == True  # → Access GRANTED: Public resources accessible to all authenticated users
 
 # Test 2: Guest accessing private resource (denied)  
 result = check_hierarchical_access(guest_user, private_resource, "write")
-assert result == False, "Guest should not write to private resource"
+assert result == False  # → Access DENIED: Insufficient role level - guests cannot write to private resources
 
 # Test 3: User accessing owned resource
 result = check_hierarchical_access(user_account, private_resource, "write")
-assert result == True, "User should access owned resource"
+assert result == True  # → Access GRANTED: Resource ownership grants full read/write permissions
 
 # Test 4: Manager can delete (role_level >= 3)
 result = check_hierarchical_access(manager_account, private_resource, "delete")
-assert result == True, "Manager should delete any resource"
+assert result == True  # → Access GRANTED: Management role hierarchy allows deletion of any resource
 
 # Test 5: Guest as collaborator can read
 result = check_hierarchical_access(guest_user, private_resource, "read")
-assert result == True, "Guest collaborator should read resource"
+assert result == True  # → Access GRANTED: Collaboration permissions override role restrictions for read access
 
 print("✓ Hierarchical access control working correctly")
 ```
@@ -202,21 +202,21 @@ test_resource = {"id": "test_doc"}
 # Test 1: Standard user during business hours
 business_time = datetime.now().replace(hour=14)  # 2 PM
 result = check_time_based_access(standard_user, test_resource, "read", business_time)
-assert result == True, "Standard user should access during business hours"
+assert result == True  # → Access GRANTED: Standard work schedule allows access during 9-5 business hours
 
 # Test 2: Standard user after hours (denied)
 after_hours = datetime.now().replace(hour=22)  # 10 PM
 result = check_time_based_access(standard_user, test_resource, "read", after_hours)
-assert result == False, "Standard user should be denied after hours"
+assert result == False  # → Access DENIED: Standard schedule restrictions prevent after-hours access
 
 # Test 3: Flexible user during extended hours
 result = check_time_based_access(flexible_user, test_resource, "read", after_hours)
-assert result == True, "Flexible user should access during extended hours"
+assert result == True  # → Access GRANTED: Flexible schedule allows extended hours (6 AM - 10 PM)
 
 # Test 4: Admin always has access
 early_morning = datetime.now().replace(hour=5)  # 5 AM
 result = check_time_based_access(admin_user, test_resource, "read", early_morning)
-assert result == True, "Admin should always have access"
+assert result == True  # → Access GRANTED: Admin role bypasses all time-based restrictions
 
 print("✓ Time-based access control working correctly")
 ```
@@ -269,28 +269,28 @@ system_resource = {"type": "system", "name": "web_server"}
 
 # Test 1: Developer with database (can read/write)
 result = check_resource_specific_access(developer, database_resource, "write")
-assert result == True, "Developer should write to database"
+assert result == True  # → Access GRANTED: Developer role has full database read/write permissions
 
 result = check_resource_specific_access(developer, database_resource, "read")
-assert result == True, "Developer should read database"
+assert result == True  # → Access GRANTED: Developer role includes database read access
 
 # Test 2: Analyst with database (read-only)
 result = check_resource_specific_access(analyst, database_resource, "read")
-assert result == True, "Analyst should read database"
+assert result == True  # → Access GRANTED: Analyst role has read-only database access for reporting
 
 result = check_resource_specific_access(analyst, database_resource, "write")
-assert result == False, "Analyst should not write to database"
+assert result == False  # → Access DENIED: Analyst role restricted from database modifications
 
 # Test 3: Operator with system (can read/restart)
 result = check_resource_specific_access(operator, system_resource, "restart")
-assert result == True, "Operator should restart system"
+assert result == True  # → Access GRANTED: Operator role can restart systems for maintenance
 
 # Test 4: Analyst as document collaborator
 result = check_resource_specific_access(analyst, document_resource, "read")
-assert result == True, "Analyst collaborator should read document"
+assert result == True  # → Access GRANTED: Collaborator status grants read access regardless of role
 
 result = check_resource_specific_access(analyst, document_resource, "write")
-assert result == False, "Analyst collaborator should not write document"
+assert result == False  # → Access DENIED: Collaborator read-only access - ownership required for writes
 
 print("✓ Resource-specific access control working correctly")
 ```
@@ -347,7 +347,7 @@ secure_pod = {
 }
 
 # Test secure pod passes validation
-assert validate_kubernetes_pod(secure_pod, pod_security_policy) == True
+assert validate_kubernetes_pod(secure_pod, pod_security_policy) == True  # → SECURITY CHECK PASSED: Non-root user (1000) complies with security policy
 
 # Invalid pod - runs as root
 insecure_pod = {
@@ -364,7 +364,7 @@ insecure_pod = {
 }
 
 # Test insecure pod fails validation
-assert validate_kubernetes_pod(insecure_pod, pod_security_policy) == False
+assert validate_kubernetes_pod(insecure_pod, pod_security_policy) == False  # → SECURITY VIOLATION: Root user (UID 0) blocked by admission policy
 
 print("✓ Kubernetes pod security validation working correctly")
 ```
@@ -410,7 +410,7 @@ deployment_with_limits = {
 }
 
 # Test deployment passes resource validation
-assert validate_resource_limits(deployment_with_limits) == True
+assert validate_resource_limits(deployment_with_limits) == True  # → RESOURCE POLICY PASSED: All containers have proper CPU/memory limits and requests
 
 print("✓ Kubernetes resource limit validation working correctly")
 ```
@@ -456,7 +456,7 @@ secure_network_policy = {
 }
 
 # Test network policy passes validation
-assert validate_network_policy(secure_network_policy) == True
+assert validate_network_policy(secure_network_policy) == True  # → NETWORK SECURITY PASSED: Ingress/egress rules properly restrict traffic flow
 
 print("✓ Kubernetes network policy validation working correctly")
 ```
@@ -505,8 +505,8 @@ development_app = {
 }
 
 # Test both applications pass validation
-assert validate_custom_resource(production_app, {}) == True
-assert validate_custom_resource(development_app, {}) == True
+assert validate_custom_resource(production_app, {}) == True  # → COMPLIANCE PASSED: Production app meets replica and versioning requirements
+assert validate_custom_resource(development_app, {}) == True  # → COMPLIANCE PASSED: Development app allows lower replica count with proper versioning
 
 print("✓ Kubernetes custom resource validation working correctly")
 ```
@@ -661,7 +661,7 @@ for policy_result in result['policy_results']:
     print(f"  {status} {policy_result['policy']}: {policy_result['message']}")
 
 # The compliant pod should pass all policies
-assert result['allowed'] == True
+assert result['allowed'] == True  # → ADMISSION APPROVED: Pod meets all security, resource, and compliance policies
 
 print("\n✓ Kubernetes production policy engine working correctly")
 ```
@@ -695,7 +695,7 @@ def test_kubernetes_pod_security_policies():
             "containers": [{"name": "app", "image": "nginx"}]
         }
     }
-    assert check_pod_security(secure_pod) == True
+    assert check_pod_security(secure_pod) == True  # → SECURITY VALID: Non-root user and no privileged containers
     
     # Test case 2: Root user should fail
     root_pod = {
@@ -704,7 +704,7 @@ def test_kubernetes_pod_security_policies():
             "containers": [{"name": "app", "image": "nginx"}]
         }
     }
-    assert check_pod_security(root_pod) == False
+    assert check_pod_security(root_pod) == False  # → SECURITY VIOLATION: Root user (UID 0) poses container escape risk
     
     # Test case 3: Privileged container should fail
     privileged_pod = {
@@ -717,7 +717,7 @@ def test_kubernetes_pod_security_policies():
             }]
         }
     }
-    assert check_pod_security(privileged_pod) == False
+    assert check_pod_security(privileged_pod) == False  # → SECURITY VIOLATION: Privileged containers bypass kernel security
     
     # Test case 4: Missing security context should pass (default behavior)
     default_pod = {
@@ -725,7 +725,7 @@ def test_kubernetes_pod_security_policies():
             "containers": [{"name": "app", "image": "nginx"}]
         }
     }
-    assert check_pod_security(default_pod) == True
+    assert check_pod_security(default_pod) == True  # → SECURITY ACCEPTABLE: Default runtime security context applied
 
 # Run the test
 test_kubernetes_pod_security_policies()

@@ -2,7 +2,22 @@
 
 Before diving deeper into CEL, let's step back and understand what makes CEL fundamentally different from other expression languages. Whether you're coming from [Quick Start](../getting-started/quick-start.md) or planning your first integration, understanding CEL's philosophy will help you make better design decisions.
 
-> **When to Read This:** This tutorial is valuable at any stage - whether you're just getting started or already building applications. The concepts here will help you choose the right tool for the job and design better CEL-based solutions.
+## 🎯 When to Use CEL (Quick Decision Guide)
+
+### ✅ **Perfect For**
+- **Policy & rules engines** that change frequently
+- **Configuration validation** without custom code
+- **Data filtering & transformation** with user input
+- **Access control** where business users need to understand rules
+- **Safe evaluation** of untrusted expressions
+
+### ❌ **Not Suitable For**
+- **Complex multi-step workflows** with branching logic
+- **I/O operations** (file access, network calls, database queries)
+- **Stateful operations** that need to remember previous results
+- **Performance-critical** tight loops (use native code instead)
+
+> **🔒 Security Advantage:** CEL expressions can be safely stored in databases or edited by non-developers without code-execution risks. No `eval()` dangers.
 
 **What You'll Learn:** By the end of this tutorial, you'll understand CEL's design philosophy, know when to use CEL vs other solutions, and have the mental models needed to design effective CEL-based systems.
 
@@ -17,7 +32,7 @@ from cel import evaluate
 
 # ✅ This works - safe expression evaluation
 result = evaluate("user.age >= 18 && user.verified", {"user": {"age": 25, "verified": True}})
-assert result == True
+assert result == True  # → True (adult verified user)
 
 # ❌ This is impossible - no loops or side effects
 # No way to write: for user in users: send_email(user)
@@ -31,6 +46,8 @@ assert result == True
 - **Predictable resource usage**: No infinite loops or recursive calls
 - **Safe for untrusted input**: Users can write expressions without security risks
 
+**💡 Takeaway: CEL's limitations are security features — expressions always terminate safely.**
+
 ### Declarative, Not Imperative
 
 CEL expressions describe **what** you want, not **how** to compute it.
@@ -41,22 +58,16 @@ from cel import evaluate
 # Declarative: "I want users who are adults and verified"
 user_filter = "user.age >= 18 && user.verified"
 
-# Test with valid user
-result = evaluate(user_filter, {"user": {"age": 25, "verified": True}})
-assert result == True
+# Test cases
+test_cases = [
+    ({"user": {"age": 25, "verified": True}}, True),   # Valid adult
+    ({"user": {"age": 25, "verified": False}}, False), # Unverified
+    ({"user": {"age": 16, "verified": True}}, False),  # Minor
+]
 
-# Test with unverified user
-result = evaluate(user_filter, {"user": {"age": 25, "verified": False}})
-assert result == False
-
-# Compare to imperative Python:
-# if user.age >= 18:
-#     if user.verified:
-#         return True
-#     else:
-#         return False
-# else:
-#     return False
+for context, expected in test_cases:
+    result = evaluate(user_filter, context)
+    assert result == expected
 ```
 
 This declarative nature makes CEL expressions:
@@ -64,6 +75,8 @@ This declarative nature makes CEL expressions:
 - **Easier to reason about**: The intent is clear from reading the expression
 - **Language-agnostic**: The same expression works across different platforms
 - **Portable**: Expressions can be stored in databases, config files, or transmitted over networks
+
+**💡 Takeaway: Write business intent, not implementation steps — CEL handles the "how" for you.**
 
 ### Idempotent and Deterministic
 
@@ -75,23 +88,22 @@ from cel import evaluate
 # This expression will ALWAYS return the same result for the same user
 policy = "user.role == 'admin' || (user.department == 'IT' && user.yearsOfService > 2)"
 
-# Test admin user
-result = evaluate(policy, {"user": {"role": "admin", "department": "sales", "yearsOfService": 1}})
-assert result == True
+# Compact test table
+test_scenarios = [
+    ({"role": "admin", "department": "sales", "yearsOfService": 1}, True),    # Admin override
+    ({"role": "user", "department": "IT", "yearsOfService": 3}, True),       # Senior IT
+    ({"role": "user", "department": "IT", "yearsOfService": 1}, False),      # Junior IT
+    ({"role": "user", "department": "sales", "yearsOfService": 5}, False),   # Non-IT
+]
 
-# Test experienced IT user
-result = evaluate(policy, {"user": {"role": "user", "department": "IT", "yearsOfService": 3}})
-assert result == True
-
-# Test new IT user
-result = evaluate(policy, {"user": {"role": "user", "department": "IT", "yearsOfService": 1}})
-assert result == False
-
-# No hidden state, no random numbers, no time-dependent behavior
-# (unless you explicitly provide time in the context)
+for user_data, expected in test_scenarios:
+    result = evaluate(policy, {"user": user_data})
+    assert result == expected  # → Results match expected access levels
 ```
 
-## When to Choose CEL
+**💡 Takeaway: Same input = same output, always. Perfect for caching and predictable behavior.**
+
+## Detailed Use Case Analysis
 
 ### ✅ Perfect Use Cases
 
@@ -99,89 +111,97 @@ assert result == False
 ```python
 from cel import evaluate
 
-# Business rules that change frequently
+# Business pricing with multiple factors
 pricing_rule = "base_price * (1 + tax_rate) * (premium_customer ? 0.9 : 1.0)"
 result = evaluate(pricing_rule, {
-    "base_price": 100.0,
-    "tax_rate": 0.08,
-    "premium_customer": True
+    "base_price": 100.0, "tax_rate": 0.08, "premium_customer": True
 })
-assert result == 97.2  # 100 * 1.08 * 0.9
+# → 97.2 (premium customer gets 10% discount)
+assert result == 97.2  # Testing for illustration - not required in your code
 
-# Access control policies
-access_policy = """
-  user.role == 'admin' || 
-  (resource.owner == user.id && action in ['read', 'update']) ||
-  (resource.public && action == 'read')
-"""
+# Multi-tier access control
+access_policy = "user.role == 'admin' || (resource.owner == user.id && action in ['read', 'update']) || (resource.public && action == 'read')"
 result = evaluate(access_policy, {
     "user": {"role": "admin", "id": "user1"},
     "resource": {"owner": "user2", "public": False},
     "action": "delete"
 })
-assert result == True  # Admin can do anything
+# → True (admin role grants access to any action)
+assert result == True  # Testing for illustration - not required in your code
 ```
+
+→ [**Complete Implementation Guide**](../how-to-guides/access-control-policies.md)
 
 **Configuration Validation**
 ```python
 from cel import evaluate
 
-# Validate complex configuration without writing code
-validation_rules = [
-    "config.database.port > 0 && config.database.port < 65536",
-    "config.cache.ttl >= 60",  # At least 1 minute
-    "config.features.ssl_enabled || config.environment == 'development'"
-]
+# Business rule validation table
+validation_rules = {
+    "Valid port range": "config.database.port > 0 && config.database.port < 65536",
+    "Cache TTL minimum": "config.cache.ttl >= 60",
+    "SSL in production": "config.features.ssl_enabled || config.environment == 'development'"
+}
 
-# Test valid configuration
 config = {
     "config": {
-        "database": {"port": 5432},
-        "cache": {"ttl": 300},
-        "features": {"ssl_enabled": True},
-        "environment": "production"
+        "database": {"port": 5432}, "cache": {"ttl": 300},
+        "features": {"ssl_enabled": True}, "environment": "production"
     }
 }
 
-for rule in validation_rules:
+# Validate all rules
+for description, rule in validation_rules.items():
     result = evaluate(rule, config)
-    assert result == True
+    assert result == True, f"Failed: {description}"
 ```
 
 **Data Filtering and Transformation**
 ```python
 from cel import evaluate
 
-# Dynamic filters for APIs
-user_filter = "user.active && user.department in ['engineering', 'product']"
-result = evaluate(user_filter, {
-    "user": {"active": True, "department": "engineering"}
-})
-assert result == True
+# Dynamic API filters
+filters = {
+    "Active engineering/product": ("user.active && user.department in ['engineering', 'product']", {"user": {"active": True, "department": "engineering"}}, True),    # → True (active eng user)
+    "Performance scoring": ("base_score * effort_multiplier + bonus_points", {"base_score": 80, "effort_multiplier": 1.2, "bonus_points": 10}, 106.0)  # → 106.0 (calculated score)
+}
 
-# Data transformation
-score_calculation = "base_score * effort_multiplier + bonus_points"
-result = evaluate(score_calculation, {
-    "base_score": 80,
-    "effort_multiplier": 1.2,
-    "bonus_points": 10
-})
-assert result == 106.0  # 80 * 1.2 + 10
+for name, (expr, ctx, expected) in filters.items():
+    result = evaluate(expr, ctx)
+    assert result == expected  # → Results match expected filter outcomes
 ```
+
+→ [**Complete Data Transformation Guide**](../how-to-guides/business-logic-data-transformation.md)
 
 ### ❌ When NOT to Use CEL
 
 **Complex Business Logic**
+
+CEL can't handle multi-step workflows with branching logic:
+
+```
+// This type of logic needs traditional programming:
+if amount > 10000:
+    route_to_executive_approval()
+    send_email_to_cfo()
+    log_high_value_request()
+else if department == "finance":
+    route_to_finance_approval()
+    check_budget_constraints()
+else:
+    auto_approve()
+    update_metrics()
+```
+
+Use Python for complex workflows:
 ```python
-# Don't use CEL for multi-step processes
-# Use Python instead:
 def complex_approval_workflow(request):
     if request.amount > 10000:
-        return "executive_approval"  # route_to_executive_approval(request)
+        return "executive_approval"  # Multiple steps happen here
     elif request.department == "finance":
-        return "finance_approval"   # route_to_finance_approval(request)
+        return "finance_approval"   # Different approval path
     else:
-        return "auto_approve"       # auto_approve(request)
+        return "auto_approve"       # Simple approval
 
 # Test the function
 class MockRequest:
@@ -190,18 +210,31 @@ class MockRequest:
         self.department = department
 
 result = complex_approval_workflow(MockRequest(15000, "engineering"))
+# → "executive_approval" (high-value request)
 assert result == "executive_approval"
 
 result = complex_approval_workflow(MockRequest(5000, "finance"))
+# → "finance_approval" (department-specific routing)
 assert result == "finance_approval"
 
 result = complex_approval_workflow(MockRequest(1000, "marketing"))
+# → "auto_approve" (standard approval)
 assert result == "auto_approve"
 ```
 
 **I/O Operations**
+
+CEL can't perform external operations:
+
+```
+// This type of logic needs I/O capabilities:
+send_email(user.email, "Welcome!")
+post_to_slack(user.slack_id, "New user joined")
+log_to_database(user.id, "registration")
+```
+
+Use Python for I/O operations:
 ```python
-# CEL can't do this - use Python
 def send_notification(user, message):
     # email_service.send(user.email, message)
     # slack_service.post(user.slack_id, message)
@@ -210,15 +243,28 @@ def send_notification(user, message):
 # Test the function
 user = {"email": "test@example.com", "slack_id": "@test"}
 result = send_notification(user, "Hello!")
+# → "Sent 'Hello!' to test@example.com and @test" (notification sent)
 assert "Sent 'Hello!' to test@example.com and @test" == result
 ```
 
 **Stateful Operations**
+
+CEL can't remember state between evaluations:
+
+```
+// This type of logic needs persistent state:
+if user_request_count < max_requests:
+    increment_request_count(user_id)
+    return allow_request()
+else:
+    return deny_request()
+```
+
+Use Python for stateful operations:
 ```python
-# CEL can't track state across evaluations
 class RateLimiter:
     def __init__(self):
-        self.requests = {}
+        self.requests = {}  # Persistent state
     
     def is_allowed(self, user_id, max_requests=100):
         # Track request counts over time
@@ -230,9 +276,9 @@ class RateLimiter:
 
 # Test the class
 rate_limiter = RateLimiter()
-assert rate_limiter.is_allowed("user1", max_requests=2) == True
-assert rate_limiter.is_allowed("user1", max_requests=2) == True
-assert rate_limiter.is_allowed("user1", max_requests=2) == False
+assert rate_limiter.is_allowed("user1", max_requests=2) == True   # → True (first request)
+assert rate_limiter.is_allowed("user1", max_requests=2) == True   # → True (second request)
+assert rate_limiter.is_allowed("user1", max_requests=2) == False  # → False (limit exceeded)
 ```
 
 ## Core Principles for Effective CEL
@@ -244,22 +290,31 @@ CEL expressions should be readable by non-programmers. Business users should be 
 ```python
 from cel import evaluate
 
-# ✅ Clear and readable
+# ✅ GOOD: Clear and readable
 clear_rule = "order.total > 100 && customer.loyalty_tier == 'gold'"
-result = evaluate(clear_rule, {
-    "order": {"total": 150},
-    "customer": {"loyalty_tier": "gold"}
-})
-assert result == True
+result = evaluate(clear_rule, {"order": {"total": 150}, "customer": {"loyalty_tier": "gold"}})
+assert result == True  # → True (gold customer with large order)
 
-# ❌ Too cryptic - avoid this style
+# ❌ BAD: Too cryptic - avoid this style  
 cryptic_rule = "o.t > 1e2 && c.lt == 'g'"
-result = evaluate(cryptic_rule, {
-    "o": {"t": 150},
-    "c": {"lt": "g"}
-})
-assert result == True  # Works but hard to understand
+result = evaluate(cryptic_rule, {"o": {"t": 150}, "c": {"lt": "g"}})
+assert result == True  # → True (works but unreadable)
 ```
+
+**Visual Comparison:**
+
+| **❌ Cryptic (Don't Do This)** | **✅ Human-Readable (Do This)** |
+|--------------------------------|----------------------------------|
+| `o.t > 1e2 && c.lt == 'g'` | `order.total > 100 && customer.loyalty_tier == 'gold'` |
+| `u.r in ['a','m'] && p.c < 5` | `user.role in ['admin','manager'] && project.complexity < 5` |
+| `d.ts > now() - 86400` | `document.timestamp > now() - duration('24h')` |
+
+**Why readable names matter:**
+- Business users can review and suggest changes
+- Debugging is faster when expressions are self-documenting  
+- Code reviews focus on logic, not deciphering abbreviations
+
+**💡 Takeaway: Use readable identifiers so policies are self-documenting.**
 
 ### 2. Keep Context Simple
 
@@ -270,16 +325,8 @@ from cel import evaluate
 
 # ✅ Clean, structured context
 context = {
-    "user": {
-        "id": "user123",
-        "role": "admin",
-        "permissions": ["read", "write", "delete"]
-    },
-    "resource": {
-        "type": "document",
-        "owner": "user123",
-        "public": False
-    },
+    "user": {"id": "user123", "role": "admin", "permissions": ["read", "write", "delete"]},
+    "resource": {"type": "document", "owner": "user123", "public": False},
     "action": "delete"
 }
 
@@ -288,36 +335,30 @@ result = evaluate(policy, context)
 assert result == True
 ```
 
+**💡 Takeaway: Structure context data clearly — it's the foundation of readable expressions.**
+
+→ [**Variable Structuring Patterns**](your-first-integration.md#context-management)
+
 ### 3. Test Your Expressions
 
 CEL expressions are code - treat them as such with proper testing.
 
 ```python
-import pytest
 from cel import evaluate
 
-def test_admin_access():
-    context = {
-        "user": {"role": "admin"},
-        "resource": {"type": "document"},
-        "action": "delete"
-    }
-    policy = "user.role == 'admin'"
-    assert evaluate(policy, context) == True
+# Compact test scenarios
+test_cases = [
+    ("Admin access", "user.role == 'admin'", {"user": {"role": "admin"}, "resource": {"type": "document"}, "action": "delete"}, True),    # → True (admin access)
+    ("Owner access", "resource.owner == user.id", {"user": {"id": "user123", "role": "user"}, "resource": {"owner": "user123"}, "action": "read"}, True),    # → True (owner access)
+    ("Denied access", "resource.owner == user.id", {"user": {"id": "user456", "role": "user"}, "resource": {"owner": "user123"}, "action": "read"}, False),   # → False (denied access)
+]
 
-def test_owner_access():
-    context = {
-        "user": {"id": "user123", "role": "user"},
-        "resource": {"owner": "user123"},
-        "action": "read"
-    }
-    policy = "resource.owner == user.id"
-    assert evaluate(policy, context) == True
-
-# Execute the test functions
-test_admin_access()
-test_owner_access()
+for name, policy, context, expected in test_cases:
+    result = evaluate(policy, context)
+    assert result == expected  # → Results match expected access decisions
 ```
+
+**💡 Takeaway: Test edge cases and failure scenarios — expressions fail silently.**
 
 ### 4. Use Type-Safe Patterns
 
@@ -326,21 +367,19 @@ Always check for field existence when dealing with optional data.
 ```python
 from cel import evaluate
 
-# ✅ Safe - check existence first
-safe_expression = 'has(user.profile) && user.profile.verified'
-result = evaluate(safe_expression, {"user": {"profile": {"verified": True}}})
-assert result == True
+# ✅ Safe patterns with has() checks
+safety_examples = [
+    ("Complete profile", 'has(user.profile) && user.profile.verified', {"user": {"profile": {"verified": True}}}, True),    # → True (profile exists and verified)
+    ("Missing profile", 'has(user.profile) && user.profile.verified', {"user": {}}, False),    # → False (no profile, safe fallback)
+    ("Fallback value", 'has(user.display_name) ? user.display_name : user.email', {"user": {"email": "test@example.com"}}, "test@example.com"),    # → "test@example.com" (fallback to email)
+]
 
-result = evaluate(safe_expression, {"user": {}})
-assert result == False
-
-# ❌ Unsafe - will fail if profile doesn't exist
-unsafe_expression = 'user.profile.verified'
-result = evaluate(unsafe_expression, {"user": {"profile": {"verified": True}}})
-assert result == True
-
-# This would fail: evaluate(unsafe_expression, {"user": {}})
+for name, expr, context, expected in safety_examples:
+    result = evaluate(expr, context)
+    assert result == expected  # → Results show safe handling of optional fields
 ```
+
+**💡 Takeaway: Always use `has()` for optional fields — prevent runtime errors.**
 
 ### 5. Document Your Context Schema
 
@@ -351,27 +390,14 @@ from cel import evaluate
 
 # Expected context schema:
 # {
-#     "user": {
-#         "id": str,
-#         "role": str ("admin" | "user" | "guest"),
-#         "department": str,
-#         "verified": bool
-#     },
-#     "resource": {
-#         "type": str,
-#         "owner": str,
-#         "public": bool
-#     },
+#     "user": {"id": str, "role": str ("admin" | "user" | "guest"), "department": str, "verified": bool},
+#     "resource": {"type": str, "owner": str, "public": bool},
 #     "action": str ("read" | "write" | "delete")
 # }
 
-access_policy = """
-    user.role == 'admin' || 
-    (resource.public && action == 'read') ||
-    (resource.owner == user.id && action in ['read', 'write'])
-"""
+access_policy = "user.role == 'admin' || (resource.public && action == 'read') || (resource.owner == user.id && action in ['read', 'write'])"
 
-# Test the access policy
+# Schema-compliant test
 test_context = {
     "user": {"id": "user1", "role": "user", "department": "engineering", "verified": True},
     "resource": {"type": "document", "owner": "user1", "public": False},
@@ -379,8 +405,10 @@ test_context = {
 }
 
 result = evaluate(access_policy, test_context)
-assert result == True  # User can read their own resource
+assert result == True  # → True (owner access granted)
 ```
+
+**💡 Takeaway: Document expected data shapes — context structure is API contract.**
 
 ## Mental Model: CEL as a Smart Calculator
 

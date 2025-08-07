@@ -27,6 +27,7 @@ context.add_variable("name", "Alice")
 context.add_variable("age", 30)
 
 result = evaluate("name + ' is ' + string(age)", context)
+# → "Alice is 30"
 assert result == "Alice is 30"
 ```
 
@@ -50,6 +51,12 @@ context.add_variable("permissions", ["read", "write"])
 context.add_variable("config", {"debug": True, "port": 8080})
 
 # Verify the variables are accessible
+evaluate("user_id", context)
+# → "123"
+evaluate("size(permissions)", context)
+# → 2
+evaluate("config.debug", context)
+# → True
 assert evaluate("user_id", context) == "123"
 assert evaluate("size(permissions)", context) == 2
 assert evaluate("config.debug", context) == True
@@ -74,6 +81,12 @@ context.update({
 })
 
 # Verify the batch update worked
+evaluate("user_id", context)
+# → "123"
+evaluate("role", context)
+# → "admin"
+evaluate("size(permissions)", context)
+# → 3
 assert evaluate("user_id", context) == "123"
 assert evaluate("role", context) == "admin"
 assert evaluate("size(permissions)", context) == 3
@@ -104,10 +117,15 @@ def validate_email(email):
 context = Context()
 context.add_function("validate_email", validate_email)
 
+evaluate('validate_email("user@example.com")', context)
+# → True
+
+# Test invalid email
+evaluate('validate_email("invalid-email")', context)
+# → False
 result = evaluate('validate_email("user@example.com")', context)
 assert result == True
 
-# Test invalid email
 result = evaluate('validate_email("invalid-email")', context)
 assert result == False
 ```
@@ -189,6 +207,7 @@ from cel import evaluate
 # Invalid syntax raises ValueError
 try:
     evaluate("1 + + 2")  # Invalid syntax
+    # → ValueError: Failed to compile expression: ...
     assert False, "Should have raised ValueError"
 except ValueError as e:
     assert "Failed to compile expression" in str(e)
@@ -196,6 +215,7 @@ except ValueError as e:
 # Empty expression raises ValueError
 try:
     evaluate("")
+    # → ValueError: Invalid syntax or malformed expression
     assert False, "Should have raised ValueError"
 except ValueError as e:
     assert "Invalid syntax" in str(e) or "malformed" in str(e)
@@ -211,6 +231,7 @@ from cel import evaluate
 # Undefined variables raise RuntimeError
 try:
     evaluate("unknown_variable + 1", {})
+    # → RuntimeError: Undefined variable 'unknown_variable'
     assert False, "Should have raised RuntimeError"
 except RuntimeError as e:
     assert "Undefined variable" in str(e)
@@ -218,6 +239,7 @@ except RuntimeError as e:
 # Undefined functions raise RuntimeError
 try:
     evaluate("unknownFunction(42)", {})
+    # → RuntimeError: Undefined function 'unknownFunction'
     assert False, "Should have raised RuntimeError"
 except RuntimeError as e:
     assert "Undefined" in str(e) and "function" in str(e)
@@ -232,6 +254,7 @@ context.add_function("fail", failing_function)
 
 try:
     evaluate("fail()", context)
+    # → RuntimeError: Function 'fail' error: Something went wrong
     assert False, "Should have raised RuntimeError"
 except RuntimeError as e:
     assert "Function 'fail' error" in str(e)
@@ -247,6 +270,7 @@ from cel import evaluate
 # String + int operations raise TypeError
 try:
     evaluate('"hello" + 42')  # String + int
+    # → TypeError: Unsupported addition operation between string and int
     assert False, "Should have raised TypeError"
 except TypeError as e:
     assert "Unsupported addition operation" in str(e)
@@ -254,6 +278,7 @@ except TypeError as e:
 # Mixed signed/unsigned int operations raise TypeError
 try:
     evaluate("1u + 2")  # Mixed signed/unsigned int  
+    # → TypeError: Cannot mix signed and unsigned integers
     assert False, "Should have raised TypeError"
 except TypeError as e:
     assert "Cannot mix signed and unsigned integers" in str(e)
@@ -261,6 +286,7 @@ except TypeError as e:
 # Unsupported multiplication raises TypeError
 try:
     evaluate('"text" * "more"')  # String multiplication
+    # → TypeError: Unsupported multiplication operation between strings
     assert False, "Should have raised TypeError"
 except TypeError as e:
     assert "Unsupported multiplication operation" in str(e)

@@ -7,68 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **BREAKING**: Updated `cel` crate (formerly `cel-interpreter`) from 0.10.0 to 0.11.0
-  - Crate renamed from `cel-interpreter` to `cel` upstream
-  - API changes to function registration system using `IntoFunction` trait
-  - Python function integration now uses `Arguments` extractor for variadic argument handling
-  - All imports updated from `cel_interpreter::` to `::cel::`
 
-### Dependencies Updated
-- cel-interpreter → cel: 0.10.0 → 0.11.0 (crate renamed, major API breaking changes)
-  - New function registration system using `IntoFunction` trait
-  - Improved extractors system with `Arguments`, `This`, and `Identifier`
-  - Better error handling and performance improvements
-- pyo3: 0.25.0 → 0.25.1 (latest stable)
-- pyo3-log: 0.12.1 → 0.12.4 (latest compatible version)
+## [0.5.0] - 2025-08-08
 
-### Notes
-- **CEL v0.11.0 Integration**: Updated to new `IntoFunction` trait system while maintaining full Python API compatibility
-  - All Python functions still work identically from user perspective
-  - Internal implementation now uses `Arguments` extractor for better performance
-  - No breaking changes to Python API - all existing code continues to work
-- **Future-Proofing**: Analysis of upcoming cel-rust changes shows exciting developments:
-  - Enhanced type system infrastructure for better type introspection
-  - Foundation for `type()` function (currently missing from CEL spec compliance)
-  - Optional value infrastructure for safer null handling
-  - All future changes maintain backward compatibility with our wrapper
+### 🚨 Breaking Changes (Rust API only)
+- Upgraded `cel` crate (formerly `cel-interpreter`) 0.10.0 → 0.11.0:
+  - Function registration now uses `IntoFunction` trait.
+  - Python integration updated to use `Arguments` extractor for variadic args.
+  - Imports renamed from `cel_interpreter::` to `cel::`.
+  - **No changes to Python API** – all existing code continues to work.
+
+### ✨ Changed
+- Internal: Refactored Python integration to match new CEL API.
+- Updated dependencies:
+  - pyo3: 0.25.0 → 0.25.1
+  - pyo3-log: 0.12.1 → 0.12.4
+
+### 🗒 Maintainer Notes
+- Prepared for upcoming CEL Rust features:
+  - Enhanced type system & introspection
+  - `type()` function support
+  - Optional value handling
 
 ## [0.4.1] - 2025-08-02
 
-### Added
-- **Automatic Type Coercion**: Intelligent preprocessing of expressions to handle mixed int/float arithmetic
-  - Expressions with float literals automatically convert integer literals to floats
-  - Context variables containing floats trigger integer-to-float promotion for compatibility
-  - Preserves array indexing with integers (e.g., `list[2]` remains as integer)
-- **Enhanced Error Handling**: Added panic handling with `std::panic::catch_unwind` for parser errors
-  - Invalid expressions now return proper ValueError instead of crashing the Python process
-  - Graceful handling of upstream parser panics from cel-interpreter
+### ✨ Added
+- **Automatic type coercion** for mixed int/float arithmetic:
+  - Float literals automatically promote integer literals to floats.
+  - Context variables containing floats trigger int → float promotion.
+  - Preserves array indexing with integers (e.g., `list[2]` stays integer).
+- **Enhanced error handling**:
+  - Parser panics now caught with `std::panic::catch_unwind`.
+  - Invalid expressions return a `ValueError` instead of crashing Python.
 
-### Changed
-- Updated `cel-interpreter` from 0.9.0 to 0.10.0
+### 🐛 Fixed
+- Mixed-type arithmetic now works in expressions like:
+  - `3.14 * 2`
+  - `2 + 3.14`
+  - `value * 2` (where `value` is float)
+- Parser panics from `cel-interpreter` handled gracefully with proper error messages.
+- Updated to latest PyO3 APIs to remove deprecation warnings.
 
-### Fixed
-- **Mixed-type arithmetic compatibility**: Expressions like `3.14 * 2`, `2 + 3.14`, `value * 2` (where value is float) now work as expected
-- **Parser panic handling**: Implemented `std::panic::catch_unwind` to gracefully handle upstream parser panics
-  - Users get proper error messages instead of application crashes
-- Fixed deprecation warnings by updating to compatible PyO3 APIs
+### ⚠ Known Issues
+- **Bytes concatenation** (`b'hello' + b'world'`) unsupported in cel-interpreter 0.10.0.
+  - **Spec requires**: should work.
+  - **Current**: returns `"Unsupported binary operator 'add'"`.
+  - **Workaround**: `bytes(string(part1) + string(part2))`.
+  - **Status**: Missing feature in cel-interpreter, not in our wrapper.
 
-### Known Issues
-- **Bytes Concatenation**: cel-interpreter 0.10.0 does not implement bytes concatenation with `+` operator
-  - **CEL specification requires**: `b'hello' + b'world'` should work  
-  - **Current behavior**: Returns "Unsupported binary operator 'add'" error
-  - **Workaround**: Use `bytes(string(part1) + string(part2))` for concatenation
-  - **Status**: This is a missing feature in the cel-interpreter crate, not a design limitation
-
-### Dependencies Updated
-- cel-interpreter: 0.9.0 → 0.10.0 (major version update with breaking changes)
+### 📦 Dependencies
+- cel-interpreter: 0.9.0 → 0.10.0 (breaking changes internally)
 - log: 0.4.22 → 0.4.27
 - chrono: 0.4.38 → 0.4.41
-- pyo3: 0.22.6 → 0.25.0 (major API upgrade with IntoPyObject migration)
-- pyo3-log: 0.11.0 → 0.12.1 (compatible with pyo3 0.25.0)
+- pyo3: 0.22.6 → 0.25.0 (major API upgrade to `IntoPyObject`)
+- pyo3-log: 0.11.0 → 0.12.1 (compatible with PyO3 0.25.0)
 
-### Notes
-- **PyO3 0.25.0 Migration**: Migrated from deprecated `IntoPy` trait to new `IntoPyObject` API
-- **API Improvements**: New conversion system provides better error handling and type safety
-- **Build Status**: All 120 tests pass with current dependency versions
+### 🗒 Maintainer Notes
+- **PyO3 migration**: moved from deprecated `IntoPy` to new `IntoPyObject` API.
+- New conversion system improves error handling and type safety.
+- All 120 tests pass on current dependency set.
 
