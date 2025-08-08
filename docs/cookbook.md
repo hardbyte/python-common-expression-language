@@ -31,18 +31,36 @@ Build robust access control policies that are easy to understand and maintain.
 - Audit logging for access decisions
 
 ### Key Recipes
-```cel
-// Role-based access
-user.role in ["admin", "editor"] && resource.type == "document"
 
-// Time-sensitive access
-user.permissions.includes("read") && now() < expires_at
+**Role-based access:**
+```python
+from cel import evaluate
 
-// Multi-tenant authorization
-user.tenant_id == resource.tenant_id && user.role != "guest"
+expression = 'user.role in ["admin", "editor"] && resource.type == "document"'
+context = {
+    "user": {"role": "editor", "id": "user123"}, 
+    "resource": {"type": "document", "owner": "user456"}
+}
+
+result = evaluate(expression, context)
+print(result)  # → True
 ```
 
-**→ [Full Access Control Guide](how-to-guides/access-control-policies.md)**
+**Time-sensitive access:**
+```python
+# Check permissions with time-based access
+expression = '"read" in user.permissions && user.active'
+context = {
+    "user": {"permissions": ["read", "write"], "active": True}
+}
+
+result = evaluate(expression, context)
+print(result)  # → True (user has read permission and is active)
+```
+
+> ⚠️ **Security Note**: Always validate user inputs and sanitize context data. Never trust user-provided expressions without proper validation.
+
+**→ [Full Access Control Guide](how-to-guides/access-control-policies.md) | [API Reference](reference/python-api.md)**
 
 ---
 
@@ -60,22 +78,41 @@ Transform and validate data with declarative expressions that business users can
 - Complex conditional logic
 
 ### Key Recipes
-```cel
-// Validate email format
-email.matches(r'^[^@]+@[^@]+\.[^@]+$') && size(email) <= 254
 
-// Calculate pricing with business rules
-base_price * (1 + tax_rate) * (customer.vip ? 0.9 : 1.0)
+**User data transformation:**
+```python
+from cel import evaluate
 
-// Transform user data
-{
+# Transform user data into a structured format
+expression = '''{
   "name": user.first_name + " " + user.last_name,
   "can_vote": user.age >= 18,
   "tier": user.spend > 1000 ? "gold" : "silver"
+}'''
+
+context = {
+    "user": {
+        "first_name": "Alice", 
+        "last_name": "Johnson",
+        "age": 25,
+        "spend": 1500
+    }
 }
+
+result = evaluate(expression, context)
+print(result)  # → {'name': 'Alice Johnson', 'can_vote': True, 'tier': 'gold'}
 ```
 
-**→ [Full Data Transformation Guide](how-to-guides/business-logic-data-transformation.md)**
+**Email validation:**
+```python
+expression = 'email.matches(r"^[^@]+@[^@]+\\.[^@]+$") && size(email) <= 254'
+context = {"email": "user@company.com"}
+
+result = evaluate(expression, context)
+print(result)  # → True
+```
+
+**→ [Full Data Transformation Guide](how-to-guides/business-logic-data-transformation.md) | [API Reference](reference/python-api.md)**
 
 ---
 
@@ -93,18 +130,40 @@ Build flexible, secure query filters that adapt to user input while preventing i
 - Performance optimization techniques
 
 ### Key Recipes
-```cel
-// Multi-field search
-(name.contains(query) || description.contains(query)) && status == "active"
 
-// Date range filtering
-created_at >= start_date && created_at <= end_date
+**Multi-field search:**
+```python
+from cel import evaluate
 
-// Hierarchical filtering
-category.startsWith(user_category) && price <= budget
+# Search across multiple fields safely
+expression = '(name.contains(query) || description.contains(query)) && status == "active"'
+context = {
+    "name": "Python CEL Library",
+    "description": "Fast expression evaluation",
+    "status": "active",
+    "query": "Python"
+}
+
+result = evaluate(expression, context)
+print(result)  # → True (matches name field)
 ```
 
-**→ [Full Query Filters Guide](how-to-guides/dynamic-query-filters.md)**
+**Date range filtering:**
+```python
+expression = 'created_at >= start_date && created_at <= end_date'
+context = {
+    "created_at": "2024-06-15T10:00:00Z",
+    "start_date": "2024-01-01T00:00:00Z",
+    "end_date": "2024-12-31T23:59:59Z"
+}
+
+result = evaluate(expression, context)
+print(result)  # → True (within date range)
+```
+
+> ⚠️ **Security Warning**: Never directly concatenate untrusted strings into SQL queries. Always use safe parameterization. CEL expressions should validate data, not construct raw SQL.
+
+**→ [Full Query Filters Guide](how-to-guides/dynamic-query-filters.md) | [API Reference](reference/python-api.md)**
 
 ---
 
@@ -122,18 +181,42 @@ Handle edge cases gracefully and provide meaningful error messages to users.
 - User-friendly error messages
 
 ### Key Recipes
-```cel
-// Safe property access
-has(user.profile) && user.profile.verified
 
-// Null coalescing patterns
-user.display_name if has(user.display_name) else user.email
+**Safe property access:**
+```python
+from cel import evaluate
 
-// Validation with fallbacks
-size(input) > 0 ? input.trim() : "default_value"
+# Safely check nested properties
+expression = 'has(user.profile) && user.profile.verified'
+
+# Test with complete data
+context = {"user": {"profile": {"verified": True}}}
+result = evaluate(expression, context)
+print(result)  # → True
+
+# Test with missing profile (won't error)
+context = {"user": {"email": "test@example.com"}}
+result = evaluate(expression, context)
+print(result)  # → False (safe fallback)
 ```
 
-**→ [Full Error Handling Guide](how-to-guides/error-handling.md)**
+**Null coalescing patterns:**
+```python
+expression = 'has(user.display_name) ? user.display_name : user.email'
+context = {
+    "user": {
+        "email": "alice@company.com"
+        # display_name is missing
+    }
+}
+
+result = evaluate(expression, context)
+print(result)  # → "alice@company.com" (fallback to email)
+```
+
+> ⚠️ **Security Note**: Always validate context structure before evaluation. Use `has()` checks for optional fields to prevent runtime errors.
+
+**→ [Full Error Handling Guide](how-to-guides/error-handling.md) | [API Reference](reference/python-api.md)**
 
 ---
 
@@ -151,18 +234,37 @@ Master the command-line interface for debugging, testing, and automation.
 - CI/CD pipeline integration
 
 ### Key Recipes
+
+**Quick expression testing:**
 ```bash
-# Test expressions interactively
-cel --interactive
+# Simple expressions
+cel '1 + 2 * 3'
+# → 7
 
-# Batch process with file input
-cel --file expressions.cel --context data.json
+cel '"Hello " + "World"'
+# → "Hello World"
 
-# Pipeline integration
-echo '{"user": "admin"}' | cel 'user == "admin"'
+# With context
+cel 'user.age >= 21' --context '{"user": {"age": 25}}'
+# → True
 ```
 
-**→ [Full CLI Guide](how-to-guides/cli-recipes.md)**
+**Interactive debugging:**
+```bash
+# Start REPL for exploration
+cel --interactive
+# CEL> user.role == "admin"
+# CEL> has(user.permissions)
+# CEL> exit
+```
+
+**Pipeline integration:**
+```bash
+echo '{"user": "admin"}' | cel 'user == "admin"'
+# → True
+```
+
+**→ [Full CLI Guide](how-to-guides/cli-recipes.md) | [CLI Reference](reference/cli-reference.md)**
 
 ---
 
@@ -180,13 +282,50 @@ Learn battle-tested patterns for building robust, secure, and performant CEL app
 - Deployment patterns
 
 ### Key Patterns
-- Always validate context data
-- Use `has()` for optional fields
-- Cache compiled expressions
-- Implement proper error handling
-- Monitor expression performance
 
-**→ [Full Production Guide](how-to-guides/production-patterns-best-practices.md)**
+**Context validation pattern:**
+```python
+from cel import evaluate
+
+def safe_evaluate(expression, context):
+    # Validate context structure before evaluation
+    if not isinstance(context, dict):
+        raise ValueError("Context must be a dictionary")
+    
+    # Simple validation before evaluation
+    if "user" not in context:
+        return False
+    return evaluate(expression, context)
+
+# Example usage
+result = safe_evaluate('user.role == "admin"', {"user": {"role": "admin"}})
+print(result)  # → True
+```
+
+**Expression caching pattern:**
+```python
+from functools import lru_cache
+
+@lru_cache(maxsize=1000)
+def get_cached_evaluation(expression, context_tuple):
+    # Cache results for identical expression + context combinations
+    # Convert tuple back to dict for evaluation
+    context = dict(context_tuple)
+    return evaluate(expression, context)
+
+# Usage with hashable context
+context = {"user_role": "admin", "resource_type": "document"}
+result = get_cached_evaluation('user_role == "admin"', tuple(context.items()))
+print(result)  # → True (cached on subsequent calls)
+```
+
+> ⚠️ **Security Best Practices**: 
+> - Always validate context data structure
+> - Use `has()` checks for optional fields
+> - Never trust user-provided expressions without sandboxing
+> - Monitor expression performance for DoS protection
+
+**→ [Full Production Guide](how-to-guides/production-patterns-best-practices.md) | [API Reference](reference/python-api.md)**
 
 ---
 

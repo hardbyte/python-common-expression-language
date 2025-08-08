@@ -25,10 +25,10 @@ context.add_variable("permissions", ["read", "write"])
 
 # Use the context
 result = evaluate("user_name + ' is ' + string(user_age)", context)
-assert result == "Alice is 30"
+assert result == "Alice is 30"  # → String concatenation with type conversion
 
 result = evaluate('"write" in permissions', context)
-assert result == True
+assert result == True  # → List membership check for permissions
 ```
 
 ### Adding Multiple Variables
@@ -61,7 +61,7 @@ policy = """
 """
 
 result = evaluate(policy, context)
-assert result == True
+assert result == True  # → Complex multi-condition policy evaluation
 ```
 
 ### Context vs Dictionary - When to Use Which?
@@ -77,11 +77,16 @@ assert result == True
 - Need to modify context dynamically
 - Working with complex, evolving data structures
 
+**Step 1: Simple Dictionary Example**
 ```python
 # Simple case - dictionary is fine
 result = evaluate("x + y", {"x": 10, "y": 20})
+assert result == 30  # → Basic arithmetic with dictionary context
+```
 
-# Complex case - Context is better
+**Step 2: Define Custom Functions**
+```python
+# Complex case requires custom functions
 def email_validator(email):
     return "@" in email and "." in email
 
@@ -90,15 +95,23 @@ def password_hasher(password):
 
 def check_permissions():
     return True
+```
 
+**Step 3: Create Context and Register Functions**
+```python
 context = Context()
-context.add_variable("base_config", {"database": {"host": "localhost", "port": 5432}})
-context.add_variable("user", {"email": "test@example.com"})
 context.add_function("validate_email", email_validator)
 context.add_function("hash_password", password_hasher)
 context.add_function("check_permissions", check_permissions)
+```
+
+**Step 4: Add Variables and Evaluate**
+```python
+context.add_variable("base_config", {"database": {"host": "localhost", "port": 5432}})
+context.add_variable("user", {"email": "test@example.com"})
+
 result = evaluate("validate_email(user.email) && check_permissions()", context)
-assert result == True
+assert result == True  # → Custom function orchestration for business logic
 ```
 
 ## Custom Functions
@@ -107,6 +120,7 @@ One of CEL's most powerful features is the ability to call Python functions from
 
 ### Basic Function Registration
 
+**Step 1: Define Your Functions**
 ```python
 from cel import Context, evaluate
 
@@ -117,29 +131,35 @@ def calculate_tax(income, rate=0.1):
 def is_valid_email(email):
     """Simple email validation."""
     return "@" in email and "." in email
+```
 
-# Create context and register functions
+**Step 2: Create Context and Register Functions**
+```python
 tax_context = Context()
 tax_context.add_function("calculate_tax", calculate_tax)
 tax_context.add_function("is_valid_email", is_valid_email)
+```
 
-# Add some data
+**Step 3: Add Variables**
+```python
 tax_context.add_variable("user_income", 50000)
 tax_context.add_variable("user_email", "alice@example.com")
+```
 
-# Use functions in expressions
+**Step 4: Evaluate Expressions**
+```python
 tax_result = evaluate("calculate_tax(user_income, 0.15)", tax_context)
-assert tax_result == 7500.0
+assert tax_result == 7500.0  # → Function with parameters: 50000 * 0.15
 
 email_result = evaluate("is_valid_email(user_email)", tax_context)
-assert email_result == True
+assert email_result == True  # → Validation function returns boolean
 ```
 
 ### Functions with Complex Logic
 
+**Step 1: Define Complex Business Functions**
 ```python
 from cel import Context, evaluate
-from datetime import datetime
 
 def score_calculation(base_score, bonus_multiplier):
     """Calculate final score with bonus."""
@@ -157,14 +177,18 @@ def is_prime(n):
 def format_user_info(name, age, department):
     """Format user information string."""
     return f"{name} ({age}) from {department}"
+```
 
-# Create context and register functions
+**Step 2: Create Context and Register Functions**
+```python
 demo_context = Context()
 demo_context.add_function("score_calculation", score_calculation)
 demo_context.add_function("is_prime", is_prime)  
 demo_context.add_function("format_user_info", format_user_info)
+```
 
-# Add test data
+**Step 3: Add Test Data**
+```python
 demo_context.update({
     "employee": {
         "name": "Alice",
@@ -177,18 +201,22 @@ demo_context.update({
         "multiplier": 1.2
     }
 })
+```
 
-# Test complex expressions with multiple functions
+**Step 4: Test Individual Functions**
+```python
 calc_result = evaluate("score_calculation(employee.base_score, config.multiplier)", demo_context)
-assert calc_result == 102.0
+assert calc_result == 102.0  # → Mathematical function: 85 * 1.2
 
 prime_check = evaluate("is_prime(employee.age)", demo_context)
-assert prime_check == False  # 25 is not prime
+assert prime_check == False  # → Algorithmic function: 25 is not prime
 
 info_text = evaluate('format_user_info(employee.name, employee.age, employee.department)', demo_context)
-assert info_text == "Alice (25) from Engineering"
+assert info_text == "Alice (25) from Engineering"  # → String formatting function
+```
 
-# Complex conditional logic
+**Step 5: Combine Functions in Complex Rules**
+```python
 business_rule = """
     config.bonus_active && 
     score_calculation(employee.base_score, config.multiplier) > 100 &&
@@ -196,7 +224,7 @@ business_rule = """
 """
 
 final_result = evaluate(business_rule, demo_context)
-assert final_result == True
+assert final_result == True  # → Complex business rule combining multiple functions
 
 print("✓ Complex validation functions working correctly")
 ```
@@ -205,41 +233,45 @@ print("✓ Complex validation functions working correctly")
 
 Now let's see how to combine custom functions for a real-world application - a business rules engine:
 
+**Step 1: Define Business Validation Functions**
 ```python
 from cel import Context, evaluate
 import re
 from datetime import datetime, timedelta
 
+def validate_password(password):
+    """Validate password strength."""
+    if len(password) < 8:
+        return False
+    if not re.search(r'[A-Z]', password):
+        return False
+    if not re.search(r'[0-9]', password):
+        return False
+    return True
+
+def days_until_expiry(expiry_date_str):
+    """Calculate days until expiry."""
+    try:
+        expiry = datetime.fromisoformat(expiry_date_str.replace('Z', '+00:00'))
+        now = datetime.now()
+        # Remove timezone info for comparison
+        expiry_naive = expiry.replace(tzinfo=None)
+        delta = expiry_naive - now
+        return max(0, delta.days)
+    except:
+        return 0
+
+def user_has_permission(user_id, permission, permissions_db):
+    """Check if user has specific permission."""
+    user_perms = permissions_db.get(user_id, [])
+    return permission in user_perms
+```
+
+**Step 2: Create Business Rules Context**
+```python
 def create_business_rules_context():
     """Create a context with business validation functions."""
     context = Context()
-    
-    def validate_password(password):
-        """Validate password strength."""
-        if len(password) < 8:
-            return False
-        if not re.search(r'[A-Z]', password):
-            return False
-        if not re.search(r'[0-9]', password):
-            return False
-        return True
-    
-    def days_until_expiry(expiry_date_str):
-        """Calculate days until expiry."""
-        try:
-            expiry = datetime.fromisoformat(expiry_date_str.replace('Z', '+00:00'))
-            now = datetime.now()
-            # Remove timezone info for comparison
-            expiry_naive = expiry.replace(tzinfo=None)
-            delta = expiry_naive - now
-            return max(0, delta.days)
-        except:
-            return 0
-    
-    def user_has_permission(user_id, permission, permissions_db):
-        """Check if user has specific permission."""
-        user_perms = permissions_db.get(user_id, [])
-        return permission in user_perms
     
     # Register all functions
     context.add_function("validate_password", validate_password)
@@ -248,10 +280,11 @@ def create_business_rules_context():
     
     return context
 
-# Example usage
 business_context = create_business_rules_context()
+```
 
-# Add business data
+**Step 3: Add Business Data**
+```python
 business_context.update({
     "user": {
         "id": "user123",
@@ -263,8 +296,10 @@ business_context.update({
         "user123": ["read", "write", "admin"]
     }
 })
+```
 
-# Business rules evaluation
+**Step 4: Define Business Rules**
+```python
 account_access_rule = """
     user.verified &&
     validate_password(user.password) &&
@@ -276,15 +311,18 @@ admin_actions_rule = """
     user_has_permission(user.id, "admin", permissions_db) &&
     days_until_expiry(user.subscription_expires) > 0
 """
+```
 
-# Evaluate rules
+**Step 5: Evaluate and Test Rules**
+```python
+# Test valid user
 can_access_account = evaluate(account_access_rule, business_context)
 can_perform_admin_actions = evaluate(admin_actions_rule, business_context)
 
-assert can_access_account == True
-assert can_perform_admin_actions == True
+assert can_access_account == True  # → Enterprise access control validation
+assert can_perform_admin_actions == True  # → Admin privilege verification
 
-# Test with different scenarios
+# Test with invalid user
 business_context.add_variable("user", {
     "id": "user456", 
     "password": "weak",  # Fails password validation
@@ -293,7 +331,7 @@ business_context.add_variable("user", {
 })
 
 expired_user_access = evaluate(account_access_rule, business_context)
-assert expired_user_access == False
+assert expired_user_access == False  # → Security policy correctly denies access
 
 print("✓ Business rules engine working correctly")
 ```
@@ -305,6 +343,8 @@ This example demonstrates how custom functions enable complex business logic whi
 These patterns become essential when building production applications like those shown in [Access Control Policies](../how-to-guides/access-control-policies.md) and [Production Patterns & Best Practices](../how-to-guides/production-patterns-best-practices.md).
 
 #### 1. Error Handling
+
+**Step 1: Define Error-Safe Functions**
 ```python
 def check_user_exists(user_id, database):
     """Check if user exists in database."""
@@ -323,7 +363,10 @@ def safe_divide(a, b):
         return a / b
     except Exception:
         return 0
+```
 
+**Step 2: Register Functions and Add Test Data**
+```python
 error_context = Context()
 error_context.add_function("check_user_exists", check_user_exists)
 error_context.add_function("get_user_status", get_user_status)
@@ -331,39 +374,49 @@ error_context.add_function("safe_divide", safe_divide)
 error_context.add_variable("users_db", {
     "user123": {"name": "Alice", "status": "active"}
 })
+```
 
-# Safe operations with error handling
+**Step 3: Test Error Handling**
+```python
+# Test individual safety functions
 exists_check = evaluate('check_user_exists("user123", users_db)', error_context)
-assert exists_check == True
+assert exists_check == True  # → Database existence check with error safety
 
 status_check = evaluate('get_user_status("user123", users_db) == "active"', error_context)
-assert status_check == True
+assert status_check == True  # → Status validation with fallback handling
 
-# Combined safety check
+# Test combined safety check
 safety_result = evaluate("""
     check_user_exists("user123", users_db) && 
     get_user_status("user123", users_db) == "active"
 """, error_context)
-assert safety_result == True
+assert safety_result == True  # → Chained safety validations for robustness
 ```
 
 #### 2. Pure Functions (Recommended)
+
+**Step 1: Define Pure Function**
 ```python
 # ✅ Good - pure function (no side effects)
 def format_currency(amount, currency="USD"):
     """Format amount as currency string."""
     return f"{currency} {amount:.2f}"
+```
 
-# Test the pure function
+**Step 2: Register Function and Add Variables**
+```python
 currency_context = Context()
 currency_context.add_function("format_currency", format_currency)
 currency_context.add_variable("price", 29.99)
+```
 
+**Step 3: Test Pure Function**
+```python
 currency_result = evaluate('format_currency(price)', currency_context)
-assert currency_result == "USD 29.99"
+assert currency_result == "USD 29.99"  # → Pure function with default parameter
 
 eur_result = evaluate('format_currency(price, "EUR")', currency_context)
-assert eur_result == "EUR 29.99"
+assert eur_result == "EUR 29.99"  # → Pure function with explicit parameter
 
 print("✓ Pure functions working correctly")
 ```
@@ -376,6 +429,7 @@ These patterns provide the foundation for production-ready systems:
 
 ### Context Builders for Reusability
 
+**Complete PolicyContext Implementation**
 ```python
 from cel import Context, evaluate
 from datetime import datetime
@@ -441,8 +495,10 @@ class PolicyContext:
     def evaluate_policy(self, policy_expression):
         """Evaluate a policy expression with this context."""
         return evaluate(policy_expression, self.context)
+```
 
-# Usage
+**Using the Context Builder**
+```python
 policy_ctx = PolicyContext()
 policy_ctx.add_user({
     "id": "alice",
@@ -458,8 +514,10 @@ policy_ctx.add_user({
     "public": False,
     "tags": ["python", "web"]
 }).add_request_info("GET", "/api/projects/project-x", "192.168.1.100")
+```
 
-# Complex policy evaluation
+**Step 5: Define and Evaluate Policy**
+```python
 access_policy = """
     user.verified &&
     (user.id == resource.owner || "admin" in user.roles) &&
@@ -468,11 +526,12 @@ access_policy = """
 """
 
 access_granted = policy_ctx.evaluate_policy(access_policy)
-assert access_granted == True
+assert access_granted == True  # → Enterprise policy with reusable context builder
 ```
 
 ### Context Inheritance and Composition
 
+**Step 1: Create Base Context Class**
 ```python
 from cel import Context
 
@@ -496,7 +555,10 @@ class BaseContext:
         
         self.context.add_function("string_length", string_length)
         self.context.add_function("is_empty", is_empty)
+```
 
+**Step 2: Create Specialized Web Context**
+```python
 class WebAppContext(BaseContext):
     """Extended context for web applications."""
     
@@ -516,8 +578,10 @@ class WebAppContext(BaseContext):
         
         self.context.add_function("is_safe_redirect", is_safe_redirect)
         self.context.add_function("extract_domain", extract_domain)
+```
 
-# Usage
+**Step 3: Use Inherited Context**
+```python
 web_context = WebAppContext()
 web_context.context.update({
     "redirect_url": "https://example.com/dashboard",
@@ -529,7 +593,7 @@ safety_check = evaluate("""
     extract_domain(user_email) == "company.com"
 """, web_context.context)
 
-assert safety_check == True
+assert safety_check == True  # → Inherited context with specialized web functions
 ```
 
 ## Testing Custom Functions
@@ -553,17 +617,17 @@ def test_custom_functions():
     
     # Test normal division
     result = evaluate("divide_safely(10, 2)", context)
-    assert result == 5.0
+    assert result == 5.0  # → Safe division function handles normal cases
     
     # Test division by zero
     result = evaluate("divide_safely(10, 0)", context)
-    assert result == float('inf')
+    assert result == float('inf')  # → Graceful error handling returns infinity
     
     # Test with context variables
     context.add_variable("numerator", 15)
     context.add_variable("denominator", 3)
     result = evaluate("divide_safely(numerator, denominator)", context)
-    assert result == 5.0
+    assert result == 5.0  # → Function integration with context variables
 
 def test_context_isolation():
     """Test that contexts don't interfere with each other."""
@@ -577,8 +641,8 @@ def test_context_isolation():
     result1 = evaluate("value * 2", context1)
     result2 = evaluate("value * 2", context2)
     
-    assert result1 == 20
-    assert result2 == 40
+    assert result1 == 20  # → First context: 10 * 2
+    assert result2 == 40  # → Second context: 20 * 2, isolated state
 
 if __name__ == "__main__":
     test_custom_functions()

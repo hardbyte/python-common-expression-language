@@ -14,6 +14,7 @@ A powerful CLI for evaluating CEL expressions with support for:
 import json
 import sys
 import time
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -51,6 +52,21 @@ except ImportError:
 
 # Initialize Rich console
 console = Console()
+
+
+def get_version() -> str:
+    """Get the version of the CEL package."""
+    try:
+        return version("common-expression-language")
+    except PackageNotFoundError:
+        return "unknown (development)"
+
+
+def version_callback(value: bool):
+    """Print version and exit."""
+    if value:
+        console.print(f"cel {get_version()}")
+        raise typer.Exit()
 
 
 class CELLexer(RegexLexer):
@@ -105,6 +121,7 @@ app = typer.Typer(
     help="Common Expression Language (CEL) Command Line Interface",
     add_completion=False,
     rich_markup_mode="rich",
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 
@@ -542,6 +559,12 @@ def main(
     ] = False,
     timing: Annotated[bool, typer.Option("-t", "--timing", help="Show evaluation timing")] = False,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Verbose output")] = False,
+    version: Annotated[
+        Optional[bool],
+        typer.Option(
+            "--version", callback=version_callback, is_eager=True, help="Show version and exit"
+        ),
+    ] = None,
 ):
     """
     Evaluate CEL expressions with enhanced CLI experience.

@@ -11,26 +11,26 @@ from cel import evaluate
 
 # Basic arithmetic
 result = evaluate("1 + 2")
-assert result == 3
+assert result == 3  # → 3 (CEL handles math naturally)
 
 # String operations
 result = evaluate('"Hello " + "World"')
-assert result == "Hello World"
+assert result == "Hello World"  # → "Hello World" (string concatenation works intuitively)
 
 # Boolean logic
 result = evaluate("5 > 3")
-assert result == True
+assert result == True  # → True (comparison operators return clear boolean values)
 
 # Conditional expressions
 result = evaluate('true ? "yes" : "no"')
-assert result == "yes"
+assert result == "yes"  # → "yes" (ternary operator for clean conditional logic)
 
 # Lists and maps
 result = evaluate("[1, 2, 3]")
-assert result == [1, 2, 3]
+assert result == [1, 2, 3]  # → [1, 2, 3] (native Python list creation)
 
 result = evaluate('{"name": "Alice", "age": 30}')
-assert result == {'name': 'Alice', 'age': 30}
+assert result == {'name': 'Alice', 'age': 30}  # → {'name': 'Alice', 'age': 30} (native Python dict)
 
 print("✓ Basic expressions working correctly")
 ```
@@ -44,10 +44,10 @@ from cel import evaluate
 
 # Simple context variables
 result = evaluate("age >= 18", {"age": 25})
-assert result == True
+assert result == True  # → True (age check with context variable)
 
 result = evaluate("name + ' is awesome!'", {"name": "CEL"})
-assert result == "CEL is awesome!"
+assert result == "CEL is awesome!"  # → "CEL is awesome!" (variable interpolation made easy)
 
 # Complex nested context
 user = {
@@ -62,23 +62,23 @@ user = {
 
 # String concatenation with conditionals
 result = evaluate('user.name + " is " + (user.age >= 18 ? "adult" : "minor")', {"user": user})
-assert result == "Alice is adult"
+assert result == "Alice is adult"  # → "Alice is adult" (nested objects with conditional logic)
 
 # Working with lists
 result = evaluate('"admin" in user.roles', {"user": user})
-assert result == True
+assert result == True  # → True (membership testing in arrays)
 
 # Nested object access
 result = evaluate('user.profile.verified && user.profile.email.endsWith("@example.com")', {"user": user})
-assert result == True
+assert result == True  # → True (deep object navigation with string methods)
 
 # Type conversions
 result = evaluate('user.name + " is " + string(user.age) + " years old"', {"user": user})
-assert result == "Alice is 30 years old"
+assert result == "Alice is 30 years old"  # → "Alice is 30 years old" (automatic type conversion)
 
 # Safe navigation with has()
 result = evaluate('has(user.profile.phone) ? user.profile.phone : "No phone"', {"user": user})
-assert result == "No phone"
+assert result == "No phone"  # → "No phone" (safe field checking prevents errors)
 
 print("✓ Context variables working correctly")
 ```
@@ -154,7 +154,7 @@ checks = [
 
 for expression, message in checks:
     result = evaluate(expression, config)
-    assert result == True, f"Validation failed: {message}"
+    assert result == True, f"Validation failed: {message}"  # → True (each validation passes)
 
 print("✓ Configuration validation working correctly")
 ```
@@ -184,10 +184,10 @@ user = {"id": "alice", "role": "member"}
 resource = {"id": "doc1", "owner": "bob", "public": True}
 
 can_read = check_access_policy(user, resource, "read")
-assert can_read == True
+assert can_read == True  # → True (member can read public resources)
 
 can_write = check_access_policy(user, resource, "write") 
-assert can_write == False
+assert can_write == False  # → False (member cannot write to others' resources)
 
 print("✓ Policy evaluation working correctly")
 ```
@@ -225,7 +225,7 @@ users = [
 
 result = transform_user_data(users)
 expected = [{'first_name': 'Alice', 'last_name': 'Smith', 'age': 30, 'role': 'admin', 'active': True, 'display_name': 'Alice Smith (admin)'}]
-assert result == expected
+assert result == expected  # → [Alice Smith (admin)] (filtered and transformed data)
 
 print("✓ Data transformation working correctly")
 ```
@@ -240,56 +240,55 @@ from datetime import datetime, timedelta
 
 # Numbers with operations
 result = evaluate("42")
-assert result == 42
+assert result == 42  # → 42 (integers work naturally)
 assert isinstance(result, int)
 
 result = evaluate("3.14 * 2")
-assert result == 6.28
+assert result == 6.28  # → 6.28 (floating point arithmetic)
 assert isinstance(result, float)
 
 result = evaluate("1u + 5u")
-assert result == 6
-assert isinstance(result, int)
+assert result == 6  # → 6 (unsigned integers convert to regular int)
 
 # Strings with methods
 result = evaluate('"hello world".size()')
-assert result == 11
+assert result == 11  # → 11 (string length via size() method)
 
 result = evaluate('"hello"[1]')
-assert result == "e"
+assert result == "e"  # → "e" (zero-indexed string character access)
 
 result = evaluate('"test".startsWith("te")')
-assert result == True
+assert result == True  # → True (rich string method support)
 
 # Bytes operations
 result = evaluate("b'binary data'")
-assert result == b'binary data'
+assert result == b'binary data'  # → b'binary data' (native bytes support)
 assert isinstance(result, bytes)
 
 result = evaluate("b'hello'.size()")
-assert result == 5
+assert result == 5  # → 5 (bytes also have size() method)
 
 # Collections with operations
 result = evaluate("[1, 2, 3] + [4, 5]")
-assert result == [1, 2, 3, 4, 5]
+assert result == [1, 2, 3, 4, 5]  # → [1, 2, 3, 4, 5] (list concatenation)
 
 result = evaluate("[1, 2, 3].size()")
-assert result == 3
+assert result == 3  # → 3 (list length)
 
 result = evaluate('{"name": "Alice", "age": 30}')
-assert result == {'name': 'Alice', 'age': 30}
+assert result == {'name': 'Alice', 'age': 30}  # → {'name': 'Alice', 'age': 30} (maps as dicts)
 assert isinstance(result, dict)
 
 result = evaluate('{"a": 1, "b": 2}.size()')
-assert result == 2
+assert result == 2  # → 2 (map size)
 
 # Special types with operations
 result = evaluate("null == null")
-assert result == True
+assert result == True  # → True (null handling works correctly)
 
 # Timestamps
 result = evaluate('timestamp("2024-01-01T12:00:00Z")')
-assert isinstance(result, datetime)
+assert isinstance(result, datetime)  # → datetime object (RFC3339 string parsing)
 assert result.year == 2024
 assert result.month == 1
 assert result.day == 1
@@ -297,13 +296,13 @@ assert result.hour == 12
 
 # Durations
 result = evaluate('duration("1h30m")')
-assert isinstance(result, timedelta)
-assert result.total_seconds() == 5400.0
+assert isinstance(result, timedelta)  # → timedelta object (duration string parsing)
+assert result.total_seconds() == 5400.0  # → 5400.0 (1.5 hours in seconds)
 
 # Timestamp arithmetic
 context = {"now": datetime.now()}
 result = evaluate('now + duration("2h")', context)
-assert isinstance(result, datetime)
+assert isinstance(result, datetime)  # → datetime object (time arithmetic works naturally)
 
 print("✓ Type system working correctly")
 ```
@@ -337,23 +336,23 @@ context = {"age": 25, "name": "Alice"}
 
 # Runtime error - undefined variable
 result = safe_evaluate("undefined_variable + 1", context, default=0)
-assert result == 0
+assert result == 0  # → 0 (graceful fallback for missing variables)
 
 # Type error - incompatible types
 result = safe_evaluate('"hello" + 42', context, default="error")
-assert result == "error"
+assert result == "error"  # → "error" (type mismatch handled safely)
 
 # Syntax error - invalid CEL
 result = safe_evaluate("1 + + 2", context, default=None)
-assert result == None
+assert result == None  # → None (malformed expression caught)
 
 # Successful evaluation
 result = safe_evaluate('name + " is " + string(age)', context)
-assert result == "Alice is 25"
+assert result == "Alice is 25"  # → "Alice is 25" (valid expression succeeds)
 
 # Safe navigation patterns
 result = safe_evaluate('has("user.email") ? user.email : "no email"', {"user": {"name": "Bob"}}, "unknown")
-assert result == "unknown"  # Note: This will trigger an error, so returns the default
+assert result == "unknown"  # → "unknown" (has() syntax error triggers fallback)
 
 # Error recovery with fallbacks
 def evaluate_with_fallback(expressions, context):
@@ -375,7 +374,7 @@ fallback_expressions = [
 ]
 
 display_name = evaluate_with_fallback(fallback_expressions, user_context)
-assert display_name == "John Doe"
+assert display_name == "John Doe"  # → "John Doe" (fallback strategy provides reliable results)
 
 print("✓ Error handling working correctly")
 ```

@@ -31,9 +31,11 @@ context.add_variable("roles", ["user", "admin"])
 
 # Use the context in evaluations
 result = evaluate("name + ' is ' + string(age)", context)
+# → "Alice is 30"
 assert result == "Alice is 30"
 
 result = evaluate('"admin" in roles', context)
+# → True
 assert result == True
 
 print("✓ Context class basics working correctly")
@@ -56,6 +58,7 @@ context.update({
 })
 
 result = evaluate("user.profile.verified && 'write' in permissions", context)
+# → True (verified user with write permission)
 assert result == True
 
 print("✓ Batch context updates working correctly")
@@ -112,30 +115,37 @@ context.add_function("calculate_discount", calculate_discount)
 
 # Use functions in expressions
 tax = evaluate("calculate_tax(income, 0.15)", context)
+# → 7500.0 (50000 * 0.15)
 assert tax == 7500.0
 
 # Test weekend detection
 weekend = evaluate('is_weekend(today)', context)
+# → True (saturday is a weekend)
 assert weekend == True
 
 # Validate email
 email_valid = evaluate('validate_email(user_email)', context)
+# → True (alice@example.com is valid)
 assert email_valid == True
 
 # Calculate discount with volume bonus
 discount = evaluate('calculate_discount(price, customer, quantity)', context)
+# → 25.0 (20% VIP discount + 5% volume discount on $100)
 assert discount == 25.0  # 20% VIP + 5% volume
 
 # Complex expressions combining multiple functions
 final_price = evaluate('price - calculate_discount(price, customer, quantity)', context)
+# → 75.0 ($100 - $25 discount)
 assert final_price == 75.0
 
 # Conditional logic with functions
 weekend_greeting = evaluate('is_weekend(today) ? "Have a great weekend!" : "Have a productive day!"', context)
+# → "Have a great weekend!" (today is saturday)
 assert weekend_greeting == "Have a great weekend!"
 
 # Hash password (showing first 8 chars for brevity)
 password_hash = evaluate('hash_password("secret123")', context)
+# → "88a9f4259abef45a..." (SHA-256 hash)
 assert password_hash.startswith("88a9f4259abef45a")
 
 print("✓ Custom functions working correctly")
@@ -183,12 +193,15 @@ context.add_variable("users", user_db)
 
 # Use functions with safe patterns
 result = evaluate('safe_divide(100, 0) == null', context)
+# → True (division by zero returns null)
 assert result == True
 
 result = evaluate('check_permission("alice", "admin", users)', context)
+# → True (alice has admin permission)
 assert result == True
 
 result = evaluate('format_currency(29.99, "EUR")', context)
+# → "€29.99" (formatted with Euro symbol)
 assert result == "€29.99"
 
 print("✓ Advanced function patterns working correctly")
@@ -225,9 +238,9 @@ premium_customer = {"verified": True, "premium": True, "order_count": 2}
 loyal_customer = {"verified": True, "premium": False, "order_count": 8}
 new_customer = {"verified": True, "premium": False, "order_count": 1}
 
-assert check_discount_eligibility(premium_customer) == True
-assert check_discount_eligibility(loyal_customer) == True  
-assert check_discount_eligibility(new_customer) == False
+assert check_discount_eligibility(premium_customer) == True  # → True (verified + premium)
+assert check_discount_eligibility(loyal_customer) == True   # → True (verified + 8 orders >= 5)
+assert check_discount_eligibility(new_customer) == False   # → False (verified but only 1 order)
 ```
 
 ### Step 2: Multi-Factor Decision Making
@@ -267,9 +280,9 @@ business_hours_order = {"amount": 2000, "customer": {"premium": False}}
 
 business_time = datetime.now().replace(hour=14)  # 2 PM
 
-assert check_order_approval(small_order) == True
-assert check_order_approval(premium_order) == True
-assert check_order_approval(business_hours_order, business_time) == True
+assert check_order_approval(small_order) == True  # → True ($500 < $1000 threshold)
+assert check_order_approval(premium_order) == True  # → True (premium customer, $3000 < $5000)
+assert check_order_approval(business_hours_order, business_time) == True  # → True (business hours, $2000 < $2500)
 ```
 
 ### Step 3: Resource Access Control
@@ -319,13 +332,13 @@ project_doc = {
 public_doc = {"id": "company_blog", "owner": "marketing", "public": True}
 
 # Alice can read her own document
-assert check_resource_access(alice, project_doc, "read") == True
+assert check_resource_access(alice, project_doc, "read") == True  # → True (owner can read own resource)
 
 # Admin Bob can access anything
-assert check_resource_access(bob, project_doc, "write") == True
+assert check_resource_access(bob, project_doc, "write") == True  # → True (admin role grants all access)
 
 # Anyone can read public documents
-assert check_resource_access(alice, public_doc, "read") == True
+assert check_resource_access(alice, public_doc, "read") == True  # → True (public resource readable by all)
 
 print("✓ Policy progression examples working correctly")
 ```
@@ -347,13 +360,16 @@ context = {"score": 85, "threshold": 80}
 
 # Numeric comparisons
 result = evaluate("score > threshold", context)
+# → True (85 > 80)
 assert result == True
 result = evaluate("score >= 90", context)
+# → False (85 < 90)
 assert result == False
 
 # String comparisons  
 context = {"status": "active"}
 result = evaluate('status == "active"', context)
+# → True (exact string match)
 assert result == True
 ```
 
@@ -366,14 +382,17 @@ context = {
 
 # AND logic
 result = evaluate("user.verified && feature_enabled", context)
+# → True (both conditions are true)
 assert result == True
 
 # OR logic  
 result = evaluate("user.age < 18 || user.verified", context)
+# → True (user is verified, even though age >= 18)
 assert result == True
 
 # NOT logic
 result = evaluate("!user.verified", context)
+# → False (user.verified is True)
 assert result == False
 ```
 
@@ -386,14 +405,18 @@ context = {
 
 # Check membership
 result = evaluate('"write" in permissions', context)
+# → True ("write" is in ["read", "write"])
 assert result == True
 result = evaluate('"admin" in permissions', context)
+# → False ("admin" is not in ["read", "write"])
 assert result == False
 
 # List operations
 result = evaluate("numbers.size()", context)
+# → 5 (length of [1, 2, 3, 4, 5])
 assert result == 5
 result = evaluate("numbers[0]", context)
+# → 1 (first element)
 assert result == 1
 ```
 
@@ -404,10 +427,12 @@ context = {"user": {"name": "Charlie"}}  # No "age" field
 
 # Check if field exists before using it
 result = evaluate('has(user.age) && user.age > 18', context)
+# → False (user.age field doesn't exist)
 assert result == False
 
 # Use has() for safe access with fallback
 result = evaluate('has(user.age) ? user.age >= 18 : false', context)
+# → False (user.age doesn't exist, fallback to false)
 assert result == False
 ```
 
@@ -434,6 +459,7 @@ context = {"x": 10}
 
 # Valid expression
 result = safe_evaluate("x * 2", context)
+# → 20 (10 * 2)
 assert result == 20
 
 # Syntax error
@@ -468,6 +494,7 @@ rules = [
 
 for rule in rules:
     result = evaluate(rule, {"config": config})
+    # → True (all config values meet validation criteria)
     assert result == True, f"Config validation failed: {rule}"
 ```
 
@@ -483,6 +510,7 @@ show_new_ui = evaluate(
     "feature_flags.new_ui && user.beta_tester", 
     user_context
 )
+# → True (feature enabled AND user is beta tester)
 assert show_new_ui == True
 ```
 
@@ -505,6 +533,7 @@ all_valid = all(
     evaluate(rule, form_data) 
     for rule in validations
 )
+# → True (all validation rules pass: email has @, age in range, terms accepted)
 assert all_valid == True
 ```
 

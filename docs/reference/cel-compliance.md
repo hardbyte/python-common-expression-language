@@ -8,6 +8,21 @@ This document tracks the compliance of this Python CEL implementation with the [
 - **Estimated Compliance**: ~80% of CEL specification features.
 - **Test Coverage**: 300+ tests across 15+ test files including comprehensive CLI testing and upstream improvement detection
 
+## 🚨 Missing Features & Severity Overview
+
+| **Feature** | **Severity** | **Impact** | **Workaround Available** | **Upstream Priority** |
+|-------------|--------------|------------|--------------------------|----------------------|
+| **OR operator behavior** | 🔴 **HIGH** | Returns original values instead of booleans | Use explicit boolean conversion | **CRITICAL** |
+| **String utility functions** | 🟡 **MEDIUM** | Limited string processing capabilities | Use Python context functions | **HIGH** |
+| **Type introspection (`type()`)** | 🟡 **MEDIUM** | No runtime type checking | Use Python type checking | **HIGH** |
+| **Mixed int/uint arithmetic** | 🟡 **MEDIUM** | Manual type conversion needed | Use explicit casting | **MEDIUM** |
+| **Mixed-type arithmetic in macros** | 🟡 **MEDIUM** | Type coercion issues in collections | Ensure type consistency | **MEDIUM** |
+| **Bytes concatenation** | 🟢 **LOW** | Cannot concatenate byte arrays | Convert through string | **LOW** |
+| **Math functions (`ceil`, `floor`)** | 🟢 **LOW** | No mathematical utilities | Use Python context functions | **LOW** |
+| **Optional values** | 🟢 **LOW** | No optional chaining syntax | Use `has()` checks | **FUTURE** |
+
+**Legend**: 🔴 High Impact | 🟡 Medium Impact | 🟢 Low Impact
+
 
 ## Python Type Mappings
 
@@ -142,7 +157,132 @@ count + 1       // If count=5, stays as 5 + 1 → 6
 - **Error handling**: Proper exception propagation
 - **Performance**: Efficient evaluation for frequent operations
 
-## Known Issues & Missing Features
+---
+
+## 👩‍💻 For Developers Using This Library
+
+This section focuses on what you need to know to use CEL effectively in your applications.
+
+### ⚠️ Critical Behavioral Issues You Must Know
+
+!!! warning "Critical Safety Issue: OR Operator Behavior"
+    
+    **This implementation has a significant behavioral difference from the CEL specification that can impact safety and predictability.**
+    
+    #### OR Operator Returns Original Values (Not Booleans)
+    - **CEL Spec**: `42 || false` should return `true` (boolean)
+    - **Our Implementation**: Returns `42` (original integer value)
+    - **Impact**: **HIGH** - This can lead to unexpected behavior and logic errors
+    
+    **Examples of problematic behavior:**
+    ```python
+from cel import evaluate
+
+# CEL Spec: should return boolean true/false
+# Our implementation: returns original values
+result = evaluate("42 || false")  # → 42 (not True as expected)
+result = evaluate("0 || 'default'")  # → 'default' (not False as expected)
+
+# This can break conditional logic:
+try:
+    if evaluate("user.age || 0", {"user": {"age": 25}}):  # → 25 (truthy value)
+        # This condition may behave unexpectedly
+        pass
+except Exception:
+    # Handle undefined variable case
+    pass
+    ```
+    
+    **Mitigation strategies:**
+    1. **Explicit boolean conversion**: Use `!!` or explicit comparisons
+    2. **Avoid relying on return values** of `||` and `&&` operations
+    3. **Test thoroughly** when migrating from other CEL implementations
+
+### 🔧 Safe Patterns & Workarounds
+
+#### String Processing Workarounds
+```python
+from cel import Context, evaluate
+
+# Since lowerAscii(), upperAscii(), indexOf() are missing:
+context = Context()
+context.add_function("lower", str.lower)
+context.add_function("upper", str.upper) 
+context.add_function("find", str.find)
+
+# Add variables to the context
+context.add_variable("name", "ALICE")
+context.add_variable("text", "hello world")
+
+# Use Python functions in CEL expressions
+result = evaluate('lower(name)', context)  # → "alice"
+result = evaluate('find(text, "world")', context)  # → 6
+```
+
+#### Type Safety Best Practices
+```python
+from cel import evaluate
+
+# ✅ SAFE: Explicit type conversions for mixed arithmetic
+result = evaluate("int(value) + 1", {"value": "42"})  # → 43
+
+# ⚠️ RISKY: Mixed int/uint arithmetic - use explicit conversion
+# evaluate("1 + 2u")  # This will fail
+result = evaluate("1 + int(2u)")  # → 3 (safe alternative)
+
+# ✅ SAFE: Use has() checks for optional fields
+safe_expr = 'has(user.profile) && user.profile.verified'
+result = evaluate(safe_expr, {"user": {}})  # → False (graceful handling)
+```
+
+#### Production-Safe Error Handling
+```python
+from cel import evaluate
+
+def safe_evaluate(expression, context):
+    """Wrapper for production CEL evaluation with proper error handling."""
+    try:
+        return evaluate(expression, context)
+    except ValueError as e:
+        # Parse/syntax errors - log and return safe default
+        print(f"CEL syntax error: {e}")
+        return False  # Fail-safe default
+    except RuntimeError as e:
+        # Undefined variables/functions - log and return safe default
+        print(f"CEL runtime error: {e}")
+        return False  # Fail-safe default
+    except TypeError as e:
+        # Type mismatches - log and return safe default
+        print(f"CEL type error: {e}")
+        return False  # Fail-safe default
+
+# Usage in access control (always fail-safe)
+policy_expr = "user.verified && user.role == 'admin'"
+user_context = {"user": {"verified": True, "role": "admin"}}
+access_granted = safe_evaluate(policy_expr, user_context)
+```
+
+### 📚 What Works Reliably
+
+Use these features with confidence in production:
+
+- **Core data types**: int, float, bool, string, bytes, lists, maps
+- **Arithmetic**: `+`, `-`, `*`, `/`, `%` (watch mixed types)
+- **Comparisons**: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- **Logical operations**: `&&`, `!` (avoid `||` return values)
+- **String operations**: `contains()`, `startsWith()`, `endsWith()`, `matches()`
+- **Collection operations**: `size()`, `has()`, indexing with `[]`
+- **Macros**: `all()`, `exists()`, `filter()` (ensure type consistency)
+- **Type conversions**: `string()`, `int()`, `double()`, `bytes()`
+- **Date/time**: `timestamp()`, `duration()` with proper ISO formats
+
+---
+
+## 🔧 For Maintainers & Contributors
+
+This section covers upstream work, detection strategies, and contribution opportunities.
+
+### Known Issues & Missing Features
 
 ### ❌ Actually Missing CEL Specification Features
 
@@ -222,41 +362,12 @@ count + 1       // If count=5, stays as 5 + 1 → 6
 
 **Recent Progress**: Upstream has introduced optional type infrastructure, suggesting these features may be implemented in future releases.
 
-### ⚠️ Behavioral Differences
+### ⚠️ Behavioral Differences  
 
-!!! warning "Critical Safety Issue: OR Operator Behavior"
-    
-    **This implementation has a significant behavioral difference from the CEL specification that can impact safety and predictability.**
-    
-    #### OR Operator Returns Original Values (Not Booleans)
-    - **CEL Spec**: `42 || false` should return `true` (boolean)
-    - **Our Implementation**: Returns `42` (original integer value)
-    - **Impact**: **HIGH** - This can lead to unexpected behavior and logic errors
-    - **Detection**: ✅ We monitor for when this behavior gets fixed upstream
-    
-    **Examples of problematic behavior:**
-    ```python
-from cel import evaluate
-
-# CEL Spec: should return boolean true/false
-# Our implementation: returns original values
-result = evaluate("42 || false")  # Returns 42, not True
-result = evaluate("0 || 'default'")  # Returns 'default', not False
-
-# This can break conditional logic:
-try:
-    if evaluate("user.age || 0", {"user": {"age": 25}}):  # Intended to check truthiness
-        # This condition may behave unexpectedly
-        pass
-except Exception:
-    # Handle undefined variable case
-    pass
-    ```
-    
-    **Mitigation strategies:**
-    1. **Explicit boolean conversion**: Use `!!` or explicit comparisons
-    2. **Avoid relying on return values** of `||` and `&&` operations
-    3. **Test thoroughly** when migrating from other CEL implementations
+#### 1. OR Operator Behavior (CRITICAL ISSUE)
+- **Detection**: ✅ We monitor for when this behavior gets fixed upstream
+- **Status**: JavaScript-like behavior instead of CEL spec compliance
+- **Upstream Priority**: **CRITICAL** - This affects specification conformance
 
 #### 2. Type Coercion in Logical Operations  
 - **Our Implementation**: Performs Python-like truthiness evaluation
@@ -369,32 +480,64 @@ Both the CLI tool and the core `evaluate()` function now handle all malformed in
 - **Boundary value testing**: Some edge cases not covered
 - **Unicode/encoding edge cases**: Basic coverage only
 
-## Recommendations
+### 🎯 Upstream Contribution Priorities
 
-### High Priority (Upstream Contributions)
-1. **String utility functions** (`lowerAscii`, `upperAscii`, `indexOf`, `lastIndexOf`, `substring`, `replace`, `split`, `join`) - ✅ **Detection Ready**
-2. **Type introspection function** (`type()` for runtime type checking) - ✅ **Detection Ready**
-3. **Better error messages** for unsupported operations
-4. **Mixed-type arithmetic** improvements in macros - ✅ **Detection Ready**
-5. **OR operator CEL spec compliance** (return booleans) - ✅ **Detection Ready**
+#### High Priority (Ready for Contribution)
+1. **String utility functions** - ✅ **Detection Ready**
+   - Functions: `lowerAscii`, `upperAscii`, `indexOf`, `lastIndexOf`, `substring`, `replace`, `split`, `join`
+   - Impact: **MEDIUM** - Widely used in string processing applications
+   - Contribution path: cel crate standard library expansion
 
-### Medium Priority (Local Improvements)
-1. **Enhanced error handling** with better Python exception mapping
-2. **Local utility functions** (can implement `lowerAscii`/`upperAscii` via Python context)
-3. **Comprehensive testing** for newly discovered working features
-4. **Performance benchmarking** of macro operations
+2. **OR operator CEL spec compliance** - ✅ **Detection Ready**  
+   - Issue: Returns original values instead of booleans
+   - Impact: **HIGH** - Breaks specification conformance
+   - Contribution path: Core logical operation fixes
 
-### Low Priority (Future Features)
-1. **Math functions** (`ceil`, `floor`, `round`) - ✅ **Detection Ready**
-2. **Advanced validation functions** (`isURL`, `isIP`) - ✅ **Detection Ready**
-3. **Optional value handling** - ✅ **Detection Ready**
+3. **Type introspection function** - ✅ **Detection Ready**
+   - Function: `type()` for runtime type checking  
+   - Impact: **MEDIUM** - Useful for dynamic expressions
+   - Contribution path: Leverage existing type system infrastructure
 
-### Immediate Actions
-1. ✅ **Update compliance documentation** with new findings
-2. ✅ **Comprehensive upstream detection system** - All known issues monitored
-3. 🔄 **Implement better local error handling** (high impact, local solution)
-4. 📝 **Add tests for newly discovered working features**
-5. 🚀 **Consider upstream contributions** to cel crate for missing functions
+#### Medium Priority (Development Needed)
+4. **Mixed-type arithmetic in macros** - ✅ **Detection Ready**
+   - Issue: Type coercion problems in collection operations
+   - Impact: **MEDIUM** - Affects advanced collection processing
+   - Contribution path: Macro type system improvements
+
+5. **Mixed int/uint arithmetic**
+   - Issue: `1 + 2u` operations fail
+   - Impact: **MEDIUM** - Requires careful type management
+   - Contribution path: Arithmetic type coercion enhancements
+
+#### Low Priority (Future Features)
+6. **Math functions** - ✅ **Detection Ready**
+   - Functions: `ceil`, `floor`, `round`
+   - Impact: **LOW** - Can be implemented via Python context
+   - Contribution path: Standard library expansion
+
+7. **Optional value handling** - ✅ **Detection Ready** 
+   - Features: `optional.of()`, `.orValue()`, `?` chaining
+   - Impact: **LOW** - Alternative patterns exist
+   - Contribution path: Type system extensions
+
+### 🔧 Local Improvement Opportunities  
+
+#### High Impact (Python Library)
+1. **Enhanced error handling** - Better Python exception mapping and messages
+2. **Performance benchmarking** - Systematic performance testing and optimization  
+3. **Comprehensive testing** - Cover newly discovered working features
+
+#### Medium Impact (Documentation & Tooling)
+4. **Local utility functions** - Implement missing string functions via Python context
+5. **Migration guides** - Help users transition from other CEL implementations
+6. **Best practices documentation** - Safe patterns and workarounds
+
+### 🎬 Immediate Actions for Contributors
+
+1. ✅ **Monitoring system active** - All issues have upstream detection
+2. 🔄 **Priority: OR operator fix** - Most critical specification compliance issue  
+3. 📝 **Priority: String utilities** - High-value, lower-risk contribution opportunity
+4. 🚀 **Engage upstream** - Discuss contribution strategy with cel crate maintainers
 
 ## Contributing
 

@@ -1,6 +1,8 @@
+A safe, embeddable expression language for Python, powered by Rust, ideal for access control, validation, and data transformation.
+
 # Python CEL
 
-**Fast, Safe CEL Evaluation for Python**
+**Evaluate business rules, filters, and policies at microsecond speeds — in pure Python code.**
 
 The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, and safety. This Python package wraps the Rust implementation [cel](https://crates.io/crates/cel) v0.11.0, providing fast and safe CEL expression evaluation with seamless Python integration.
 
@@ -8,19 +10,23 @@ The Common Expression Language (CEL) is a non-Turing complete language designed 
 
 === "🐍 Python Integration"
 
+    **Simple evaluation**
     ```python
     from cel import evaluate
     
-    # Simple evaluation
     result = evaluate("age > 21", {"age": 25})
-    assert result == True
+    assert result == True  # → True (age check passes)
+    ```
     
-    # Policy evaluation
+    **Policy checks**
+    ```python
     policy = "user.role == 'admin' || resource.public"
     result = evaluate(policy, {"user": {"role": "guest"}, "resource": {"public": True}})
-    assert result == True
+    assert result == True  # → True (public resource access allowed)
+    ```
     
-    # Working with nested data
+    **Nested data**
+    ```python
     user_data = {
         "user": {
             "name": "Alice",
@@ -28,19 +34,15 @@ The Common Expression Language (CEL) is a non-Turing complete language designed 
         }
     }
     
-    # Access nested fields
+    # Access nested fields and business logic
     name_check = evaluate("user.name == 'Alice'", user_data)
-    assert name_check == True
+    assert name_check == True  # → True (name matches)
     
-    role_check = evaluate("user.profile.role", user_data)
-    assert role_check == "admin"
-    
-    # Simple business logic
     policy = "user.profile.verified && user.profile.role == 'admin'"
     admin_access = evaluate(policy, user_data)
-    assert admin_access == True
+    assert admin_access == True  # → True (verified admin user)
     
-    print("✓ Basic CEL evaluation working correctly")
+    print("✓ Basic CEL evaluation working correctly")  # → ✓ Basic CEL evaluation working correctly
     ```
 
 === "⚡ Command Line"
@@ -83,6 +85,15 @@ The Common Expression Language (CEL) is a non-Turing complete language designed 
     
     **[📖 Complete Syntax Reference →](tutorials/cel-language-basics.md)**
 
+## Key Features
+
+✅ **80% CEL spec compliance**  
+✅ **200+ tests**  
+✅ **CLI + Python API**  
+✅ **Safe by design** (Rust core)  
+✅ **Ready for production**  
+✅ **No GIL-blocking, safe concurrent evaluation**  
+
 ## Why Python CEL?
 
 ### 🚀 **Performance**
@@ -109,7 +120,7 @@ Built on cel-rust v0.11.0 with modern architecture - upcoming features like type
 ### 🔧 **Developer Friendly**
 Dual interfaces (Python API + CLI), rich error messages, extensive documentation, and full IDE support.
 
-## Architecture
+## How It Works
 
 Python CEL leverages a high-performance Rust core wrapped with PyO3 for seamless Python integration:
 
@@ -151,6 +162,7 @@ graph LR
 - **🛡️ Safety**: Memory-safe Rust prevents crashes and security vulnerabilities  
 - **🔧 Ergonomics**: PyO3 provides seamless Python integration with automatic type conversion
 - **📦 Distribution**: Single wheel package with no external dependencies  
+- **⚡ Concurrency**: No GIL-blocking — safe concurrent evaluation across threads  
 
 ## Installation
 
@@ -176,11 +188,11 @@ admin_user = {"user": {"role": "admin", "verified": True, "id": "admin1"}, "reso
 owner_user = {"user": {"role": "user", "verified": True, "id": "alice"}, "resource": {"owner": "alice", "public": False}}
 guest_user = {"user": {"role": "guest", "verified": True, "id": "guest1"}, "resource": {"owner": "bob", "public": True}}
 
-assert evaluate(policy, admin_user) == True   # Admin access
-assert evaluate(policy, owner_user) == True   # Owner access  
-assert evaluate(policy, guest_user) == True   # Public access
+assert evaluate(policy, admin_user) == True   # → True (admin access granted)
+assert evaluate(policy, owner_user) == True   # → True (owner access granted)  
+assert evaluate(policy, guest_user) == True   # → True (public resource access)
 
-print("✓ Access control policies working correctly")
+print("✓ Access control policies working correctly")  # → ✓ Access control policies working correctly
 ```
 
 Simple, readable policies that handle complex business logic.

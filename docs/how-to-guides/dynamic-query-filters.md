@@ -125,8 +125,13 @@ sample_records = [
 
 # Build filters for different users
 admin_filter = query_builder.build_filter(admin_user, user_filters)
+# → "(true) && (record.status == \"active\" && record.department == \"Sales\" && record.amount > 1000)"
+
 manager_filter = query_builder.build_filter(manager_user, user_filters)
+# → "(record.department == user.department) && (record.status == \"active\" && record.department == \"Sales\" && record.amount > 1000)"
+
 user_filter = query_builder.build_filter(regular_user, user_filters)
+# → "(record.user_id == user.id) && (record.status == \"active\" && record.department == \"Sales\" && record.amount > 1000)"
 
 print("Admin filter:", admin_filter)
 print("Manager filter:", manager_filter)
@@ -134,24 +139,37 @@ print("User filter:", user_filter)
 
 # Test filters
 admin_results = query_builder.test_filter(admin_filter, admin_user, sample_records)
+# → [{'id': '1', 'user_id': 'user1', 'department': 'Sales', 'amount': 1500, 'status': 'active', 'public': False}, 
+#    {'id': '5', 'user_id': 'user4', 'department': 'Sales', 'amount': 1800, 'status': 'active', 'public': True}]
+
 manager_results = query_builder.test_filter(manager_filter, manager_user, sample_records)
+# → [{'id': '1', 'user_id': 'user1', 'department': 'Sales', 'amount': 1500, 'status': 'active', 'public': False},
+#    {'id': '5', 'user_id': 'user4', 'department': 'Sales', 'amount': 1800, 'status': 'active', 'public': True}]
+
 user_results = query_builder.test_filter(user_filter, regular_user, sample_records)
+# → [{'id': '1', 'user_id': 'user1', 'department': 'Sales', 'amount': 1500, 'status': 'active', 'public': False}]
 
 print(f"\nAdmin sees {len(admin_results)} records")
-print(f"Manager sees {len(manager_results)} records")  
+# → Admin sees 2 records
+print(f"Manager sees {len(manager_results)} records")
+# → Manager sees 2 records
 print(f"User sees {len(user_results)} records")
+# → User sees 1 records
 
 # Verify expected results
 assert len(admin_results) == 2  # Admin sees all matching records
 assert len(manager_results) == 2  # Manager sees Sales records  
 assert len(user_results) == 1  # User sees only their own record
 assert user_results[0]["user_id"] == "user1"
+# → All assertions pass
 
 # Verify the filter expressions are constructed correctly  
 assert "(true)" in admin_filter  # Admin has no restrictions
 assert "record.department == user.department" in manager_filter  # Manager restricted by department
 assert "record.user_id == user.id" in user_filter  # User restricted to own records
+# → All filter validations pass
 
+# Demonstrate different data types
 # Demonstrate different data types
 mixed_filters = [
     {"field": "active", "operator": "equals", "value": True},     # Boolean
@@ -161,12 +179,16 @@ mixed_filters = [
 ]
 
 # This will generate correctly formatted CEL expressions:
+filter_expr = query_builder.build_filter(admin_user, mixed_filters)
+# → "(true) && (record.active == true && record.score > 85.5 && record.category in [\"urgent\", \"sales\"] && record.notes == null)"
+# Individual parts:
 # record.active == true
 # record.score > 85.5  
 # record.category in ["urgent", "sales"]
 # record.notes == null
 
 print("✓ Dynamic query filters working correctly")
+# → ✓ Dynamic query filters working correctly
 ```
 
 ## Why This Works
