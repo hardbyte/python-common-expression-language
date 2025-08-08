@@ -14,11 +14,11 @@ A powerful CLI for evaluating CEL expressions with support for:
 import json
 import sys
 import time
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import typer
-from importlib.metadata import version, PackageNotFoundError
 
 # Prompt toolkit imports for enhanced REPL
 from prompt_toolkit import PromptSession
