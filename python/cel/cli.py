@@ -560,13 +560,10 @@ def main(
     timing: Annotated[bool, typer.Option("-t", "--timing", help="Show evaluation timing")] = False,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Verbose output")] = False,
     version: Annotated[
-        Optional[bool], 
+        Optional[bool],
         typer.Option(
-            "--version", 
-            callback=version_callback, 
-            is_eager=True,
-            help="Show version and exit"
-        )
+            "--version", callback=version_callback, is_eager=True, help="Show version and exit"
+        ),
     ] = None,
 ):
     """
