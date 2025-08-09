@@ -246,6 +246,18 @@ def add_function(self, name: str, func: Callable) -> None:
     """
 ```
 
+### Type Checking Support
+
+This package includes manual type stub files (`.pyi`) for the PyO3 Rust extension to support static type checking.
+
+**Type checker verification:**
+```bash
+uvx ty check your_file.py      # ✅ Should pass without "no member" errors
+uvx mypy your_file.py          # ✅ Works with proper MYPYPATH setup
+```
+
+See https://pyo3.rs/main/type-stub to opt-in to the automated types when implemented in Maturin.
+
 ## Debugging & Troubleshooting
 
 ### Common Issues
