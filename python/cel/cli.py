@@ -38,11 +38,12 @@ from rich.table import Table
 from typing_extensions import Annotated
 
 try:
-    from . import cel
+    from . import EvaluationMode, cel
 except ImportError:
     # Fallback for running as standalone script
     try:
         import cel
+        from cel import EvaluationMode
     except ImportError:
         console = Console()
         console.print(
@@ -191,9 +192,10 @@ class CELFormatter:
 class CELEvaluator:
     """Enhanced CEL expression evaluator."""
 
-    def __init__(self, context: Optional[Dict[str, Any]] = None):
-        """Initialize evaluator with optional context."""
+    def __init__(self, context: Optional[Dict[str, Any]] = None, mode: str = "python"):
+        """Initialize evaluator with optional context and mode."""
         self.context = context or {}
+        self.mode = mode
         self._cel_context = None
         self._update_cel_context()
 
@@ -208,7 +210,7 @@ class CELEvaluator:
         """Evaluate a CEL expression."""
         if not expression.strip():
             raise ValueError("Empty expression")
-        return cel.evaluate(expression, self._cel_context)
+        return cel.evaluate(expression, self._cel_context, mode=self.mode)
 
     def update_context(self, new_context: Dict[str, Any]):
         """Update the evaluation context."""
@@ -554,6 +556,13 @@ def main(
         typer.Option("--file", help="Read expressions from file (one per line)"),
     ] = None,
     output: Annotated[str, typer.Option("-o", "--output", help="Output format")] = "auto",
+    mode: Annotated[
+        str,
+        typer.Option(
+            "--mode",
+            help="Evaluation mode: python (mixed arithmetic) or strict (type matching)",
+        ),
+    ] = "python",
     interactive: Annotated[
         bool, typer.Option("-i", "--interactive", help="Start interactive REPL mode")
     ] = False,
@@ -585,6 +594,10 @@ def main(
 
         # Evaluate expressions from file
         cel --file expressions.cel --output json
+
+        # Use strict evaluation mode
+        cel '1 + 2.0' --mode strict  # This will fail due to mixed types
+        cel '1.0 + 2.0' --mode strict  # This will work
     """
 
     # Load context
@@ -600,8 +613,13 @@ def main(
         file_context = load_context_from_file(context_file)
         eval_context.update(file_context)
 
+    # Validate mode parameter
+    if mode not in ("python", "strict"):
+        console.print(f"[red]Error: Invalid mode '{mode}'. Use 'python' or 'strict'[/red]")
+        raise typer.Exit(1)
+
     # Initialize evaluator
-    evaluator = CELEvaluator(eval_context)
+    evaluator = CELEvaluator(eval_context, mode=mode)
 
     # Interactive mode
     if interactive:
