@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.1] - 2025-08-11
 
 ### ✨ Added
 
@@ -13,7 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `EvaluationMode.PYTHON` (default for Python API): Python-friendly type promotions
   - `EvaluationMode.STRICT` (default for CLI): Strict CEL type rules with no coercion
 - **Type checking support**: Added complete type stub files (`.pyi`) for PyO3 extension
-
 
 
 ## [0.5.0] - 2025-08-08
