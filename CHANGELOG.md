@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Added
+
+- **EvaluationMode enum**: Control type handling behavior in CEL expressions
+  - `EvaluationMode.PYTHON` (default for Python API): Python-friendly type promotions
+  - `EvaluationMode.STRICT` (default for CLI): Strict CEL type rules with no coercion
+- **Type checking support**: Added complete type stub files (`.pyi`) for PyO3 extension
+
+
 
 ## [0.5.0] - 2025-08-08
 

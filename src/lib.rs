@@ -16,6 +16,25 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum EvaluationMode {
+    PythonCompatible,
+    Strict,
+}
+
+impl<'py> FromPyObject<'py> for EvaluationMode {
+    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+        let s: String = ob.extract()?;
+        match s.as_str() {
+            "python" => Ok(EvaluationMode::PythonCompatible),
+            "strict" => Ok(EvaluationMode::Strict),
+            _ => Err(PyTypeError::new_err(format!(
+                "Invalid EvaluationMode: expected 'python' or 'strict', got '{s}'"
+            ))),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct RustyCelType(Value);
 
@@ -424,6 +443,12 @@ impl TryIntoValue for RustyPyType<'_> {
 ///         - A `cel.Context` object (recommended for reusable contexts)
 ///         - A standard Python dictionary containing variables and functions
 ///         - None (for expressions that don't require external variables)
+///     mode (Union[str, cel.EvaluationMode]): The evaluation mode to use.
+///         Defaults to "python". Can be:
+///         - "python" or EvaluationMode.PYTHON: Enables Python-friendly type
+///           promotions (e.g., int -> float) for better mixed arithmetic compatibility
+///         - "strict" or EvaluationMode.STRICT: Enforces strict CEL type rules
+///           with no automatic coercion to match WebAssembly behavior
 ///
 /// Returns:
 ///     Union[bool, int, float, str, list, dict, datetime.datetime, bytes, None]:
@@ -508,7 +533,7 @@ impl TryIntoValue for RustyPyType<'_> {
 ///
 ///     Using Context object for reusable evaluations:
 ///
-///     >>> from cel import Context
+///     >>> from cel import Context, EvaluationMode
 ///     >>> context = Context(
 ///     ...     variables={"base_url": "https://api.example.com"},
 ///     ...     functions={"len": len}
@@ -518,19 +543,32 @@ impl TryIntoValue for RustyPyType<'_> {
 ///     >>> evaluate("len('hello world')", context)
 ///     11
 ///
+///     Using different evaluation modes:
+///
+///     >>> # Python mode (default) - allows mixed arithmetic
+///     >>> evaluate("1 + 2.5")
+///     3.5
+///     >>> evaluate("1 + 2.5", mode=EvaluationMode.PYTHON)
+///     3.5
+///     >>> # Strict mode - enforces type matching
+///     >>> try:
+///     ...     evaluate("1 + 2.5", mode=EvaluationMode.STRICT)
+///     ... except TypeError as e:
+///     ...     print("Strict mode error:", e)
+///     Strict mode error: Unsupported addition operation: Int + Double...
+///
 /// See Also:
 ///     - cel.Context: For managing reusable evaluation contexts
 ///     - CEL Language Guide: For comprehensive language documentation
 ///     - Python API Reference: For detailed API documentation
-#[pyfunction(signature = (src, evaluation_context=None))]
-fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<RustyCelType> {
-    // Preprocess expression for better mixed int/float arithmetic compatibility
-    // First check if expression itself has mixed literals
-    let mut processed_src = if expression_has_mixed_numeric_literals(&src) {
-        preprocess_expression_for_mixed_arithmetic_always(&src)
-    } else {
-        src.clone()
-    };
+#[pyfunction(signature = (src, evaluation_context=None, mode=None))]
+fn evaluate(
+    src: String,
+    evaluation_context: Option<&Bound<'_, PyAny>>,
+    mode: Option<EvaluationMode>,
+) -> PyResult<RustyCelType> {
+    // Use PythonCompatible as default if mode is not provided
+    let mode = mode.unwrap_or(EvaluationMode::PythonCompatible);
 
     let mut environment = CelContext::default();
     let mut ctx = context::Context::new(None, None)?;
@@ -539,7 +577,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
     // Custom Rust functions can also be added to the environment...
     //environment.add_function("add", |a: i64, b: i64| a + b);
 
-    // Process the evaluation context if provided first to determine if we need preprocessing
+    // Process the evaluation context if provided
     if let Some(evaluation_context) = evaluation_context {
         // Attempt to extract directly as a Context object
         if let Ok(py_context_ref) = evaluation_context.extract::<PyRef<context::Context>>() {
@@ -555,21 +593,35 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
             ));
         };
 
-        // Smart numeric coercion for mixed int/float arithmetic compatibility
         variables_for_env = ctx.variables.clone();
-
-        // Check if we should promote integers to floats for better compatibility
-        let should_promote = should_promote_integers_to_floats(&variables_for_env)
-            || expression_has_mixed_numeric_literals(&src);
-
-        if should_promote {
-            promote_integers_in_context(&mut variables_for_env);
-
-            // Always preprocess the expression when we're promoting types
-            // This handles cases where context has floats but expression has integer literals
-            processed_src = preprocess_expression_for_mixed_arithmetic_always(&src);
-        }
     }
+
+    // Apply type promotion logic based on evaluation mode (consolidated)
+    let processed_src = match mode {
+        EvaluationMode::PythonCompatible => {
+            // Check if we should promote integers to floats for better compatibility
+            let should_promote = should_promote_integers_to_floats(&variables_for_env)
+                || expression_has_mixed_numeric_literals(&src);
+
+            if should_promote {
+                // Promote integers in context if we have one
+                if !variables_for_env.is_empty() {
+                    promote_integers_in_context(&mut variables_for_env);
+                }
+                // Always preprocess the expression when promoting types
+                preprocess_expression_for_mixed_arithmetic_always(&src)
+            } else if expression_has_mixed_numeric_literals(&src) {
+                // Preprocess expression even without context if it has mixed literals
+                preprocess_expression_for_mixed_arithmetic_always(&src)
+            } else {
+                src.clone()
+            }
+        }
+        EvaluationMode::Strict => {
+            // Do nothing - preserve strict type behavior with no promotions or rewriting
+            src.clone()
+        }
+    };
 
     // Use panic::catch_unwind to handle parser panics gracefully
     let program = panic::catch_unwind(|| Program::compile(&processed_src))

@@ -53,7 +53,7 @@ jobs:
         run: uv run pytest --verbose --tb=short
 
   lint:
-    name: Code Quality
+    name: Code Quality & Type Checking
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,6 +87,19 @@ jobs:
       
       - name: Run Python linting
         run: uv run ruff check .
+      
+      - name: Test type stub files exist
+        run: |
+          test -f python/cel/cel.pyi || (echo "❌ Type stub file missing" && exit 1)
+          test -f python/cel/py.typed || (echo "❌ PEP 561 marker missing" && exit 1)
+          echo "✅ Type stub files present"
+
+      - name: Test ty type checker integration
+        run: |
+          echo "from cel import evaluate, Context; evaluate('1+1')" > test_types.py
+          uvx ty check test_types.py
+          rm test_types.py
+          echo "✅ Type checker integration working"
   linux:
     runs-on: ${{ matrix.platform.runner }}
     needs: [test, lint]
