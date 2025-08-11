@@ -19,15 +19,3 @@ class EvaluationMode(str, Enum):
     """
     Enforces strict cel-rust type rules with no automatic coercion to match Wasm behavior.
     """
-
-
-__doc__ = cel.__doc__
-if hasattr(cel, "__all__"):
-    # Ensure EvaluationMode is always exported even if Rust module defines __all__
-    __all__ = list(cel.__all__) + ["EvaluationMode"]
-else:
-    __all__ = [
-        "evaluate",
-        "Context",
-        "EvaluationMode",
-    ]

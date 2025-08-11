@@ -192,7 +192,7 @@ class CELFormatter:
 class CELEvaluator:
     """Enhanced CEL expression evaluator."""
 
-    def __init__(self, context: Optional[Dict[str, Any]] = None, mode: str = "python"):
+    def __init__(self, context: Optional[Dict[str, Any]] = None, mode: str = "strict"):
         """Initialize evaluator with optional context and mode."""
         self.context = context or {}
         self.mode = mode
@@ -562,7 +562,7 @@ def main(
             "--mode",
             help="Evaluation mode: python (mixed arithmetic) or strict (type matching)",
         ),
-    ] = "python",
+    ] = "strict",
     interactive: Annotated[
         bool, typer.Option("-i", "--interactive", help="Start interactive REPL mode")
     ] = False,
