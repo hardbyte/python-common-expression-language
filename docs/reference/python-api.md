@@ -81,6 +81,7 @@ In STRICT mode, the library:
 3. Raises TypeError for incompatible type operations
 
 **Example with Context:**
+
 ```python
 from cel import evaluate, EvaluationMode
 

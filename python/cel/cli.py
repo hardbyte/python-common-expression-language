@@ -37,19 +37,9 @@ from rich.syntax import Syntax
 from rich.table import Table
 from typing_extensions import Annotated
 
-try:
-    from . import EvaluationMode, cel
-except ImportError:
-    # Fallback for running as standalone script
-    try:
-        import cel
-        from cel import EvaluationMode
-    except ImportError:
-        console = Console()
-        console.print(
-            "[red]Error: 'cel' package not found. Please install with: pip install common-expression-language[/red]"
-        )
-        sys.exit(1)
+# Import directly from relative modules to avoid circular imports
+from .cel import Context, evaluate
+from .evaluation_modes import EvaluationMode
 
 # Initialize Rich console
 console = Console()
@@ -202,7 +192,7 @@ class CELEvaluator:
     def _update_cel_context(self):
         """Update the internal CEL context object."""
         if self.context:
-            self._cel_context = cel.Context(self.context)
+            self._cel_context = Context(self.context)
         else:
             self._cel_context = None
 
@@ -210,7 +200,7 @@ class CELEvaluator:
         """Evaluate a CEL expression."""
         if not expression.strip():
             raise ValueError("Empty expression")
-        return cel.evaluate(expression, self._cel_context, mode=self.mode)
+        return evaluate(expression, self._cel_context, mode=self.mode)
 
     def update_context(self, new_context: Dict[str, Any]):
         """Update the evaluation context."""

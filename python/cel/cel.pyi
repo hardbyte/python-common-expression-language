@@ -2,10 +2,9 @@
 Type stubs for the CEL Rust extension module.
 """
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, Literal, Optional, Union, overload
+from typing import Any, Callable, Dict, Literal, Optional, Union, overload
 
-if TYPE_CHECKING:
-    from . import EvaluationMode
+from .evaluation_modes import EvaluationMode
 
 class Context:
     """CEL evaluation context for variables and functions."""

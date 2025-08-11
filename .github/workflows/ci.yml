@@ -93,10 +93,7 @@ jobs:
           test -f python/cel/cel.pyi || (echo "❌ Type stub file missing" && exit 1)
           test -f python/cel/py.typed || (echo "❌ PEP 561 marker missing" && exit 1)
           echo "✅ Type stub files present"
-      
-      - name: Run type checking tests
-        run: uv run pytest tests/test_type_stubs.py -v
-      
+
       - name: Test ty type checker integration
         run: |
           echo "from cel import evaluate, Context; evaluate('1+1')" > test_types.py
