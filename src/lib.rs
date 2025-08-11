@@ -730,7 +730,6 @@ fn cel(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
-
     m.add_class::<context::Context>()?;
     Ok(())
 }
