@@ -548,8 +548,8 @@ cel 'users.map(u, {
   "permissions_count": u.permissions.size()
 })' --context-file users.json
 
-# Filter and aggregate
-cel 'products.filter(p, p.price > 100).map(p, p.price).fold(sum, 0, sum + item)' \
+# Filter and extract prices
+cel 'products.filter(p, p.price > 100).map(p, p.price)' \
   --context-file products.json
 
 # Nested filtering

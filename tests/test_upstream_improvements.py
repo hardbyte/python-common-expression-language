@@ -254,6 +254,62 @@ class TestMissingStringFunctions:
             cel.evaluate('["hello", "world"].join(",")')
 
 
+class TestMissingAggregationFunctions:
+    """Test aggregation functions that are missing from CEL."""
+
+    def test_sum_function_not_available(self):
+        """
+        Test that sum() function is not currently available.
+
+        When this test starts failing, sum() has been implemented upstream.
+        """
+        with pytest.raises(RuntimeError, match="Undefined variable or function.*sum"):
+            cel.evaluate("sum([1, 2, 3, 4, 5])")
+
+    def test_fold_function_not_available(self):
+        """
+        Test that fold() is not available - various syntax attempts.
+
+        When this test starts failing, fold() has been implemented upstream.
+        """
+        # Method syntax
+        with pytest.raises((RuntimeError, ValueError)):
+            cel.evaluate("[1, 2, 3, 4, 5].fold(0, (acc, x) -> acc + x)")
+
+        # Global function syntax
+        with pytest.raises(RuntimeError, match="Undefined variable or function.*fold"):
+            cel.evaluate("fold([1, 2, 3], 0, sum + x)")
+
+    def test_reduce_function_not_available(self):
+        """
+        Test that reduce() is not available - various syntax attempts.
+
+        When this test starts failing, reduce() has been implemented upstream.
+        """
+        # Global function syntax
+        with pytest.raises(RuntimeError, match="Undefined variable or function.*reduce"):
+            cel.evaluate("reduce([1, 2, 3, 4, 5], 0, sum + x)")
+
+        # Method syntax
+        with pytest.raises((RuntimeError, ValueError)):
+            cel.evaluate("[1, 2, 3].reduce(0, (acc, x) -> acc + x)")
+
+    @pytest.mark.xfail(reason="Aggregation functions not implemented in cel v0.11.0", strict=False)
+    def test_aggregation_functions_expected_behavior(self):
+        """
+        Test expected aggregation function behavior when implemented.
+
+        This test will pass when upstream implements sum(), fold(), reduce().
+        """
+        # Sum function
+        assert cel.evaluate("sum([1, 2, 3, 4, 5])") == 15
+        assert cel.evaluate("sum([1.1, 2.2, 3.3])") == pytest.approx(6.6)
+
+        # Fold/reduce functions (syntax may differ when actually implemented)
+        assert cel.evaluate("[1, 2, 3, 4].fold(0, (acc, x) -> acc + x)") == 10
+        assert cel.evaluate("[1, 2, 3].fold(1, (acc, x) -> acc * x)") == 6
+
+
 class TestMathFunctions:
     """Test missing mathematical functions."""
 
@@ -316,6 +372,7 @@ def test_upstream_improvements_summary():
     upstream improvements we're monitoring.
     """
     improvements_to_watch = {
+        "Missing aggregation functions": ["sum()", "fold()", "reduce()"],
         "String functions": [
             "lowerAscii",
             "upperAscii",

@@ -6,20 +6,21 @@ This document tracks the compliance of this Python CEL implementation with the [
 
 - **Implementation**: Based on [`cel`](https://crates.io/crates/cel) v0.11.0 Rust crate (formerly cel-interpreter)
 - **Estimated Compliance**: ~80% of CEL specification features.
-- **Test Coverage**: 300+ tests across 15+ test files including comprehensive CLI testing and upstream improvement detection
+- **Test Coverage**: 300+ tests across 16+ test files including comprehensive CLI testing and upstream improvement detection
 
 ## 🚨 Missing Features & Severity Overview
 
-| **Feature** | **Severity** | **Impact** | **Workaround Available** | **Upstream Priority** |
-|-------------|--------------|------------|--------------------------|----------------------|
-| **OR operator behavior** | 🔴 **HIGH** | Returns original values instead of booleans | Use explicit boolean conversion | **CRITICAL** |
-| **String utility functions** | 🟡 **MEDIUM** | Limited string processing capabilities | Use Python context functions | **HIGH** |
-| **Type introspection (`type()`)** | 🟡 **MEDIUM** | No runtime type checking | Use Python type checking | **HIGH** |
-| **Mixed int/uint arithmetic** | 🟡 **MEDIUM** | Manual type conversion needed | Use explicit casting | **MEDIUM** |
-| **Mixed-type arithmetic in macros** | 🟡 **MEDIUM** | Type coercion issues in collections | Ensure type consistency | **MEDIUM** |
-| **Bytes concatenation** | 🟢 **LOW** | Cannot concatenate byte arrays | Convert through string | **LOW** |
-| **Math functions (`ceil`, `floor`)** | 🟢 **LOW** | No mathematical utilities | Use Python context functions | **LOW** |
-| **Optional values** | 🟢 **LOW** | No optional chaining syntax | Use `has()` checks | **FUTURE** |
+| **Feature**                                         | **Severity** | **Impact** | **Workaround Available** | **Upstream Priority** |
+|-----------------------------------------------------|--------------|------------|--------------------------|----------------------|
+| **OR operator behavior**                            | 🔴 **HIGH** | Returns original values instead of booleans | Use explicit boolean conversion | **CRITICAL** |
+| **String utility functions**                        | 🟡 **MEDIUM** | Limited string processing capabilities | Use Python context functions | **HIGH** |
+| **Type introspection (`type()`)**                   | 🟡 **MEDIUM** | No runtime type checking | Use Python type checking | **HIGH** |
+| **Mixed int/uint arithmetic**                       | 🟡 **MEDIUM** | Manual type conversion needed | Use explicit casting | **MEDIUM** |
+| **Mixed-type arithmetic in macros**                 | 🟡 **MEDIUM** | Type coercion issues in collections | Ensure type consistency | **MEDIUM** |
+| **Bytes concatenation**                             | 🟢 **LOW** | Cannot concatenate byte arrays | Convert through string | **LOW** |
+| **Math functions (`ceil`, `floor`)**                | 🟢 **LOW** | No mathematical utilities | Use Python context functions | **LOW** |
+| **Collection aggregation (`sum`, `fold`, `reduce`)** | 🟢 **LOW** | No aggregation functions | Use Python context functions | **LOW** |
+| **Optional values**                                 | 🟢 **LOW** | No optional chaining syntax | Use `has()` checks | **FUTURE** |
 
 **Legend**: 🔴 High Impact | 🟡 Medium Impact | 🟢 Low Impact
 
@@ -134,6 +135,7 @@ count + 1       // If count=5, stays as 5 + 1 → 6
 | `matches()` | `string.matches(pattern) -> bool` | Regex matching | `bool` | ✅ Working |
 | `min()` | `min(list) -> value` | Find minimum value | Various | ✅ Working |
 | `max()` | `max(list) -> value` | Find maximum value | Various | ✅ Working |
+| `sum()` | `sum(list) -> number` | Sum numeric values | N/A | ❌ **NOT AVAILABLE** |
 
 ### ✅ String Operations
 - **contains()**: `"hello".contains("ell")` → `True`
@@ -149,6 +151,10 @@ count + 1       // If count=5, stays as 5 + 1 → 6
 - **exists()**: `[1,2,3].exists(x, x == 2)` → `True`
 - **filter()**: `[1,2,3].filter(x, x > 1)` → `[2.0, 3.0]` (with type coercion)
 - **map()**: Limited due to type system restrictions ⚠️ **PARTIAL** (requires type-compatible operations)
+
+### ❌ Missing Collection Functions
+- **fold()**: `[1,2,3].fold(0, sum, sum + x)` - Collection aggregation ❌ **NOT AVAILABLE**
+- **reduce()**: `reduce([1,2,3], 0, sum + x)` - Reduction operations ❌ **NOT AVAILABLE**
 
 ### ✅ Python Integration
 - **Automatic type conversion**: Seamless Python ↔ CEL type mapping
@@ -350,6 +356,7 @@ This section covers upstream work, detection strategies, and contribution opport
 - **Detection**: ✅ Full detection for all missing functions
 **Missing functions**:
 - Math: `ceil()`, `floor()`, `round()` - Mathematical functions
+- Collection: `fold()`, `reduce()` - Collection aggregation functions
 - Collection: Enhanced `in` operator behaviors
 - URL/IP: `isURL()`, `isIP()` - Validation functions (available in some CEL implementations)
 
@@ -483,7 +490,7 @@ Both the CLI tool and the core `evaluate()` function now handle all malformed in
 ### 🎯 Upstream Contribution Priorities
 
 #### High Priority (Ready for Contribution)
-1. **String utility functions** - ✅ **Detection Ready**
+1. **String utility functions** - ✅ **Detection Ready** (`test_upstream_detection.py`)
    - Functions: `lowerAscii`, `upperAscii`, `indexOf`, `lastIndexOf`, `substring`, `replace`, `split`, `join`
    - Impact: **MEDIUM** - Widely used in string processing applications
    - Contribution path: cel crate standard library expansion
@@ -493,7 +500,7 @@ Both the CLI tool and the core `evaluate()` function now handle all malformed in
    - Impact: **HIGH** - Breaks specification conformance
    - Contribution path: Core logical operation fixes
 
-3. **Type introspection function** - ✅ **Detection Ready**
+3. **Type introspection function** - ✅ **Detection Ready** (`test_upstream_detection.py`)
    - Function: `type()` for runtime type checking  
    - Impact: **MEDIUM** - Useful for dynamic expressions
    - Contribution path: Leverage existing type system infrastructure
@@ -510,12 +517,17 @@ Both the CLI tool and the core `evaluate()` function now handle all malformed in
    - Contribution path: Arithmetic type coercion enhancements
 
 #### Low Priority (Future Features)
-6. **Math functions** - ✅ **Detection Ready**
+6. **Collection aggregation functions** - ✅ **Detection Ready**
+   - Functions: `sum()`, `fold()`, `reduce()`
+   - Impact: **LOW** - Can be implemented via Python context
+   - Contribution path: Standard library expansion
+
+7. **Math functions** - ✅ **Detection Ready**
    - Functions: `ceil`, `floor`, `round`
    - Impact: **LOW** - Can be implemented via Python context
    - Contribution path: Standard library expansion
 
-7. **Optional value handling** - ✅ **Detection Ready** 
+8. **Optional value handling** - ✅ **Detection Ready** 
    - Features: `optional.of()`, `.orValue()`, `?` chaining
    - Impact: **LOW** - Alternative patterns exist
    - Contribution path: Type system extensions
