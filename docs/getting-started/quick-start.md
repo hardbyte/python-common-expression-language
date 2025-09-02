@@ -72,9 +72,15 @@ assert result == True  # → True (membership testing in arrays)
 result = evaluate('user.profile.verified && user.profile.email.endsWith("@example.com")', {"user": user})
 assert result == True  # → True (deep object navigation with string methods)
 
-# Type conversions
+# Type conversions - CEL enforces type safety
 result = evaluate('user.name + " is " + string(user.age) + " years old"', {"user": user})
-assert result == "Alice is 30 years old"  # → "Alice is 30 years old" (automatic type conversion)
+assert result == "Alice is 30 years old"  # → "Alice is 30 years old" (explicit type conversion with string())
+
+# ❌ This would fail - no automatic type conversion between incompatible types:
+# evaluate('user.name + " is " + user.age')  # TypeError: can't add string + int
+# 
+# ✅ Always use explicit conversion for mixed types:
+# string(), int(), float(), double() functions
 
 # Safe navigation with has()
 result = evaluate('has(user.profile.phone) ? user.profile.phone : "No phone"', {"user": user})
