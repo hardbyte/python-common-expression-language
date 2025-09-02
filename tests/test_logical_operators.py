@@ -115,24 +115,26 @@ class TestLogicalOperators:
             pass
 
     def test_logical_type_coercion(self):
-        """Test logical operators with type coercion.
+        """Test that logical operators correctly reject mixed types per CEL specification.
 
-        Note: This CEL implementation appears to do type coercion rather than
-        raising errors for non-boolean operands.
+        CEL specification requires boolean operands for logical operators.
+        Mixed-type operations should fail with "No such overload".
         """
-        # Document current behavior: non-empty strings are truthy
-        assert cel.evaluate("'string' && true") is True
-        # Empty strings are falsy
-        assert cel.evaluate("'' && true") is False
+        # These should fail - non-boolean operands not allowed per CEL spec
+        with pytest.raises(ValueError, match="No such overload"):
+            cel.evaluate("'string' && true")
 
-        # Document current behavior: OR returns first truthy value
-        assert cel.evaluate("42 || false") == 42
-        # 0 is falsy, so OR returns the second operand (true)
-        assert cel.evaluate("0 || true") is True
+        with pytest.raises(ValueError, match="No such overload"):
+            cel.evaluate("'' && true")
 
-        # Test NOT with various types
-        assert cel.evaluate("!'string'") is False  # String is truthy
-        assert cel.evaluate("!42") is False  # Number is truthy
+        with pytest.raises(ValueError, match="No such overload"):
+            cel.evaluate("42 || false")
+
+        with pytest.raises(ValueError, match="No such overload"):
+            cel.evaluate("0 || true")
+
+        with pytest.raises(ValueError, match="No such overload"):
+            cel.evaluate("!'string'")
 
     def test_logical_in_conditionals(self):
         """Test logical operators in conditional expressions."""

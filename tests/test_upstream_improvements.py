@@ -177,41 +177,65 @@ class TestMapFunctionImprovements:
 
 
 class TestLogicalOperatorBehavior:
-    """Test logical operator behavioral differences that should be fixed."""
+    """Test logical operator behavior to verify CEL specification compliance."""
 
-    def test_or_operator_returns_original_values(self):
+    def test_or_operator_cel_compliant_behavior(self):
         """
-        CRITICAL: Test that OR operator currently returns original values, not booleans.
+        Test OR operator behavior follows CEL specification requirements.
 
-        When this test starts failing, the OR operator behavior has been fixed
-        to match CEL specification (should return boolean values).
+        Per CEL specification, logical operators require boolean first operands.
+        Mixed-type operations like "42 || false" should fail with "No such overload".
+
+        Reference: https://github.com/tektoncd/triggers/issues/644
         """
-        # CEL spec: should return boolean true, but we return original value
-        result = cel.evaluate("42 || false")
-        assert result == 42, f"Expected 42 (current behavior), got {result}"
+        # These correctly fail - first operand must be boolean per CEL spec
+        with pytest.raises(ValueError, match="No such overload"):
+            cel.evaluate("42 || false")  # Non-boolean first operand fails
 
-        result = cel.evaluate('0 || "default"')
-        assert result == "default", f"Expected 'default' (current behavior), got {result}"
+        with pytest.raises(ValueError, match="No such overload"):
+            cel.evaluate('0 || "default"')  # Non-boolean first operand fails
 
-        # This documents the current non-spec behavior
-        result = cel.evaluate("true || 99")
-        assert result, f"Expected True, got {result}"  # Short-circuit works
+        # CEL's logical operators with boolean first operand work correctly
+        assert cel.evaluate("true || 99")  # Short-circuits to True
+        assert cel.evaluate("false || 99") == 99  # Returns second operand per CEL spec
+        assert cel.evaluate("false || 'default'") == "default"  # Any type for second operand
 
-    @pytest.mark.xfail(
-        reason="OR operator returns original values instead of booleans in cel v0.11.0",
-        strict=False,
-    )
-    def test_or_operator_expected_cel_spec_behavior(self):
+        # AND operator has stricter requirements for both operands
+        assert not cel.evaluate("false && 99")  # Short-circuits to False
+        with pytest.raises(ValueError, match="No such overload"):
+            cel.evaluate("true && 99")  # AND requires both operands to be boolean when evaluated
+
+    def test_or_operator_correct_boolean_behavior(self):
         """
-        Test expected OR operator behavior per CEL specification.
-
-        This test will pass when upstream fixes OR operator to return booleans.
+        Test OR operator with boolean operands follows CEL specification.
         """
-        # CEL spec: logical OR should always return boolean values
-        assert cel.evaluate("42 || false")
-        assert cel.evaluate('0 || "default"')
-        assert not cel.evaluate("false || 0")
-        assert not cel.evaluate("null || false")
+        # Boolean logical operations work as expected
+        assert cel.evaluate("true || false")
+        assert cel.evaluate("false || true")
+        assert not cel.evaluate("false || false")
+        assert cel.evaluate("true || true")
+
+    def test_and_operator_correct_boolean_behavior(self):
+        """
+        Test AND operator with boolean operands follows CEL specification.
+        """
+        # Boolean logical operations work as expected
+        assert not cel.evaluate("true && false")
+        assert not cel.evaluate("false && true")
+        assert not cel.evaluate("false && false")
+        assert cel.evaluate("true && true")
+
+    def test_ternary_operator_requires_boolean_condition(self):
+        """
+        Test ternary operator requires boolean condition per CEL specification.
+        """
+        # Boolean condition works correctly
+        assert cel.evaluate("true ? 42 : 0") == 42
+        assert cel.evaluate("false ? 42 : 0") == 0
+
+        # Non-boolean condition fails as expected
+        with pytest.raises(ValueError, match="No such overload"):
+            cel.evaluate("42 ? true : false")
 
 
 class TestMissingStringFunctions:
@@ -294,7 +318,7 @@ class TestMissingAggregationFunctions:
         with pytest.raises((RuntimeError, ValueError)):
             cel.evaluate("[1, 2, 3].reduce(0, (acc, x) -> acc + x)")
 
-    @pytest.mark.xfail(reason="Aggregation functions not implemented in cel v0.11.0", strict=False)
+    @pytest.mark.xfail(reason="Aggregation functions not implemented in cel v0.11.1", strict=False)
     def test_aggregation_functions_expected_behavior(self):
         """
         Test expected aggregation function behavior when implemented.
@@ -388,7 +412,7 @@ def test_upstream_improvements_summary():
         "Optional values": ["optional.of()", "optional chaining (?.)"],
         "Map improvements": ["Mixed type arithmetic in map()"],
         "Bytes operations": ["bytes concatenation with +"],
-        "Logical operators": ["OR operator CEL spec compliance (return booleans)"],
+        "Logical operators": ["CEL-compliant behavior verified in v0.11.1"],
         "Math functions": ["ceil()", "floor()", "round()"],
         "Validation functions": ["isURL()", "isIP()"],
     }

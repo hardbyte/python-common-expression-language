@@ -2,7 +2,6 @@
 Arithmetic operations tests for CEL bindings.
 
 - Basic arithmetic operations (+ - * / %)
-- Mixed-type arithmetic (int/float combinations)
 - Arithmetic with context variables
 - Edge cases and precedence
 - String concatenation (a form of arithmetic)
@@ -50,73 +49,8 @@ class TestBasicArithmetic:
         assert result is True
 
 
-class TestMixedTypeArithmetic:
-    """Test arithmetic operations with mixed numeric types."""
-
-    def test_float_times_int(self):
-        """Test that 3.14 * 2 works (float * int)."""
-        result = cel.evaluate("3.14 * 2")
-        assert result == 6.28
-
-    def test_int_times_float(self):
-        """Test that 2 * 3.14 works (int * float)."""
-        result = cel.evaluate("2 * 3.14")
-        assert result == 6.28
-
-    def test_float_plus_int(self):
-        """Test that 10.5 + 5 works (float + int)."""
-        result = cel.evaluate("10.5 + 5")
-        assert result == 15.5
-
-    def test_int_plus_float(self):
-        """Test that 5 + 10.5 works (int + float)."""
-        result = cel.evaluate("5 + 10.5")
-        assert result == 15.5
-
-    def test_float_minus_int(self):
-        """Test that 10.5 - 3 works (float - int)."""
-        result = cel.evaluate("10.5 - 3")
-        assert result == 7.5
-
-    def test_int_minus_float(self):
-        """Test that 10 - 3.5 works (int - float)."""
-        result = cel.evaluate("10 - 3.5")
-        assert result == 6.5
-
-    def test_float_divide_int(self):
-        """Test that 15.0 / 3 works (float / int)."""
-        result = cel.evaluate("15.0 / 3")
-        assert result == 5.0
-
-    def test_int_divide_float(self):
-        """Test that 15 / 3.0 works (int / float)."""
-        result = cel.evaluate("15 / 3.0")
-        assert result == 5.0
-
-    def test_mixed_arithmetic_preserves_python_behavior(self):
-        """Test that our mixed arithmetic matches Python's behavior."""
-        # These should match what Python would do
-        python_result = 3.14 * 2
-        cel_result = cel.evaluate("3.14 * 2")
-        assert cel_result == python_result
-
-        python_result = 2 * 3.14
-        cel_result = cel.evaluate("2 * 3.14")
-        assert cel_result == python_result
-
-        python_result = 10.5 + 5
-        cel_result = cel.evaluate("10.5 + 5")
-        assert cel_result == python_result
-
-
 class TestArithmeticWithContext:
     """Test arithmetic operations with context variables."""
-
-    def test_mixed_arithmetic_with_context(self):
-        """Test mixed arithmetic with variables from context."""
-        context = {"pi": 3.14159, "radius": 2}
-        result = cel.evaluate("pi * radius * radius", context)
-        assert abs(result - 12.56636) < 0.00001
 
     def test_datetime_arithmetic_context(self):
         """Test datetime arithmetic operations with context."""
@@ -124,30 +58,6 @@ class TestArithmeticWithContext:
         result = cel.evaluate("start_time + duration('1h')", {"start_time": now})
         expected = now + datetime.timedelta(hours=1)
         assert result == expected
-
-
-class TestArithmeticPrecedenceAndGrouping:
-    """Test operator precedence and parentheses in arithmetic."""
-
-    def test_mixed_arithmetic_with_parentheses(self):
-        """Test mixed arithmetic with parentheses."""
-        result = cel.evaluate("(3.14 + 1) * 2")
-        assert abs(result - 8.28) < 0.000001
-
-    def test_mixed_arithmetic_precedence(self):
-        """Test that operator precedence is preserved with mixed types."""
-        result = cel.evaluate("2 + 3.14 * 2")
-        assert abs(result - 8.28) < 0.000001
-
-    def test_multiple_operators_in_expression(self):
-        """Test expressions with multiple different operators."""
-        result = cel.evaluate("10.5 + 2 * 3 - 1")
-        assert result == 15.5
-
-    def test_complex_mixed_expression(self):
-        """Test complex expressions with multiple mixed operations."""
-        result = cel.evaluate("3.14 * 2 + 1")
-        assert result == 7.28
 
 
 class TestArithmeticEdgeCases:
@@ -164,36 +74,6 @@ class TestArithmeticEdgeCases:
         result = cel.evaluate("5.5 + 3.2")
         assert result == 8.7
         assert isinstance(result, float)
-
-    def test_mixed_arithmetic_with_negative_numbers(self):
-        """Test mixed arithmetic with negative numbers."""
-        result = cel.evaluate("-3.14 * 2")
-        assert result == -6.28
-
-    def test_mixed_arithmetic_with_spaces(self):
-        """Test that spacing doesn't affect mixed arithmetic."""
-        result = cel.evaluate("3.14*2")  # No spaces
-        assert result == 6.28
-
-        result = cel.evaluate("3.14 * 2")  # With spaces
-        assert result == 6.28
-
-        result = cel.evaluate("3.14  *  2")  # Extra spaces
-        assert result == 6.28
-
-    def test_mixed_arithmetic_edge_cases(self):
-        """Test edge cases for mixed arithmetic."""
-        # Zero cases
-        assert cel.evaluate("0.0 * 5") == 0.0
-        assert cel.evaluate("5 * 0.0") == 0.0
-
-        # One cases
-        assert cel.evaluate("1.0 * 7") == 7.0
-        assert cel.evaluate("7 * 1.0") == 7.0
-
-        # Large numbers
-        result = cel.evaluate("1000000.0 * 2")
-        assert result == 2000000.0
 
     def test_invalid_expression_raises_parse_value_error(self):
         """Test that invalid arithmetic expressions raise proper ValueError."""

@@ -4,7 +4,7 @@ This document tracks the compliance of this Python CEL implementation with the [
 
 ## Summary
 
-- **Implementation**: Based on [`cel`](https://crates.io/crates/cel) v0.11.0 Rust crate (formerly cel-interpreter)
+- **Implementation**: Based on [`cel`](https://crates.io/crates/cel) v0.11.1 Rust crate (formerly cel-interpreter)
 - **Estimated Compliance**: ~80% of CEL specification features.
 - **Test Coverage**: 300+ tests across 16+ test files including comprehensive CLI testing and upstream improvement detection
 
@@ -12,7 +12,7 @@ This document tracks the compliance of this Python CEL implementation with the [
 
 | **Feature**                                         | **Severity** | **Impact** | **Workaround Available** | **Upstream Priority** |
 |-----------------------------------------------------|--------------|------------|--------------------------|----------------------|
-| **OR operator behavior**                            | 🔴 **HIGH** | Returns original values instead of booleans | Use explicit boolean conversion | **CRITICAL** |
+| **OR operator behavior**                            | 🟢 **LOW** | ✅ FIXED v0.11.1 - now CEL-compliant (rejects mixed types) | Use boolean operands only | **RESOLVED** |
 | **String utility functions**                        | 🟡 **MEDIUM** | Limited string processing capabilities | Use Python context functions | **HIGH** |
 | **Type introspection (`type()`)**                   | 🟡 **MEDIUM** | No runtime type checking | Use Python type checking | **HIGH** |
 | **Mixed int/uint arithmetic**                       | 🟡 **MEDIUM** | Manual type conversion needed | Use explicit casting | **MEDIUM** |
@@ -33,41 +33,17 @@ This implementation correctly follows the CEL specification where maps can have 
 
 ### Arithmetic Operations
 
-| CEL Operation | Result Type | Example | Python Result |
-|---------------|-------------|---------|---------------|
-| `int + int` | `int` | `1 + 2` | `3` |
-| `uint + uint` | `int` | `1u + 2u` | `3` |
-| `double + double` | `float` | `1.5 + 2.5` | `4.0` |
-| `int + double` | `float` | `1 + 2.0` | `3.0` |
-| `double + int` | `float` | `1.5 + 2` | `3.5` |
-| `int / int` | `int` | `10 / 2` | `5` |
-| `uint % uint` | `int` | `10u % 3u` | `1` |
-| `string + string` | `str` | `"hello" + " world"` | `"hello world"` |
+| CEL Operation | Result Type | Example | Python Result | Notes |
+|---------------|-------------|---------|---------------|-------|
+| `int + int` | `int` | `1 + 2` | `3` | ✅ Works |
+| `uint + uint` | `int` | `1u + 2u` | `3` | ✅ Works |
+| `double + double` | `float` | `1.5 + 2.5` | `4.0` | ✅ Works |
+| `int + double` | `float` | `1 + 2.0` | `3.0` | ⚠️ **FAILS** - Use `double(1) + 2.0` |
+| `double + int` | `float` | `1.5 + 2` | `3.5` | ⚠️ **FAILS** - Use `1.5 + double(2)` |
+| `int / int` | `int` | `10 / 2` | `5` | ✅ Works |
+| `uint % uint` | `int` | `10u % 3u` | `1` | ✅ Works |
+| `string + string` | `str` | `"hello" + " world"` | `"hello world"` | ✅ Works |
 
-#### ✨ Enhanced Mixed-Type Arithmetic
-
-**Ergonomic Improvement**: This library automatically promotes integers to floats when an expression involves float literals or float variables in the context. This provides intuitive behavior for mixed-type arithmetic while preserving integer-only operations.
-
-**Examples of automatic promotion:**
-```cel
-2 * 3.14        // Automatically treated as 2.0 * 3.14 → 6.28
-age * 1.5       // If age=30, treated as 30.0 * 1.5 → 45.0  
-score + 0.5     // If score=85, treated as 85.0 + 0.5 → 85.5
-```
-
-**Integer operations remain intact:**
-```cel
-arr[2]          // List indexing still uses integers
-age / 10        // If age=30, stays as 30 / 10 → 3 (integer division)
-count + 1       // If count=5, stays as 5 + 1 → 6
-```
-
-**Technical Implementation**: The underlying Rust code (`preprocess_expression_for_mixed_arithmetic_always`) analyzes expressions and automatically promotes integers to floats when float context is detected, ensuring seamless mixed-type arithmetic without explicit casting.
-
-**Benefits:**
-- **Intuitive**: `2 * 3.14` works as expected without requiring `double(2) * 3.14`
-- **Safe**: Preserves integer semantics for operations that require them
-- **Compatible**: Maintains CEL specification compliance while improving ergonomics
 
 ### Logical Operations
 
@@ -110,8 +86,8 @@ count + 1       // If count=5, stays as 5 + 1 → 6
 - `<`, `>`, `<=`, `>=` - Numbers, strings (lexicographic)
 
 #### Logical Operators
-- `&&` (logical AND) - With short-circuit evaluation
-- `||` (logical OR) - With short-circuit evaluation
+- `&&` (logical AND) - With short-circuit evaluation ⚠️ **Requires boolean operands in v0.11.1+**
+- `||` (logical OR) - With short-circuit evaluation ⚠️ **Partially improved in v0.11.1 - some mixed-type coercion removed**
 - `!` (logical NOT) - Boolean negation
 
 #### Other Operators
@@ -157,7 +133,7 @@ count + 1       // If count=5, stays as 5 + 1 → 6
 - **reduce()**: `reduce([1,2,3], 0, sum + x)` - Reduction operations ❌ **NOT AVAILABLE**
 
 ### ✅ Python Integration
-- **Automatic type conversion**: Seamless Python ↔ CEL type mapping
+- **Type conversion**: Seamless Python ↔ CEL type mapping
 - **Context variables**: Access Python objects in expressions
 - **Custom functions**: Call Python functions from CEL expressions
 - **Error handling**: Proper exception propagation
@@ -168,41 +144,6 @@ count + 1       // If count=5, stays as 5 + 1 → 6
 ## 👩‍💻 For Developers Using This Library
 
 This section focuses on what you need to know to use CEL effectively in your applications.
-
-### ⚠️ Critical Behavioral Issues You Must Know
-
-!!! warning "Critical Safety Issue: OR Operator Behavior"
-    
-    **This implementation has a significant behavioral difference from the CEL specification that can impact safety and predictability.**
-    
-    #### OR Operator Returns Original Values (Not Booleans)
-    - **CEL Spec**: `42 || false` should return `true` (boolean)
-    - **Our Implementation**: Returns `42` (original integer value)
-    - **Impact**: **HIGH** - This can lead to unexpected behavior and logic errors
-    
-    **Examples of problematic behavior:**
-    ```python
-from cel import evaluate
-
-# CEL Spec: should return boolean true/false
-# Our implementation: returns original values
-result = evaluate("42 || false")  # → 42 (not True as expected)
-result = evaluate("0 || 'default'")  # → 'default' (not False as expected)
-
-# This can break conditional logic:
-try:
-    if evaluate("user.age || 0", {"user": {"age": 25}}):  # → 25 (truthy value)
-        # This condition may behave unexpectedly
-        pass
-except Exception:
-    # Handle undefined variable case
-    pass
-    ```
-    
-    **Mitigation strategies:**
-    1. **Explicit boolean conversion**: Use `!!` or explicit comparisons
-    2. **Avoid relying on return values** of `||` and `&&` operations
-    3. **Test thoroughly** when migrating from other CEL implementations
 
 ### 🔧 Safe Patterns & Workarounds
 
@@ -293,7 +234,7 @@ This section covers upstream work, detection strategies, and contribution opport
 ### ❌ Actually Missing CEL Specification Features
 
 #### 1. String Utility Functions (Upstream Priority: HIGH)
-- **Status**: Not implemented in cel v0.11.0
+- **Status**: Not implemented in cel v0.11.1
 - **Detection**: ✅ Comprehensive detection for all missing functions
 - **Missing functions**:
   - `lowerAscii()` - lowercase conversion
@@ -328,7 +269,7 @@ This section covers upstream work, detection strategies, and contribution opport
 - **Impact**: Medium - requires careful type management in expressions
 
 #### 3. Type Introspection Function (Upstream Priority: HIGH)
-- **Status**: Not implemented in cel v0.11.0, but foundation exists
+- **Status**: Not implemented in cel v0.11.1, but foundation exists
 - **Detection**: ✅ Full detection with expected behavior tests
 - **Missing function**: `type(value) -> string`
 - **CEL Spec**: Should return runtime type as string
@@ -346,7 +287,7 @@ This section covers upstream work, detection strategies, and contribution opport
 - **Recommendation**: Better type coercion in cel crate
 
 #### 5. Bytes Concatenation (Upstream Priority: LOW)
-- **Status**: Not implemented in cel v0.11.0
+- **Status**: Not implemented in cel v0.11.1
 - **CEL Spec**: `b'hello' + b'world'` should return `b'helloworld'`
 - **Our Implementation**: Throws "Unsupported binary operator" error
 - **Workaround**: `bytes(string(part1) + string(part2))`
