@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### 🐛 Fixed
+
+- **String literal corruption in Python evaluation mode**: Fixed issue where string literals containing numbers (e.g., `"epa1"`, `"test123"`) were incorrectly modified to include decimal points (e.g., `"epa1.0"`) when floats existed in the evaluation context, causing string comparisons like `var == "epa1"` to return `False` instead of `True`.
+- **Robust AST-based integer promotion**: Replaced fragile string-based integer-to-float promotion with robust AST-based approach that:
+  - Preserves string literals exactly as written
+  - Maintains proper array indexing (indices stay as integers)
+  - Handles complex expressions like comprehensions via graceful fallback
+  - Ensures consistent behavior across Python and Strict evaluation modes
+
 ## [0.5.1] - 2025-08-11
 
 ### ✨ Added
