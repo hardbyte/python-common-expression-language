@@ -208,125 +208,258 @@ fn expression_has_mixed_numeric_literals(expr: &str) -> bool {
     expr.contains('.') && expr.chars().any(|c| c.is_ascii_digit())
 }
 
-/// Find all integer literal positions in the expression
-fn find_integer_literals(expr: &str) -> Vec<(usize, usize)> {
-    let mut matches = Vec::new();
-    let chars: Vec<char> = expr.chars().collect();
-    let len = chars.len();
-    let mut i = 0;
 
-    while i < len {
-        if chars[i].is_ascii_digit()
-            || (chars[i] == '.' && i + 1 < len && chars[i + 1].is_ascii_digit())
-        {
-            let start = i;
-
-            // Handle numbers that start with decimal point (like .456789)
-            let starts_with_decimal = chars[i] == '.';
-            if starts_with_decimal {
-                i += 1; // Skip the initial '.'
-            }
-
-            // Skip all digits
-            while i < len && chars[i].is_ascii_digit() {
-                i += 1;
-            }
-
-            // Check if this is already a float (has decimal point) - but only if it didn't start with one
-            if !starts_with_decimal && i < len && chars[i] == '.' {
-                // This is already a float, skip the decimal part
-                i += 1;
-                while i < len && chars[i].is_ascii_digit() {
-                    i += 1;
-                }
-                continue;
-            }
-
-            // Check if this is scientific notation (e.g., 123e4)
-            if i < len && (chars[i] == 'e' || chars[i] == 'E') {
-                // Skip scientific notation
-                i += 1;
-                if i < len && (chars[i] == '+' || chars[i] == '-') {
-                    i += 1;
-                }
-                while i < len && chars[i].is_ascii_digit() {
-                    i += 1;
-                }
-                continue;
-            }
-
-            // Skip this if it starts with decimal point (already a float)
-            if starts_with_decimal {
-                continue;
-            }
-
-            // Check if this integer is in a context where it shouldn't be converted to float
-            // e.g., array indices [2], or other contexts where integers are expected
-            if should_skip_integer_conversion(expr, start, i) {
-                continue;
-            }
-
-            // This is an integer literal that should be converted
-            matches.push((start, i));
-        } else {
-            i += 1;
-        }
-    }
-
-    matches
-}
-
-/// Check if an integer at the given position should not be converted to float
-fn should_skip_integer_conversion(expr: &str, start: usize, _end: usize) -> bool {
-    let chars: Vec<char> = expr.chars().collect();
-
-    // Check if this integer is used as an array/list index [integer]
-    if start > 0 && chars[start - 1] == '[' {
-        return true;
-    }
-
-    // Check if this integer is immediately after a '[' with possible whitespace
-    let mut check_pos = start;
-    while check_pos > 0 {
-        check_pos -= 1;
-        if chars[check_pos] == '[' {
-            // Found opening bracket, this is likely an array index
-            return true;
-        } else if !chars[check_pos].is_whitespace() {
-            // Found non-whitespace that isn't '[', not an array index
-            break;
-        }
-    }
-
-    false
-}
-
-/// Always preprocesses expression to promote integer literals to floats (used when context has mixed types)
+/// AST-based preprocessing to promote integer literals to floats
 fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
-    // Convert all integer literals to floats
-    // This is a more comprehensive approach than operator-by-operator processing
-    let mut result = expr.to_string();
-
-    // Use regex-like approach to find integer literals and convert them to floats
-    // This approach modifies the string directly, which is more reliable
-    let mut offset = 0;
-    let original_result = result.clone();
-
-    for (match_start, match_end) in find_integer_literals(&original_result) {
-        let adjusted_start = match_start + offset;
-        let adjusted_end = match_end + offset;
-
-        // Extract the integer
-        let integer_str = &result[adjusted_start..adjusted_end];
-        let float_str = format!("{integer_str}.0");
-
-        // Replace in the result string
-        result.replace_range(adjusted_start..adjusted_end, &float_str);
-
-        // Update offset for subsequent replacements (we added ".0", so +2)
-        offset += 2;
+    // Try to parse the expression using CEL's parser
+    match Program::compile(expr) {
+        Ok(program) => {
+            // Walk the AST and promote integer literals to floats
+            let modified_expr = promote_integers_in_ast(program.expression());
+            
+            // If we hit unsupported constructs (like comprehensions), fall back
+            if modified_expr.contains("/* comprehension fallback */") || modified_expr.contains("/* unsupported expression */") {
+                warn!("AST promotion encountered unsupported constructs, falling back to original string");
+                return expr.to_string();
+            }
+            
+            modified_expr
+        }
+        Err(_) => {
+            // If parsing fails, fall back to the original string
+            // This should rarely happen since we've already validated the expression
+            warn!("Failed to parse expression for AST-based promotion: {}", expr);
+            expr.to_string()
+        }
     }
-    result
+}
+
+/// Recursively walks the AST and converts integer literals to floats while preserving the expression structure
+fn promote_integers_in_ast(expr: &::cel::parser::Expression) -> String {
+    ast_to_string_with_promotion(&expr.expr)
+}
+
+/// Converts an AST expression to string, promoting integer literals to floats
+fn ast_to_string_with_promotion(expr: &::cel::common::ast::Expr) -> String {
+    use ::cel::common::ast::Expr;
+    use ::cel::common::value::CelVal;
+    
+    match expr {
+        Expr::Literal(CelVal::Int(value)) => {
+            // Promote integer literals to floats
+            format!("{}.0", value)
+        }
+        Expr::Literal(CelVal::Double(value)) => {
+            // Ensure float formatting preserves decimal point for whole numbers
+            if value.fract() == 0.0 {
+                format!("{:.1}", value)  // Force one decimal place
+            } else {
+                format!("{}", value)
+            }
+        }
+        Expr::Literal(CelVal::String(value)) => {
+            // Preserve string literals exactly - this fixes the original issue
+            format!("\"{}\"", escape_string(value))
+        }
+        Expr::Literal(CelVal::Boolean(value)) => {
+            format!("{}", value)
+        }
+        Expr::Literal(CelVal::Null) => {
+            "null".to_string()
+        }
+        Expr::Literal(CelVal::Bytes(value)) => {
+            format!("b\"{}\"", escape_bytes(value))
+        }
+        Expr::Ident(name) => {
+            name.clone()
+        }
+        Expr::Call(call_expr) => {
+            // Handle operators specially 
+            match call_expr.func_name.as_str() {
+                // Binary operators
+                "_+_" => format!("({} + {})", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_-_" => format!("({} - {})", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_*_" => format!("({} * {})", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_/_" => format!("({} / {})", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_%_" => format!("({} % {})", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_==_" => format!("{} == {}", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_!=_" => format!("{} != {}", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_<_" => format!("{} < {}", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_<=_" => format!("{} <= {}", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_>_" => format!("{} > {}", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_>=_" => format!("{} >= {}", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_&&_" => format!("{} && {}", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                "_||_" => format!("{} || {}", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
+                // Unary operators
+                "!_" => format!("!{}", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr)
+                ),
+                "-_" => format!("-{}", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr)
+                ),
+                // Ternary operator
+                "_?_:_" => format!("{} ? {} : {}", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr),
+                    ast_to_string_with_promotion(&call_expr.args[2].expr)
+                ),
+                // Index operator - keep indices as integers!
+                "_[_]" => format!("{}[{}]", 
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_preserve_integers(&call_expr.args[1].expr)
+                ),
+                // Regular function calls
+                _ => {
+                    let mut result = String::new();
+                    
+                    // Handle target (for method calls like obj.method())
+                    if let Some(target) = &call_expr.target {
+                        result.push_str(&ast_to_string_with_promotion(&target.expr));
+                        result.push('.');
+                    }
+                    
+                    result.push_str(&call_expr.func_name);
+                    result.push('(');
+                    
+                    for (i, arg) in call_expr.args.iter().enumerate() {
+                        if i > 0 {
+                            result.push_str(", ");
+                        }
+                        result.push_str(&ast_to_string_with_promotion(&arg.expr));
+                    }
+                    
+                    result.push(')');
+                    result
+                }
+            }
+        }
+        Expr::Select(select_expr) => {
+            format!("{}.{}", 
+                ast_to_string_with_promotion(&select_expr.operand.expr),
+                select_expr.field
+            )
+        }
+        Expr::List(list_expr) => {
+            let mut result = String::from("[");
+            for (i, element) in list_expr.elements.iter().enumerate() {
+                if i > 0 {
+                    result.push_str(", ");
+                }
+                result.push_str(&ast_to_string_with_promotion(&element.expr));
+            }
+            result.push(']');
+            result
+        }
+        Expr::Map(map_expr) => {
+            let mut result = String::from("{");
+            for (i, entry) in map_expr.entries.iter().enumerate() {
+                if i > 0 {
+                    result.push_str(", ");
+                }
+                if let ::cel::common::ast::EntryExpr::MapEntry(map_entry) = &entry.expr {
+                    result.push_str(&ast_to_string_with_promotion(&map_entry.key.expr));
+                    result.push_str(": ");
+                    result.push_str(&ast_to_string_with_promotion(&map_entry.value.expr));
+                }
+            }
+            result.push('}');
+            result
+        }
+        Expr::Comprehension(_) => {
+            // Comprehensions are too complex to reliably reconstruct
+            // Fall back to original string for these cases
+            warn!("Comprehension expressions are not supported in AST promotion - falling back to original string");
+            return "/* comprehension fallback */".to_string();
+        }
+        // Handle other expression types as needed
+        _ => {
+            // For unsupported expression types, we should implement them
+            // For now, return a placeholder to avoid compilation errors
+            warn!("Unsupported AST node type in promotion: {:?}", expr);
+            "/* unsupported expression */".to_string()
+        }
+    }
+}
+
+/// Escape string content for proper representation
+fn escape_string(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '"' => "\\\"".to_string(),
+            '\\' => "\\\\".to_string(),
+            '\n' => "\\n".to_string(),
+            '\r' => "\\r".to_string(),
+            '\t' => "\\t".to_string(),
+            c => c.to_string(),
+        })
+        .collect()
+}
+
+/// Converts an AST expression to string WITHOUT promoting integers (for array indices)
+fn ast_to_string_preserve_integers(expr: &::cel::common::ast::Expr) -> String {
+    use ::cel::common::ast::Expr;
+    use ::cel::common::value::CelVal;
+    
+    match expr {
+        Expr::Literal(CelVal::Int(value)) => {
+            // Keep integers as integers for array indices
+            format!("{}", value)
+        }
+        // For other types, delegate to the regular promotion function
+        _ => ast_to_string_with_promotion(expr)
+    }
+}
+
+/// Escape bytes content for proper representation
+fn escape_bytes(bytes: &[u8]) -> String {
+    bytes.iter()
+        .map(|&b| {
+            if b.is_ascii_graphic() && b != b'"' && b != b'\\' {
+                (b as char).to_string()
+            } else {
+                format!("\\x{:02x}", b)
+            }
+        })
+        .collect()
 }
 
 /// We can't implement TryIntoValue for PyAny, so we implement for our wrapper RustyPyType
