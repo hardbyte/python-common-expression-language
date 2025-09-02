@@ -4,7 +4,8 @@ A safe, embeddable expression language for Python, powered by Rust, ideal for ac
 
 **Evaluate business rules, filters, and policies at microsecond speeds — in pure Python code.**
 
-The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, and safety. This Python package wraps the Rust implementation [cel](https://crates.io/crates/cel) v0.11.0, providing fast and safe CEL expression evaluation with seamless Python integration.
+The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, and safety. This Python package wraps the Rust implementation [cel](https://crates.io/crates/cel),
+providing fast and safe CEL expression evaluation with seamless Python integration.
 
 ## Quick Start Paths
 
@@ -56,11 +57,6 @@ The Common Expression Language (CEL) is a non-Turing complete language designed 
     # With context
     cel 'age >= 21' --context '{"age": 25}'  # → true
     
-    # Mixed arithmetic with modes
-    cel '1 + 2.5'                            # → Error (default: strict mode)
-    cel '1 + 2.5' --mode python              # → 3.5 (python-friendly mode)
-    cel '1 + 2.5' --mode strict              # → Error (strict CEL rules)
-    
     # Interactive REPL
     cel --interactive
     ```
@@ -98,7 +94,7 @@ The Common Expression Language (CEL) is a non-Turing complete language designed 
 ✅ **Safe by design** (Rust core)  
 ✅ **Ready for production**  
 ✅ **No GIL-blocking, safe concurrent evaluation**  
-✅ **Flexible type handling** (Python-friendly + strict modes)  
+✅ **Strict type safety** (CEL-compliant type system)  
 
 ## Why Python CEL?
 
@@ -121,7 +117,7 @@ Safe by Design: Built on a memory-safe Rust core. The non-Turing complete nature
 200+ tests, comprehensive CLI, type safety, and ~80% CEL compliance with transparent documentation.
 
 ### 🚀 **Future-Proof**
-Built on cel-rust v0.11.0 with modern architecture - upcoming features like type introspection, optional values, and enhanced string functions will work seamlessly.
+Built on cel-rust v0.11.1 with modern architecture - upcoming features like type introspection, optional values, and enhanced string functions will work seamlessly.
 
 ### 🔧 **Developer Friendly**
 Dual interfaces (Python API + CLI), rich error messages, extensive documentation, and full IDE support.

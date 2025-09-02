@@ -40,7 +40,7 @@ flowchart LR
 
 ### Dependencies
 
-- **[cel crate](https://crates.io/crates/cel)** v0.11.0 - The Rust CEL implementation we wrap
+- **[cel crate](https://crates.io/crates/cel)** - The Rust CEL implementation we wrap
 - **[PyO3](https://pyo3.rs/)** - Python-Rust bindings framework
 - **[maturin](https://www.maturin.rs/)** - Build system for Python extensions
 
@@ -152,7 +152,7 @@ def test_lower_ascii_not_implemented(self):
         cel.evaluate('"HELLO".lowerAscii()')
         # → RuntimeError: Undefined variable or function 'lowerAscii'
 
-@pytest.mark.xfail(reason="String utilities not implemented in cel v0.11.0", strict=False)
+@pytest.mark.xfail(reason="String utilities not implemented in cel v0.11.1", strict=False)
 def test_lower_ascii_expected_behavior(self):
     """This test will pass when upstream implements lowerAscii()."""
     result = cel.evaluate('"HELLO".lowerAscii()')

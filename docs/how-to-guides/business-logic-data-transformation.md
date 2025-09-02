@@ -73,7 +73,7 @@ class BusinessRulesEngine:
                 package.weight <= 1 ? 5.99 :
                 package.weight <= 5 ? 8.99 :
                 package.weight <= 20 ? 15.99 :
-                package.weight * 1.2
+                double(package.weight) * 1.2
             """,
             
             "shipping_distance_multiplier": """
@@ -268,10 +268,7 @@ class DataTransformationPipeline:
             # Calculate derived fields
             "calculate_metrics": {
                 "engagement_score": """
-                    (has(user.login_count) ? user.login_count * 2 : 0) + 
-                    (has(user.posts_count) ? user.posts_count * 5 : 0) + 
-                    (has(user.comments_count) ? user.comments_count * 1 : 0) +
-                    (has(user.premium) && user.premium ? 20 : 0)
+                    user.login_count + user.posts_count + user.comments_count
                 """,
                 "risk_level": """
                     has(user.failed_logins) ? (
@@ -364,9 +361,9 @@ source2_data = {
 result1 = pipeline.transform_user_data(source1_data)
 result2 = pipeline.transform_user_data(source2_data)
 # → result1: {"full_name": "John Doe", "email": "JOHN.DOE@EXAMPLE.COM", "age": 30, "score": 80.0, "status": "active", 
-#            "engagement_score": 245, "risk_level": "low", "subscription_tier": "platinum"}
+#            "engagement_score": 85, "risk_level": "low", "subscription_tier": "platinum"}
 # → result2: {"full_name": "Jane Smith", "email": "jane.smith@example.com", "age": 34, "score": 85, "status": "ACTIVE",
-#            "engagement_score": 120, "risk_level": "medium", "subscription_tier": "silver"}
+#            "engagement_score": 50, "risk_level": "medium", "subscription_tier": "silver"}
 
 # Verify transformed data from source 1
 assert "full_name" in result1
@@ -707,10 +704,10 @@ rules_config = {
     
     "fraud_score": {
         "expression": """
-            (transaction.amount > double(customer.avg_transaction) * 5.0 ? 0.3 : 0.0) +
-            (transaction.location != customer.usual_location ? 0.2 : 0.0) +
-            (transaction.time_hour < 6 || transaction.time_hour > 22 ? 0.1 : 0.0) +
-            (customer.failed_attempts_today > 3 ? 0.4 : 0.0)
+            double(transaction.amount > double(customer.avg_transaction) * 5.0 ? 0.3 : 0.0) +
+            double(transaction.location != customer.usual_location ? 0.2 : 0.0) +
+            double(transaction.time_hour < 6 || transaction.time_hour > 22 ? 0.1 : 0.0) +
+            double(customer.failed_attempts_today > 3 ? 0.4 : 0.0)
         """,
         "description": "Calculate fraud risk score for transactions",
         "version": "1.5",

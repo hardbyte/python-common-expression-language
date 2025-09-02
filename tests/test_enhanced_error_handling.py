@@ -44,7 +44,7 @@ class TestEnhancedErrorHandling:
     def test_unsupported_multiplication_type_error(self):
         """Test multiplication type errors provide conversion suggestions."""
         with pytest.raises(TypeError) as exc_info:
-            cel.evaluate("[1,2,3].map(x, x * 2)", {})
+            cel.evaluate("[1,2,3].map(x, x * 2.0)", {})
 
         error_msg = str(exc_info.value)
         assert "Unsupported multiplication operation" in error_msg

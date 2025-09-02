@@ -5,13 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+
+## [0.5.2] - 2025-09-12
+
+### 🚨 Breaking Changes
+
+- **Python evaluation mode removed**: The library now operates exclusively in strict CEL mode
+  - **Removed**: `EvaluationMode.PYTHON` and all automatic integer-to-float promotion
+  - **Removed**: `mode` parameter from `evaluate()` function
+  - **Removed**: `--mode` CLI option
+  - **Behavior change**: Mixed arithmetic like `1 + 2.5` now raises `TypeError` instead of automatically promoting to `3.5`
+  - **Migration**: Use explicit type conversion (e.g., `double(1) + 2.5`) for mixed arithmetic
+  - **Rationale**: Eliminates complex AST preprocessing that was breaking `has()` short-circuiting and other CEL functions
+
+### 🐛 Fixed
+
+- **CEL function short-circuiting**: Fixed issue where `has()` and other CEL functions failed due to AST preprocessing interference
+- **String literal corruption**: Eliminated string literal modification that occurred during integer promotion preprocessing
+
+### Updated
+
+- Updated cel crate from v0.11.0 to v0.11.1
+- Updated documentation to reflect strict CEL mode operation
+- Updated tests to work with strict CEL mode only
+- Removed complex preprocessing logic
+
 ## [0.5.1] - 2025-08-11
 
 ### ✨ Added
 
-- **EvaluationMode enum**: Control type handling behavior in CEL expressions
-  - `EvaluationMode.PYTHON` (default for Python API): Python-friendly type promotions
-  - `EvaluationMode.STRICT` (default for CLI): Strict CEL type rules with no coercion
+- **EvaluationMode enum**: Control type handling behavior in CEL expressions *(deprecated and removed in later version)*
+  - `EvaluationMode.PYTHON` (default for Python API): Python-friendly type promotions *(removed)*
+  - `EvaluationMode.STRICT` (default for CLI): Strict CEL type rules with no coercion *(now the only mode)*
 - **Type checking support**: Added complete type stub files (`.pyi`) for PyO3 extension
 
 
@@ -39,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.1] - 2025-08-02
 
 ### ✨ Added
-- **Automatic type coercion** for mixed int/float arithmetic:
+- **Automatic type coercion** for mixed int/float arithmetic *(deprecated and removed in later version)*:
   - Float literals automatically promote integer literals to floats.
   - Context variables containing floats trigger int → float promotion.
   - Preserves array indexing with integers (e.g., `list[2]` stays integer).

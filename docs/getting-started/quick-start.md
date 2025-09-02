@@ -60,8 +60,9 @@ user = {
     }
 }
 
-# String concatenation with conditionals
-result = evaluate('user.name + " is " + (user.age >= 18 ? "adult" : "minor")', {"user": user})
+# String concatenation with conditionals  
+adult_status = evaluate('user.age >= 18 ? "adult" : "minor"', {"user": user})
+result = evaluate('user.name + " is " + status', {"user": user, "status": adult_status})
 assert result == "Alice is adult"  # → "Alice is adult" (nested objects with conditional logic)
 
 # Working with lists
@@ -72,9 +73,15 @@ assert result == True  # → True (membership testing in arrays)
 result = evaluate('user.profile.verified && user.profile.email.endsWith("@example.com")', {"user": user})
 assert result == True  # → True (deep object navigation with string methods)
 
-# Type conversions
+# Type conversions - CEL enforces type safety
 result = evaluate('user.name + " is " + string(user.age) + " years old"', {"user": user})
-assert result == "Alice is 30 years old"  # → "Alice is 30 years old" (automatic type conversion)
+assert result == "Alice is 30 years old"  # → "Alice is 30 years old" (explicit type conversion with string())
+
+# ❌ This would fail - no automatic type conversion between incompatible types:
+# evaluate('user.name + " is " + user.age')  # TypeError: can't add string + int
+# 
+# ✅ Always use explicit conversion for mixed types:
+# string(), int(), float(), double() functions
 
 # Safe navigation with has()
 result = evaluate('has(user.profile.phone) ? user.profile.phone : "No phone"', {"user": user})
@@ -243,7 +250,7 @@ result = evaluate("42")
 assert result == 42  # → 42 (integers work naturally)
 assert isinstance(result, int)
 
-result = evaluate("3.14 * 2")
+result = evaluate("3.14 * double(2)")
 assert result == 6.28  # → 6.28 (floating point arithmetic)
 assert isinstance(result, float)
 
@@ -314,69 +321,92 @@ CEL expressions can fail for various reasons. Always handle errors appropriately
 ```python
 from cel import evaluate
 
-def safe_evaluate(expression, context=None, default=None):
-    """Safely evaluate a CEL expression with error handling."""
+# Most idiomatic: Let exceptions bubble up naturally
+def evaluate_expression(expression: str, context: dict = None):
+    """Evaluate expression with proper exception handling."""
+    return evaluate(expression, context or {})
+
+# For cases where you need fallback values  
+def evaluate_with_default(expression: str, context: dict = None, default = None):
+    """Evaluate with fallback value on errors."""
     try:
         return evaluate(expression, context or {})
-    except ValueError as e:
-        print(f"Syntax error: {e}")
-        return default
-    except TypeError as e:
-        print(f"Type error: {e}")
-        return default
-    except RuntimeError as e:
-        print(f"Runtime error: {e}")
-        return default
-    except Exception as e:
-        print(f"Unexpected error: {e}")
+    except (ValueError, TypeError, RuntimeError):
         return default
 
-# Different types of errors
+# Result-like pattern for detailed error information
+def safe_evaluate(expression: str, context: dict = None):
+    """
+    Evaluate with detailed success/error information.
+    
+    Returns: (success: bool, result: Any, error_message: str)
+    """
+    try:
+        result = evaluate(expression, context or {})
+        return (True, result, "")
+    except ValueError as e:
+        return (False, None, f"Syntax error: {e}")
+    except TypeError as e:
+        return (False, None, f"Type error: {e}")
+    except RuntimeError as e:
+        return (False, None, f"Runtime error: {e}")
+
+# Examples demonstrating idiomatic error handling
 context = {"age": 25, "name": "Alice"}
 
-# Runtime error - undefined variable
-result = safe_evaluate("undefined_variable + 1", context, default=0)
-assert result == 0  # → 0 (graceful fallback for missing variables)
+# Most idiomatic: let exceptions propagate to caller
+try:
+    result = evaluate_expression('name + " is " + string(age)', context)
+    assert result == "Alice is 25"  # → "Alice is 25"
+except (ValueError, TypeError, RuntimeError) as e:
+    print(f"Expression failed: {e}")
 
-# Type error - incompatible types
-result = safe_evaluate('"hello" + 42', context, default="error")
-assert result == "error"  # → "error" (type mismatch handled safely)
+# Fallback pattern for non-critical features
+display_name = evaluate_with_default(
+    'user.display_name', 
+    {"user": {"first_name": "John"}}, 
+    default="Unknown User"
+)
+assert display_name == "Unknown User"  # → "Unknown User" (missing field)
 
-# Syntax error - invalid CEL
-result = safe_evaluate("1 + + 2", context, default=None)
-assert result == None  # → None (malformed expression caught)
+# Result pattern when you need detailed error info
+success, result, error = safe_evaluate("undefined_variable + 1", context)
+assert success == False
+assert result is None
+assert "Runtime error" in error
 
-# Successful evaluation
-result = safe_evaluate('name + " is " + string(age)', context)
-assert result == "Alice is 25"  # → "Alice is 25" (valid expression succeeds)
+success, result, error = safe_evaluate("age * 2", context)  
+assert success == True
+assert result == 50
+assert error == ""
 
-# Safe navigation patterns
-result = safe_evaluate('has("user.email") ? user.email : "no email"', {"user": {"name": "Bob"}}, "unknown")
-assert result == "unknown"  # → "unknown" (has() syntax error triggers fallback)
+# Practical example: validation utility
+def validate_user_rules(rules: list[str], user_context: dict) -> dict[str, bool]:
+    """Validate multiple business rules for a user."""
+    results = {}
+    for rule in rules:
+        try:
+            results[rule] = bool(evaluate_expression(rule, user_context))
+        except (ValueError, TypeError, RuntimeError):
+            results[rule] = False  # Invalid rules are considered failed
+    return results
 
-# Error recovery with fallbacks
-def evaluate_with_fallback(expressions, context):
-    """Try multiple expressions until one succeeds."""
-    for expr in expressions:
-        result = safe_evaluate(expr, context)
-        if result is not None:
-            return result
-    return "No valid result"
-
-# Try different ways to get a user display name
-user_context = {"user": {"first_name": "John", "last_name": "Doe"}}
-fallback_expressions = [
-    'user.display_name',  # Might not exist
-    'user.full_name',     # Might not exist
-    'user.first_name + " " + user.last_name',  # Should work
-    'user.name',          # Fallback
-    '"Unknown User"'      # Final fallback
+# Test business rules validation
+user = {"age": 25, "role": "member", "verified": True}
+business_rules = [
+    "age >= 18",                    # Valid rule
+    "role == 'admin'",              # Valid rule (false result)
+    "verified && age > 21",         # Valid rule  
+    "invalid_syntax + +",           # Invalid syntax
 ]
 
-display_name = evaluate_with_fallback(fallback_expressions, user_context)
-assert display_name == "John Doe"  # → "John Doe" (fallback strategy provides reliable results)
+rule_results = validate_user_rules(business_rules, user)
+assert rule_results["age >= 18"] == True
+assert rule_results["role == 'admin'"] == False
+assert rule_results["verified && age > 21"] == True
+assert rule_results["invalid_syntax + +"] == False
 
-print("✓ Error handling working correctly")
+print("✓ Idiomatic error handling working correctly")
 ```
 
 ## What's Next?

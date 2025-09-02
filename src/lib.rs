@@ -16,25 +16,6 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum EvaluationMode {
-    PythonCompatible,
-    Strict,
-}
-
-impl<'py> FromPyObject<'py> for EvaluationMode {
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
-        let s: String = ob.extract()?;
-        match s.as_str() {
-            "python" => Ok(EvaluationMode::PythonCompatible),
-            "strict" => Ok(EvaluationMode::Strict),
-            _ => Err(PyTypeError::new_err(format!(
-                "Invalid EvaluationMode: expected 'python' or 'strict', got '{s}'"
-            ))),
-        }
-    }
-}
-
 #[derive(Debug)]
 struct RustyCelType(Value);
 
@@ -181,154 +162,6 @@ fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
     }
 }
 
-/// Analyzes context for mixed int/float usage and returns whether to promote integers to floats
-fn should_promote_integers_to_floats(variables: &HashMap<String, Value>) -> bool {
-    // If we have floats in context, we should promote integers to floats for compatibility
-    // This handles cases where expression has integer literals but context has floats
-    for value in variables.values() {
-        if matches!(value, Value::Float(_)) {
-            return true;
-        }
-    }
-    false
-}
-
-/// Promotes integers to floats in the context for better mixed arithmetic compatibility
-fn promote_integers_in_context(variables: &mut HashMap<String, Value>) {
-    for value in variables.values_mut() {
-        if let Value::Int(int_val) = value {
-            *value = Value::Float(*int_val as f64);
-        }
-    }
-}
-
-/// Analyzes expression for mixed int/float literals (simple heuristic)
-fn expression_has_mixed_numeric_literals(expr: &str) -> bool {
-    // If expression contains float literals (decimal point), assume mixed arithmetic is likely
-    expr.contains('.') && expr.chars().any(|c| c.is_ascii_digit())
-}
-
-/// Find all integer literal positions in the expression
-fn find_integer_literals(expr: &str) -> Vec<(usize, usize)> {
-    let mut matches = Vec::new();
-    let chars: Vec<char> = expr.chars().collect();
-    let len = chars.len();
-    let mut i = 0;
-
-    while i < len {
-        if chars[i].is_ascii_digit()
-            || (chars[i] == '.' && i + 1 < len && chars[i + 1].is_ascii_digit())
-        {
-            let start = i;
-
-            // Handle numbers that start with decimal point (like .456789)
-            let starts_with_decimal = chars[i] == '.';
-            if starts_with_decimal {
-                i += 1; // Skip the initial '.'
-            }
-
-            // Skip all digits
-            while i < len && chars[i].is_ascii_digit() {
-                i += 1;
-            }
-
-            // Check if this is already a float (has decimal point) - but only if it didn't start with one
-            if !starts_with_decimal && i < len && chars[i] == '.' {
-                // This is already a float, skip the decimal part
-                i += 1;
-                while i < len && chars[i].is_ascii_digit() {
-                    i += 1;
-                }
-                continue;
-            }
-
-            // Check if this is scientific notation (e.g., 123e4)
-            if i < len && (chars[i] == 'e' || chars[i] == 'E') {
-                // Skip scientific notation
-                i += 1;
-                if i < len && (chars[i] == '+' || chars[i] == '-') {
-                    i += 1;
-                }
-                while i < len && chars[i].is_ascii_digit() {
-                    i += 1;
-                }
-                continue;
-            }
-
-            // Skip this if it starts with decimal point (already a float)
-            if starts_with_decimal {
-                continue;
-            }
-
-            // Check if this integer is in a context where it shouldn't be converted to float
-            // e.g., array indices [2], or other contexts where integers are expected
-            if should_skip_integer_conversion(expr, start, i) {
-                continue;
-            }
-
-            // This is an integer literal that should be converted
-            matches.push((start, i));
-        } else {
-            i += 1;
-        }
-    }
-
-    matches
-}
-
-/// Check if an integer at the given position should not be converted to float
-fn should_skip_integer_conversion(expr: &str, start: usize, _end: usize) -> bool {
-    let chars: Vec<char> = expr.chars().collect();
-
-    // Check if this integer is used as an array/list index [integer]
-    if start > 0 && chars[start - 1] == '[' {
-        return true;
-    }
-
-    // Check if this integer is immediately after a '[' with possible whitespace
-    let mut check_pos = start;
-    while check_pos > 0 {
-        check_pos -= 1;
-        if chars[check_pos] == '[' {
-            // Found opening bracket, this is likely an array index
-            return true;
-        } else if !chars[check_pos].is_whitespace() {
-            // Found non-whitespace that isn't '[', not an array index
-            break;
-        }
-    }
-
-    false
-}
-
-/// Always preprocesses expression to promote integer literals to floats (used when context has mixed types)
-fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
-    // Convert all integer literals to floats
-    // This is a more comprehensive approach than operator-by-operator processing
-    let mut result = expr.to_string();
-
-    // Use regex-like approach to find integer literals and convert them to floats
-    // This approach modifies the string directly, which is more reliable
-    let mut offset = 0;
-    let original_result = result.clone();
-
-    for (match_start, match_end) in find_integer_literals(&original_result) {
-        let adjusted_start = match_start + offset;
-        let adjusted_end = match_end + offset;
-
-        // Extract the integer
-        let integer_str = &result[adjusted_start..adjusted_end];
-        let float_str = format!("{integer_str}.0");
-
-        // Replace in the result string
-        result.replace_range(adjusted_start..adjusted_end, &float_str);
-
-        // Update offset for subsequent replacements (we added ".0", so +2)
-        offset += 2;
-    }
-    result
-}
-
 /// We can't implement TryIntoValue for PyAny, so we implement for our wrapper RustyPyType
 impl TryIntoValue for RustyPyType<'_> {
     type Error = CelError;
@@ -342,6 +175,8 @@ impl TryIntoValue for RustyPyType<'_> {
                     Ok(Value::Bool(value))
                 } else if let Ok(value) = pyobject.extract::<i64>() {
                     Ok(Value::Int(value))
+                } else if let Ok(value) = pyobject.extract::<u64>() {
+                    Ok(Value::UInt(value))
                 } else if let Ok(value) = pyobject.extract::<f64>() {
                     Ok(Value::Float(value))
                 } else if let Ok(value) = pyobject.extract::<DateTime<chrono::FixedOffset>>() {
@@ -443,12 +278,6 @@ impl TryIntoValue for RustyPyType<'_> {
 ///         - A `cel.Context` object (recommended for reusable contexts)
 ///         - A standard Python dictionary containing variables and functions
 ///         - None (for expressions that don't require external variables)
-///     mode (Union[str, cel.EvaluationMode]): The evaluation mode to use.
-///         Defaults to "python". Can be:
-///         - "python" or EvaluationMode.PYTHON: Enables Python-friendly type
-///           promotions (e.g., int -> float) for better mixed arithmetic compatibility
-///         - "strict" or EvaluationMode.STRICT: Enforces strict CEL type rules
-///           with no automatic coercion to match WebAssembly behavior
 ///
 /// Returns:
 ///     Union[bool, int, float, str, list, dict, datetime.datetime, bytes, None]:
@@ -533,7 +362,7 @@ impl TryIntoValue for RustyPyType<'_> {
 ///
 ///     Using Context object for reusable evaluations:
 ///
-///     >>> from cel import Context, EvaluationMode
+///     >>> from cel import Context
 ///     >>> context = Context(
 ///     ...     variables={"base_url": "https://api.example.com"},
 ///     ...     functions={"len": len}
@@ -543,33 +372,27 @@ impl TryIntoValue for RustyPyType<'_> {
 ///     >>> evaluate("len('hello world')", context)
 ///     11
 ///
-///     Using different evaluation modes:
+///     Type safety and error handling:
 ///
-///     >>> # Python mode (default) - allows mixed arithmetic
-///     >>> evaluate("1 + 2.5")
+///     >>> # Strict CEL mode enforces type compatibility
+///     >>> evaluate("1.0 + 2.5")  # Same type - works
 ///     3.5
-///     >>> evaluate("1 + 2.5", mode=EvaluationMode.PYTHON)
-///     3.5
-///     >>> # Strict mode - enforces type matching
 ///     >>> try:
-///     ...     evaluate("1 + 2.5", mode=EvaluationMode.STRICT)
+///     ...     evaluate("1 + 2.5")  # Mixed types - fails
 ///     ... except TypeError as e:
-///     ...     print("Strict mode error:", e)
-///     Strict mode error: Unsupported addition operation: Int + Double...
+///     ...     print("Type error:", e)
+///     Type error: Unsupported addition operation: Int + Double...
+///
+///     >>> # Use explicit conversion for mixed arithmetic
+///     >>> evaluate("double(1) + 2.5")
+///     3.5
 ///
 /// See Also:
 ///     - cel.Context: For managing reusable evaluation contexts
 ///     - CEL Language Guide: For comprehensive language documentation
 ///     - Python API Reference: For detailed API documentation
-#[pyfunction(signature = (src, evaluation_context=None, mode=None))]
-fn evaluate(
-    src: String,
-    evaluation_context: Option<&Bound<'_, PyAny>>,
-    mode: Option<EvaluationMode>,
-) -> PyResult<RustyCelType> {
-    // Use PythonCompatible as default if mode is not provided
-    let mode = mode.unwrap_or(EvaluationMode::PythonCompatible);
-
+#[pyfunction(signature = (src, evaluation_context=None))]
+fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<RustyCelType> {
     let mut environment = CelContext::default();
     let mut ctx = context::Context::new(None, None)?;
     let mut variables_for_env = HashMap::new();
@@ -596,32 +419,8 @@ fn evaluate(
         variables_for_env = ctx.variables.clone();
     }
 
-    // Apply type promotion logic based on evaluation mode (consolidated)
-    let processed_src = match mode {
-        EvaluationMode::PythonCompatible => {
-            // Check if we should promote integers to floats for better compatibility
-            let should_promote = should_promote_integers_to_floats(&variables_for_env)
-                || expression_has_mixed_numeric_literals(&src);
-
-            if should_promote {
-                // Promote integers in context if we have one
-                if !variables_for_env.is_empty() {
-                    promote_integers_in_context(&mut variables_for_env);
-                }
-                // Always preprocess the expression when promoting types
-                preprocess_expression_for_mixed_arithmetic_always(&src)
-            } else if expression_has_mixed_numeric_literals(&src) {
-                // Preprocess expression even without context if it has mixed literals
-                preprocess_expression_for_mixed_arithmetic_always(&src)
-            } else {
-                src.clone()
-            }
-        }
-        EvaluationMode::Strict => {
-            // Do nothing - preserve strict type behavior with no promotions or rewriting
-            src.clone()
-        }
-    };
+    // Strict mode only - preserve original expression without any preprocessing
+    let processed_src = src.clone();
 
     // Use panic::catch_unwind to handle parser panics gracefully
     let program = panic::catch_unwind(|| Program::compile(&processed_src))
