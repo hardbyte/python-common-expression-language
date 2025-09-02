@@ -342,6 +342,12 @@ fn ast_to_string_with_promotion(expr: &::cel::common::ast::Expr) -> String {
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
+                // Special operators that need custom handling
+                "@in" => format!(
+                    "{} in {}",
+                    ast_to_string_with_promotion(&call_expr.args[0].expr),
+                    ast_to_string_with_promotion(&call_expr.args[1].expr)
+                ),
                 // Unary operators
                 "!_" => format!("!{}", ast_to_string_with_promotion(&call_expr.args[0].expr)),
                 "-_" => format!("-{}", ast_to_string_with_promotion(&call_expr.args[0].expr)),
