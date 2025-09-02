@@ -459,7 +459,7 @@ fn ast_to_string_with_selective_promotion(
             // Comprehensions are too complex to reliably reconstruct
             // Fall back to original string for these cases
             warn!("Comprehension expressions are not supported in AST promotion - falling back to original string");
-            return "/* comprehension fallback */".to_string();
+            "/* comprehension fallback */".to_string()
         }
         // Handle other expression types as needed
         _ => {
