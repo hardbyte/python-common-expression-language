@@ -208,7 +208,6 @@ fn expression_has_mixed_numeric_literals(expr: &str) -> bool {
     expr.contains('.') && expr.chars().any(|c| c.is_ascii_digit())
 }
 
-
 /// AST-based preprocessing to promote integer literals to floats
 fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
     // Try to parse the expression using CEL's parser
@@ -216,19 +215,24 @@ fn preprocess_expression_for_mixed_arithmetic_always(expr: &str) -> String {
         Ok(program) => {
             // Walk the AST and promote integer literals to floats
             let modified_expr = promote_integers_in_ast(program.expression());
-            
+
             // If we hit unsupported constructs (like comprehensions), fall back
-            if modified_expr.contains("/* comprehension fallback */") || modified_expr.contains("/* unsupported expression */") {
+            if modified_expr.contains("/* comprehension fallback */")
+                || modified_expr.contains("/* unsupported expression */")
+            {
                 warn!("AST promotion encountered unsupported constructs, falling back to original string");
                 return expr.to_string();
             }
-            
+
             modified_expr
         }
         Err(_) => {
             // If parsing fails, fall back to the original string
             // This should rarely happen since we've already validated the expression
-            warn!("Failed to parse expression for AST-based promotion: {}", expr);
+            warn!(
+                "Failed to parse expression for AST-based promotion: {}",
+                expr
+            );
             expr.to_string()
         }
     }
@@ -243,7 +247,7 @@ fn promote_integers_in_ast(expr: &::cel::parser::Expression) -> String {
 fn ast_to_string_with_promotion(expr: &::cel::common::ast::Expr) -> String {
     use ::cel::common::ast::Expr;
     use ::cel::common::value::CelVal;
-    
+
     match expr {
         Expr::Literal(CelVal::Int(value)) => {
             // Promote integer literals to floats
@@ -252,7 +256,7 @@ fn ast_to_string_with_promotion(expr: &::cel::common::ast::Expr) -> String {
         Expr::Literal(CelVal::Double(value)) => {
             // Ensure float formatting preserves decimal point for whole numbers
             if value.fract() == 0.0 {
-                format!("{:.1}", value)  // Force one decimal place
+                format!("{:.1}", value) // Force one decimal place
             } else {
                 format!("{}", value)
             }
@@ -264,116 +268,124 @@ fn ast_to_string_with_promotion(expr: &::cel::common::ast::Expr) -> String {
         Expr::Literal(CelVal::Boolean(value)) => {
             format!("{}", value)
         }
-        Expr::Literal(CelVal::Null) => {
-            "null".to_string()
-        }
+        Expr::Literal(CelVal::Null) => "null".to_string(),
         Expr::Literal(CelVal::Bytes(value)) => {
             format!("b\"{}\"", escape_bytes(value))
         }
-        Expr::Ident(name) => {
-            name.clone()
-        }
+        Expr::Ident(name) => name.clone(),
         Expr::Call(call_expr) => {
-            // Handle operators specially 
+            // Handle operators specially
             match call_expr.func_name.as_str() {
                 // Binary operators
-                "_+_" => format!("({} + {})", 
+                "_+_" => format!(
+                    "({} + {})",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_-_" => format!("({} - {})", 
+                "_-_" => format!(
+                    "({} - {})",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_*_" => format!("({} * {})", 
+                "_*_" => format!(
+                    "({} * {})",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_/_" => format!("({} / {})", 
+                "_/_" => format!(
+                    "({} / {})",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_%_" => format!("({} % {})", 
+                "_%_" => format!(
+                    "({} % {})",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_==_" => format!("{} == {}", 
+                "_==_" => format!(
+                    "{} == {}",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_!=_" => format!("{} != {}", 
+                "_!=_" => format!(
+                    "{} != {}",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_<_" => format!("{} < {}", 
+                "_<_" => format!(
+                    "{} < {}",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_<=_" => format!("{} <= {}", 
+                "_<=_" => format!(
+                    "{} <= {}",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_>_" => format!("{} > {}", 
+                "_>_" => format!(
+                    "{} > {}",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_>=_" => format!("{} >= {}", 
+                "_>=_" => format!(
+                    "{} >= {}",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_&&_" => format!("{} && {}", 
+                "_&&_" => format!(
+                    "{} && {}",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
-                "_||_" => format!("{} || {}", 
+                "_||_" => format!(
+                    "{} || {}",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr)
                 ),
                 // Unary operators
-                "!_" => format!("!{}", 
-                    ast_to_string_with_promotion(&call_expr.args[0].expr)
-                ),
-                "-_" => format!("-{}", 
-                    ast_to_string_with_promotion(&call_expr.args[0].expr)
-                ),
+                "!_" => format!("!{}", ast_to_string_with_promotion(&call_expr.args[0].expr)),
+                "-_" => format!("-{}", ast_to_string_with_promotion(&call_expr.args[0].expr)),
                 // Ternary operator
-                "_?_:_" => format!("{} ? {} : {}", 
+                "_?_:_" => format!(
+                    "{} ? {} : {}",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_with_promotion(&call_expr.args[1].expr),
                     ast_to_string_with_promotion(&call_expr.args[2].expr)
                 ),
                 // Index operator - keep indices as integers!
-                "_[_]" => format!("{}[{}]", 
+                "_[_]" => format!(
+                    "{}[{}]",
                     ast_to_string_with_promotion(&call_expr.args[0].expr),
                     ast_to_string_preserve_integers(&call_expr.args[1].expr)
                 ),
                 // Regular function calls
                 _ => {
                     let mut result = String::new();
-                    
+
                     // Handle target (for method calls like obj.method())
                     if let Some(target) = &call_expr.target {
                         result.push_str(&ast_to_string_with_promotion(&target.expr));
                         result.push('.');
                     }
-                    
+
                     result.push_str(&call_expr.func_name);
                     result.push('(');
-                    
+
                     for (i, arg) in call_expr.args.iter().enumerate() {
                         if i > 0 {
                             result.push_str(", ");
                         }
                         result.push_str(&ast_to_string_with_promotion(&arg.expr));
                     }
-                    
+
                     result.push(')');
                     result
                 }
             }
         }
         Expr::Select(select_expr) => {
-            format!("{}.{}", 
+            format!(
+                "{}.{}",
                 ast_to_string_with_promotion(&select_expr.operand.expr),
                 select_expr.field
             )
@@ -438,20 +450,21 @@ fn escape_string(s: &str) -> String {
 fn ast_to_string_preserve_integers(expr: &::cel::common::ast::Expr) -> String {
     use ::cel::common::ast::Expr;
     use ::cel::common::value::CelVal;
-    
+
     match expr {
         Expr::Literal(CelVal::Int(value)) => {
             // Keep integers as integers for array indices
             format!("{}", value)
         }
         // For other types, delegate to the regular promotion function
-        _ => ast_to_string_with_promotion(expr)
+        _ => ast_to_string_with_promotion(expr),
     }
 }
 
 /// Escape bytes content for proper representation
 fn escape_bytes(bytes: &[u8]) -> String {
-    bytes.iter()
+    bytes
+        .iter()
         .map(|&b| {
             if b.is_ascii_graphic() && b != b'"' && b != b'\\' {
                 (b as char).to_string()
