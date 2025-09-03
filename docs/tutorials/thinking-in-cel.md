@@ -112,7 +112,7 @@ for user_data, expected in test_scenarios:
 from cel import evaluate
 
 # Business pricing with multiple factors
-pricing_rule = "base_price * (1 + tax_rate) * (premium_customer ? 0.9 : 1.0)"
+pricing_rule = "base_price * (1 + tax_rate) * double(premium_customer ? 0.9 : 1.0)"
 result = evaluate(pricing_rule, {
     "base_price": 100.0, "tax_rate": 0.08, "premium_customer": True
 })
@@ -424,7 +424,7 @@ Think of CEL as a very smart calculator that can work with complex data structur
 from cel import evaluate
 
 # Like a calculator, but for complex logic
-expression = "price * quantity * (1 + tax_rate) * (customer.vip ? 0.9 : 1.0)"
+expression = "price * quantity * (1 + tax_rate) * double(customer.vip ? 0.9 : 1.0)"
 context = {
     "price": 29.99,
     "quantity": 2, 

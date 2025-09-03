@@ -60,8 +60,9 @@ user = {
     }
 }
 
-# String concatenation with conditionals
-result = evaluate('user.name + " is " + (user.age >= 18 ? "adult" : "minor")', {"user": user})
+# String concatenation with conditionals  
+adult_status = evaluate('user.age >= 18 ? "adult" : "minor"', {"user": user})
+result = evaluate('user.name + " is " + status', {"user": user, "status": adult_status})
 assert result == "Alice is adult"  # → "Alice is adult" (nested objects with conditional logic)
 
 # Working with lists
