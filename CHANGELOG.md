@@ -7,22 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2025-09-04
+
+### 🚨 Breaking Changes
+
+- **Python evaluation mode removed**: The library now operates exclusively in strict CEL mode
+  - **Removed**: `EvaluationMode.PYTHON` and all automatic integer-to-float promotion
+  - **Removed**: `mode` parameter from `evaluate()` function
+  - **Removed**: `--mode` CLI option
+  - **Behavior change**: Mixed arithmetic like `1 + 2.5` now raises `TypeError` instead of automatically promoting to `3.5`
+  - **Migration**: Use explicit type conversion (e.g., `double(1) + 2.5`) for mixed arithmetic
+  - **Rationale**: Eliminates complex AST preprocessing that was breaking `has()` short-circuiting and other CEL functions
+
 ### 🐛 Fixed
 
-- **String literal corruption in Python evaluation mode**: Fixed issue where string literals containing numbers (e.g., `"epa1"`, `"test123"`) were incorrectly modified to include decimal points (e.g., `"epa1.0"`) when floats existed in the evaluation context, causing string comparisons like `var == "epa1"` to return `False` instead of `True`.
-- **Robust AST-based integer promotion**: Replaced fragile string-based integer-to-float promotion with robust AST-based approach that:
-  - Preserves string literals exactly as written
-  - Maintains proper array indexing (indices stay as integers)
-  - Handles complex expressions like comprehensions via graceful fallback
-  - Ensures consistent behavior across Python and Strict evaluation modes
+- **CEL function short-circuiting**: Fixed issue where `has()` and other CEL functions failed due to AST preprocessing interference
+- **String literal corruption**: Eliminated string literal modification that occurred during integer promotion preprocessing
+
+### 📚 Documentation
+
+- **Complete documentation overhaul**: Updated all documentation to reflect strict CEL mode operation
+  - Removed all references to Python evaluation mode
+  - Updated all code examples to use explicit type conversion for mixed arithmetic
+  - Updated CLI reference to remove `--mode` option
+  - All documentation tests now pass with strict CEL mode
+
+### 🧪 Testing
+
+- **Comprehensive test suite cleanup**: Removed Python mode specific tests while maintaining coverage
+  - Removed 30 Python mode specific tests
+  - Updated 47 tests to work with strict CEL mode only
+  - Maintained 291 core functionality tests
+  - All 329 tests now pass (321 passed, 1 skipped, 6 xfailed, 1 xpassed)
+
+### 🏗️ Architecture
+
+- **Simplified codebase**: Removed ~600 lines of complex preprocessing logic
+  - Eliminated `EvaluationMode` enum and related infrastructure
+  - Removed AST reconstruction and integer promotion functions
+  - Streamlined evaluate function signature and implementation
+  - Enhanced performance by removing mode checking overhead
 
 ## [0.5.1] - 2025-08-11
 
 ### ✨ Added
 
-- **EvaluationMode enum**: Control type handling behavior in CEL expressions
-  - `EvaluationMode.PYTHON` (default for Python API): Python-friendly type promotions
-  - `EvaluationMode.STRICT` (default for CLI): Strict CEL type rules with no coercion
+- **EvaluationMode enum**: Control type handling behavior in CEL expressions *(deprecated and removed in later version)*
+  - `EvaluationMode.PYTHON` (default for Python API): Python-friendly type promotions *(removed)*
+  - `EvaluationMode.STRICT` (default for CLI): Strict CEL type rules with no coercion *(now the only mode)*
 - **Type checking support**: Added complete type stub files (`.pyi`) for PyO3 extension
 
 
@@ -50,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.1] - 2025-08-02
 
 ### ✨ Added
-- **Automatic type coercion** for mixed int/float arithmetic:
+- **Automatic type coercion** for mixed int/float arithmetic *(deprecated and removed in later version)*:
   - Float literals automatically promote integer literals to floats.
   - Context variables containing floats trigger int → float promotion.
   - Preserves array indexing with integers (e.g., `list[2]` stays integer).
