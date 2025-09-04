@@ -2,9 +2,8 @@
 Regression tests for GitHub issue #16:
 String variables misinterpreted as floats when floats exist in context
 
-Tests ensure that string literals are not affected by the integer-to-float
-preprocessing that occurs in Python compatibility mode when floats are
-present in the context.
+Tests ensure that string literals are preserved correctly in strict CEL mode
+and are not corrupted during evaluation.
 """
 
 import pytest
@@ -12,7 +11,7 @@ from cel import Context, evaluate
 
 
 class TestIssue16StringLiteralRegression:
-    """Test cases for string literal preprocessing issue."""
+    """Test cases for string literal preservation issue."""
 
     def test_string_comparison_with_float_context(self):
         """Test that string comparisons work correctly with floats in context."""
@@ -24,14 +23,14 @@ class TestIssue16StringLiteralRegression:
 
     def test_string_literal_with_number_suffix(self):
         """Test that string literals ending with numbers are not modified."""
-        ctx = Context({'value': 0.4})  # Float in context to trigger preprocessing
+        ctx = Context({'value': 0.4})  # Float in context
         
         result = evaluate('"epa1"', ctx)
         assert result == "epa1", f"String literal should be unchanged, got {result}"
 
     def test_string_literal_with_embedded_numbers(self):
         """Test that string literals with numbers in the middle are not modified."""
-        ctx = Context({'value': 0.4})  # Float in context to trigger preprocessing
+        ctx = Context({'value': 0.4})  # Float in context
         
         test_cases = [
             '"abc123def"',
@@ -47,7 +46,7 @@ class TestIssue16StringLiteralRegression:
 
     def test_string_literal_pure_numbers(self):
         """Test that string literals that look like pure numbers are not modified."""
-        ctx = Context({'value': 0.4})  # Float in context to trigger preprocessing
+        ctx = Context({'value': 0.4})  # Float in context
         
         test_cases = [
             '"123"',
@@ -63,14 +62,14 @@ class TestIssue16StringLiteralRegression:
 
     def test_string_function_with_numeric_strings(self):
         """Test that the string() function works correctly with numeric strings."""
-        ctx = Context({'value': 0.4})  # Float in context to trigger preprocessing
+        ctx = Context({'value': 0.4})  # Float in context
         
         result = evaluate('string("epa1")', ctx)
         assert result == "epa1", f"string() function should return unchanged string, got {result}"
 
     def test_single_quote_strings(self):
         """Test that single-quoted strings are also handled correctly."""
-        ctx = Context({'value': 0.4})  # Float in context to trigger preprocessing
+        ctx = Context({'value': 0.4})  # Float in context
         
         test_cases = [
             "'epa1'",
@@ -85,7 +84,7 @@ class TestIssue16StringLiteralRegression:
 
     def test_escaped_quotes_in_strings(self):
         """Test that strings with escaped quotes are handled correctly."""
-        ctx = Context({'value': 0.4})  # Float in context to trigger preprocessing
+        ctx = Context({'value': 0.4})  # Float in context
         
         # Test escaped double quotes
         result = evaluate('"He said \\"hello123\\""', ctx)
@@ -103,17 +102,16 @@ class TestIssue16StringLiteralRegression:
         assert result is True, "Control test should pass without floats in context"
 
     def test_mixed_expressions_with_actual_numbers(self):
-        """Test that actual numeric literals are still converted when appropriate."""
-        ctx = Context({'value': 0.4})  # Float in context to trigger preprocessing
+        """Test that mixed arithmetic fails appropriately in strict mode."""
+        ctx = Context({'value': 0.4})  # Float in context
         
-        # This should still work - actual numeric literals should be converted
-        # when doing mixed arithmetic
-        result = evaluate('1 + 2.5', ctx)
-        assert result == 3.5, "Actual numeric arithmetic should still work"
+        # Mixed arithmetic should fail in strict mode
+        with pytest.raises(TypeError, match="Unsupported.*operation"):
+            evaluate('1 + 2.5', ctx)
         
-        # But string literals in the same expression should not be affected
-        result = evaluate('value + 1', ctx)  # 0.4 + 1 (should be converted to 0.4 + 1.0)
-        assert result == 1.4, "Context variable arithmetic should work"
+        # Mixed type with context variables should also fail
+        with pytest.raises(TypeError, match="Unsupported.*operation"):
+            evaluate('value + 1', ctx)  # 0.4 + 1 should fail in strict mode
 
     def test_complex_expressions_with_strings_and_numbers(self):
         """Test complex expressions mixing strings and numbers."""

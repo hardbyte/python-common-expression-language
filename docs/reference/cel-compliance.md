@@ -33,41 +33,17 @@ This implementation correctly follows the CEL specification where maps can have 
 
 ### Arithmetic Operations
 
-| CEL Operation | Result Type | Example | Python Result |
-|---------------|-------------|---------|---------------|
-| `int + int` | `int` | `1 + 2` | `3` |
-| `uint + uint` | `int` | `1u + 2u` | `3` |
-| `double + double` | `float` | `1.5 + 2.5` | `4.0` |
-| `int + double` | `float` | `1 + 2.0` | `3.0` |
-| `double + int` | `float` | `1.5 + 2` | `3.5` |
-| `int / int` | `int` | `10 / 2` | `5` |
-| `uint % uint` | `int` | `10u % 3u` | `1` |
-| `string + string` | `str` | `"hello" + " world"` | `"hello world"` |
+| CEL Operation | Result Type | Example | Python Result | Notes |
+|---------------|-------------|---------|---------------|-------|
+| `int + int` | `int` | `1 + 2` | `3` | ✅ Works |
+| `uint + uint` | `int` | `1u + 2u` | `3` | ✅ Works |
+| `double + double` | `float` | `1.5 + 2.5` | `4.0` | ✅ Works |
+| `int + double` | `float` | `1 + 2.0` | `3.0` | ⚠️ **FAILS** - Use `double(1) + 2.0` |
+| `double + int` | `float` | `1.5 + 2` | `3.5` | ⚠️ **FAILS** - Use `1.5 + double(2)` |
+| `int / int` | `int` | `10 / 2` | `5` | ✅ Works |
+| `uint % uint` | `int` | `10u % 3u` | `1` | ✅ Works |
+| `string + string` | `str` | `"hello" + " world"` | `"hello world"` | ✅ Works |
 
-#### ✨ Enhanced Mixed-Type Arithmetic
-
-**Ergonomic Improvement**: This library automatically promotes integers to floats when an expression involves float literals or float variables in the context. This provides intuitive behavior for mixed-type arithmetic while preserving integer-only operations.
-
-**Examples of automatic promotion:**
-```cel
-2 * 3.14        // Automatically treated as 2.0 * 3.14 → 6.28
-age * 1.5       // If age=30, treated as 30.0 * 1.5 → 45.0  
-score + 0.5     // If score=85, treated as 85.0 + 0.5 → 85.5
-```
-
-**Integer operations remain intact:**
-```cel
-arr[2]          // List indexing still uses integers
-age / 10        // If age=30, stays as 30 / 10 → 3 (integer division)
-count + 1       // If count=5, stays as 5 + 1 → 6
-```
-
-**Technical Implementation**: The underlying Rust code (`preprocess_expression_for_mixed_arithmetic_always`) analyzes expressions and automatically promotes integers to floats when float context is detected, ensuring seamless mixed-type arithmetic without explicit casting.
-
-**Benefits:**
-- **Intuitive**: `2 * 3.14` works as expected without requiring `double(2) * 3.14`
-- **Safe**: Preserves integer semantics for operations that require them
-- **Compatible**: Maintains CEL specification compliance while improving ergonomics
 
 ### Logical Operations
 
@@ -157,7 +133,7 @@ count + 1       // If count=5, stays as 5 + 1 → 6
 - **reduce()**: `reduce([1,2,3], 0, sum + x)` - Reduction operations ❌ **NOT AVAILABLE**
 
 ### ✅ Python Integration
-- **Automatic type conversion**: Seamless Python ↔ CEL type mapping
+- **Type conversion**: Seamless Python ↔ CEL type mapping
 - **Context variables**: Access Python objects in expressions
 - **Custom functions**: Call Python functions from CEL expressions
 - **Error handling**: Proper exception propagation

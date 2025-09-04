@@ -112,7 +112,7 @@ for user_data, expected in test_scenarios:
 from cel import evaluate
 
 # Business pricing with multiple factors
-pricing_rule = "base_price * (1 + tax_rate) * double(premium_customer ? 0.9 : 1.0)"
+pricing_rule = "base_price * (double(1) + tax_rate) * double(premium_customer ? 0.9 : 1.0)"
 result = evaluate(pricing_rule, {
     "base_price": 100.0, "tax_rate": 0.08, "premium_customer": True
 })
@@ -163,7 +163,7 @@ from cel import evaluate
 # Dynamic API filters
 filters = {
     "Active engineering/product": ("user.active && user.department in ['engineering', 'product']", {"user": {"active": True, "department": "engineering"}}, True),    # → True (active eng user)
-    "Performance scoring": ("base_score * effort_multiplier + bonus_points", {"base_score": 80, "effort_multiplier": 1.2, "bonus_points": 10}, 106.0)  # → 106.0 (calculated score)
+    "Performance scoring": ("double(base_score) * effort_multiplier + double(bonus_points)", {"base_score": 80, "effort_multiplier": 1.2, "bonus_points": 10}, 106.0)  # → 106.0 (calculated score)
 }
 
 for name, (expr, ctx, expected) in filters.items():
@@ -424,7 +424,7 @@ Think of CEL as a very smart calculator that can work with complex data structur
 from cel import evaluate
 
 # Like a calculator, but for complex logic
-expression = "price * quantity * (1 + tax_rate) * double(customer.vip ? 0.9 : 1.0)"
+expression = "price * double(quantity) * (double(1) + tax_rate) * double(customer.vip ? 0.9 : 1.0)"
 context = {
     "price": 29.99,
     "quantity": 2, 
