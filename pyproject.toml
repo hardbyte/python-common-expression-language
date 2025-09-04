@@ -3,11 +3,13 @@
 name = "common-expression-language"
 description = "Python bindings for the Common Expression Language (CEL)"
 readme = "README.md"
+license = "Apache-2.0"
 authors = [
     {name = "Brian Thorne", email = "brian@hardbyte.nz"}
 ]
 requires-python = ">=3.11"
 classifiers = [
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
@@ -41,7 +43,7 @@ dev-dependencies = [
     "pytest>=8.4.1",
     "maturin>=1.8.0",
     "ruff>=0.12.7",
-    "mypy>=1.17.1",
+    "mypy>=1.16.0",
 ]
 
 [dependency-groups]
@@ -51,7 +53,6 @@ docs = [
     "mkdocstrings>=0.24.0",
     "mkdocstrings-python>=1.8.0",
     "pygments>=2.0.0",
-    "mktestdocs>=0.2.0",
 ]
 
 [tool.ruff]
