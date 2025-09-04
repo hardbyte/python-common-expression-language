@@ -179,6 +179,8 @@ impl TryIntoValue for RustyPyType<'_> {
                     Ok(Value::Bool(value))
                 } else if let Ok(value) = pyobject.extract::<i64>() {
                     Ok(Value::Int(value))
+                } else if let Ok(value) = pyobject.extract::<u64>() {
+                    Ok(Value::UInt(value))
                 } else if let Ok(value) = pyobject.extract::<f64>() {
                     Ok(Value::Float(value))
                 } else if let Ok(value) = pyobject.extract::<DateTime<chrono::FixedOffset>>() {
