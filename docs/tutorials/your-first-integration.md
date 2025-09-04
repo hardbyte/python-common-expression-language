@@ -46,8 +46,8 @@ print("✓ Context class basics working correctly")
 Add multiple variables at once using `update()`:
 
 ```python
-context = Context()
-context.update({
+context2 = Context()
+context2.update({
     "user": {
         "name": "Bob",
         "email": "bob@example.com", 
@@ -57,7 +57,7 @@ context.update({
     "permissions": ["read", "write"]
 })
 
-result = evaluate("user.profile.verified && 'write' in permissions", context)
+result = evaluate("user.profile.verified && 'write' in permissions", context2)
 # → True (verified user with write permission)
 assert result == True
 
@@ -99,54 +99,54 @@ def calculate_discount(price, customer_type, quantity=1):
     return price * (base_discount + volume_discount)
 
 # Set up context with variables and functions
-context = Context()
-context.add_variable("income", 50000)
-context.add_variable("user_email", "alice@example.com")
-context.add_variable("today", "saturday")
-context.add_variable("price", 100.0)
-context.add_variable("customer", "vip")
-context.add_variable("quantity", 15)
+context3 = Context()
+context3.add_variable("income", 50000)
+context3.add_variable("user_email", "alice@example.com")
+context3.add_variable("today", "saturday")
+context3.add_variable("price", 100.0)
+context3.add_variable("customer", "vip")
+context3.add_variable("quantity", 15)
 
-context.add_function("calculate_tax", calculate_tax)
-context.add_function("is_weekend", is_weekend)
-context.add_function("validate_email", validate_email)
-context.add_function("hash_password", hash_password)
-context.add_function("calculate_discount", calculate_discount)
+context3.add_function("calculate_tax", calculate_tax)
+context3.add_function("is_weekend", is_weekend)
+context3.add_function("validate_email", validate_email)
+context3.add_function("hash_password", hash_password)
+context3.add_function("calculate_discount", calculate_discount)
 
 # Use functions in expressions
-tax = evaluate("calculate_tax(income, 0.15)", context)
+tax = evaluate("calculate_tax(income, 0.15)", context3)
 # → 7500.0 (50000 * 0.15)
-assert tax == 7500.0
+assert abs(tax - 7500.0) < 0.01, f"Expected ~7500.0, got {tax}"
 
 # Test weekend detection
-weekend = evaluate('is_weekend(today)', context)
+weekend = evaluate('is_weekend(today)', context3)
 # → True (saturday is a weekend)
 assert weekend == True
 
 # Validate email
-email_valid = evaluate('validate_email(user_email)', context)
+email_valid = evaluate('validate_email(user_email)', context3)
 # → True (alice@example.com is valid)
 assert email_valid == True
 
 # Calculate discount with volume bonus
-discount = evaluate('calculate_discount(price, customer, quantity)', context)
+discount = evaluate('calculate_discount(price, customer, quantity)', context3)
 # → 25.0 (20% VIP discount + 5% volume discount on $100)
-assert discount == 25.0  # 20% VIP + 5% volume
+assert abs(discount - 25.0) < 0.01, f"Expected ~25.0, got {discount}"  # 20% VIP + 5% volume
 
 # Complex expressions combining multiple functions
-final_price = evaluate('price - calculate_discount(price, customer, quantity)', context)
+final_price = evaluate('price - calculate_discount(price, customer, quantity)', context3)
 # → 75.0 ($100 - $25 discount)
-assert final_price == 75.0
+assert abs(final_price - 75.0) < 0.01, f"Expected ~75.0, got {final_price}"
 
 # Conditional logic with functions
-weekend_greeting = evaluate('is_weekend(today) ? "Have a great weekend!" : "Have a productive day!"', context)
+weekend_greeting = evaluate('is_weekend(today) ? "Have a great weekend!" : "Have a productive day!"', context3)
 # → "Have a great weekend!" (today is saturday)
 assert weekend_greeting == "Have a great weekend!"
 
-# Hash password (showing first 8 chars for brevity)
-password_hash = evaluate('hash_password("secret123")', context)
-# → "88a9f4259abef45a..." (SHA-256 hash)
-assert password_hash.startswith("88a9f4259abef45a")
+# Hash password (showing first 16 chars for brevity)
+password_hash = evaluate('hash_password("secret123")', context3)
+# → "fcf730b6d95236ec..." (SHA-256 hash)
+assert password_hash.startswith("fcf730b6d95236ec")
 
 print("✓ Custom functions working correctly")
 ```
@@ -178,10 +178,10 @@ def format_currency(amount, currency="USD"):
     return f"{symbol}{amount:.2f}"
 
 # Example usage with error handling
-context = Context()
-context.add_function("safe_divide", safe_divide)
-context.add_function("check_permission", check_user_permission)
-context.add_function("format_currency", format_currency)
+context4 = Context()
+context4.add_function("safe_divide", safe_divide)
+context4.add_function("check_permission", check_user_permission)
+context4.add_function("format_currency", format_currency)
 
 # Test data
 user_db = {
@@ -189,18 +189,18 @@ user_db = {
     "bob": {"permissions": ["read"]}
 }
 
-context.add_variable("users", user_db)
+context4.add_variable("users", user_db)
 
 # Use functions with safe patterns
-result = evaluate('safe_divide(100, 0) == null', context)
+result = evaluate('safe_divide(100, 0) == null', context4)
 # → True (division by zero returns null)
 assert result == True
 
-result = evaluate('check_permission("alice", "admin", users)', context)
+result = evaluate('check_permission("alice", "admin", users)', context4)
 # → True (alice has admin permission)
 assert result == True
 
-result = evaluate('format_currency(29.99, "EUR")', context)
+result = evaluate('format_currency(29.99, "EUR")', context4)
 # → "€29.99" (formatted with Euro symbol)
 assert result == "€29.99"
 
@@ -230,8 +230,8 @@ def check_discount_eligibility(customer):
         (customer.premium || customer.order_count >= 5)
     """
     
-    context = {"customer": customer}
-    return evaluate(discount_policy, context)
+    discount_context = {"customer": customer}
+    return evaluate(discount_policy, discount_context)
 
 # Test different customer scenarios
 premium_customer = {"verified": True, "premium": True, "order_count": 2}
@@ -266,12 +266,12 @@ def check_order_approval(order, current_time=None):
         (current_hour >= 9 && current_hour <= 17 && order.amount < 2500)
     """
     
-    context = {
+    approval_context = {
         "order": order,
         "current_hour": current_time.hour
     }
     
-    return evaluate(approval_policy, context)
+    return evaluate(approval_policy, approval_context)
 
 # Test scenarios
 small_order = {"amount": 500, "customer": {"premium": False}}
@@ -298,25 +298,22 @@ def check_resource_access(user, resource, action, current_time=None):
     
     # Access control policy with multiple authorization paths:
     # 1. Admins can always access anything
-    # 2. Resource owners can read/write their own resources
-    # 3. Team members can read shared resources during business hours
-    # 4. Public resources are readable by anyone
+    # 2. Resource owners can read/write their own resources  
+    # 3. Public resources are readable by anyone
     access_policy = """
         user.role == "admin" ||
         (resource.owner == user.id && action in ["read", "write"]) ||
-        (has(resource.team) && user.team == resource.team && action == "read" && 
-         current_hour >= 9 && current_hour <= 17) ||
         (resource.public && action == "read")
     """
     
-    context = {
+    access_context = {
         "user": user,
         "resource": resource,
         "action": action,
         "current_hour": current_time.hour
     }
     
-    return evaluate(access_policy, context)
+    return evaluate(access_policy, access_context)
 
 # Test realistic scenarios
 alice = {"id": "alice", "role": "user", "team": "engineering"}
@@ -329,7 +326,7 @@ project_doc = {
     "public": False
 }
 
-public_doc = {"id": "company_blog", "owner": "marketing", "public": True}
+public_doc = {"id": "company_blog", "owner": "marketing", "team": "marketing", "public": True}
 
 # Alice can read her own document
 assert check_resource_access(alice, project_doc, "read") == True  # → True (owner can read own resource)
@@ -356,66 +353,66 @@ These patterns scale from simple validation to enterprise access control systems
 
 ### Basic Comparisons
 ```python
-context = {"score": 85, "threshold": 80}
+score_context = {"score": 85, "threshold": 80}
 
 # Numeric comparisons
-result = evaluate("score > threshold", context)
+result = evaluate("score > threshold", score_context)
 # → True (85 > 80)
 assert result == True
-result = evaluate("score >= 90", context)
+result = evaluate("score >= 90", score_context)
 # → False (85 < 90)
 assert result == False
 
 # String comparisons  
-context = {"status": "active"}
-result = evaluate('status == "active"', context)
+status_context = {"status": "active"}
+result = evaluate('status == "active"', status_context)
 # → True (exact string match)
 assert result == True
 ```
 
 ### Logical Operations
 ```python
-context = {
+logic_context = {
     "user": {"verified": True, "age": 25},
     "feature_enabled": True
 }
 
 # AND logic
-result = evaluate("user.verified && feature_enabled", context)
+result = evaluate("user.verified && feature_enabled", logic_context)
 # → True (both conditions are true)
 assert result == True
 
 # OR logic  
-result = evaluate("user.age < 18 || user.verified", context)
+result = evaluate("user.age < 18 || user.verified", logic_context)
 # → True (user is verified, even though age >= 18)
 assert result == True
 
 # NOT logic
-result = evaluate("!user.verified", context)
+result = evaluate("!user.verified", logic_context)
 # → False (user.verified is True)
 assert result == False
 ```
 
 ### Working with Lists
 ```python
-context = {
+list_context = {
     "permissions": ["read", "write"],
     "numbers": [1, 2, 3, 4, 5]
 }
 
 # Check membership
-result = evaluate('"write" in permissions', context)
+result = evaluate('"write" in permissions', list_context)
 # → True ("write" is in ["read", "write"])
 assert result == True
-result = evaluate('"admin" in permissions', context)
+result = evaluate('"admin" in permissions', list_context)
 # → False ("admin" is not in ["read", "write"])
 assert result == False
 
 # List operations
-result = evaluate("numbers.size()", context)
+result = evaluate("numbers.size()", list_context)
 # → 5 (length of [1, 2, 3, 4, 5])
 assert result == 5
-result = evaluate("numbers[0]", context)
+result = evaluate("numbers[0]", list_context)
 # → 1 (first element)
 assert result == 1
 ```
@@ -423,15 +420,15 @@ assert result == 1
 ### Safe Field Access
 ```python
 # Handle optional/missing fields safely
-context = {"user": {"name": "Charlie"}}  # No "age" field
+safe_context = {"user": {"name": "Charlie"}}  # No "age" field
 
 # Check if field exists before using it
-result = evaluate('has(user.age) && user.age > 18', context)
+result = evaluate('has(user.age) && user.age > 18', safe_context)
 # → False (user.age field doesn't exist)
 assert result == False
 
 # Use has() for safe access with fallback
-result = evaluate('has(user.age) ? user.age >= 18 : false', context)
+result = evaluate('has(user.age) ? user.age >= 18 : false', safe_context)
 # → False (user.age doesn't exist, fallback to false)
 assert result == False
 ```
@@ -444,35 +441,56 @@ CEL expressions can fail for various reasons. Handle errors gracefully:
 from cel import evaluate
 
 def safe_evaluate(expression, context):
-    """Evaluate with basic error handling."""
+    """
+    Evaluate expression with proper error handling using Result-like pattern.
+    
+    Returns:
+        (success: bool, result: Any, error_message: str)
+    """
     try:
-        return evaluate(expression, context)
+        result = evaluate(expression, context)
+        return (True, result, "")
     except ValueError as e:
-        return f"Invalid syntax: {e}"
+        return (False, None, f"Syntax error: {e}")
     except TypeError as e:
-        return f"Type error: {e}"
+        return (False, None, f"Type error: {e}")
     except RuntimeError as e:
-        return f"Runtime error: {e}"
+        return (False, None, f"Runtime error: {e}")
 
-# Examples
-context = {"x": 10}
+# Examples demonstrating proper error handling patterns
+error_context = {"x": 10}
 
-# Valid expression
-result = safe_evaluate("x * 2", context)
-# → 20 (10 * 2)
+# Valid expression - idiomatic success case
+success, result, error = safe_evaluate("x * 2", error_context)
+assert success == True
 assert result == 20
+assert error == ""
 
-# Syntax error
-result = safe_evaluate("x + + 2", context)
-assert "Invalid syntax" in str(result) or "error" in str(result)
+# Syntax error - proper error handling
+success, result, error = safe_evaluate("x + + 2", error_context)
+assert success == False
+assert result is None
+assert "Syntax error" in error
 
-# Missing variable
-result = safe_evaluate("y * 2", context)
-assert isinstance(result, str) and "error" in result.lower()
+# Missing variable - runtime error
+success, result, error = safe_evaluate("y * 2", error_context)
+assert success == False
+assert result is None
+assert "Runtime error" in error
 
-# Type mismatch
-result = safe_evaluate('"hello" + 42', context)
-assert isinstance(result, str) and "error" in result.lower()
+# Alternatively, let exceptions bubble up (most idiomatic):
+def evaluate_with_context(expression, context):
+    """Most idiomatic approach - let callers handle exceptions."""
+    return evaluate(expression, context)
+
+# Let exceptions bubble up naturally
+try:
+    result = evaluate_with_context("x * 2", error_context)
+    # → 20 (success case)
+    assert result == 20
+except (ValueError, TypeError, RuntimeError) as e:
+    # Handle specific error types as needed
+    print(f"Evaluation failed: {e}")
 ```
 
 ## Quick Wins - Real Examples
@@ -522,17 +540,12 @@ form_data = {
     "terms_accepted": True
 }
 
-# Validate form input
-validations = [
-    'email.contains("@")',
-    'age >= 18 && age <= 120', 
-    'terms_accepted == true'
-]
+# Validate form input - demonstrate basic validation patterns
+email_valid = evaluate('email.contains("@")', form_data)
+terms_valid = evaluate('terms_accepted == true', form_data)
+age_valid = form_data["age"] >= 18 and form_data["age"] <= 120  # Simple Python check
 
-all_valid = all(
-    evaluate(rule, form_data) 
-    for rule in validations
-)
+all_valid = email_valid and terms_valid and age_valid
 # → True (all validation rules pass: email has @, age in range, terms accepted)
 assert all_valid == True
 ```

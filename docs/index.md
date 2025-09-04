@@ -56,11 +56,6 @@ The Common Expression Language (CEL) is a non-Turing complete language designed 
     # With context
     cel 'age >= 21' --context '{"age": 25}'  # → true
     
-    # Mixed arithmetic with modes
-    cel '1 + 2.5'                            # → Error (default: strict mode)
-    cel '1 + 2.5' --mode python              # → 3.5 (python-friendly mode)
-    cel '1 + 2.5' --mode strict              # → Error (strict CEL rules)
-    
     # Interactive REPL
     cel --interactive
     ```
@@ -98,7 +93,7 @@ The Common Expression Language (CEL) is a non-Turing complete language designed 
 ✅ **Safe by design** (Rust core)  
 ✅ **Ready for production**  
 ✅ **No GIL-blocking, safe concurrent evaluation**  
-✅ **Flexible type handling** (Python-friendly + strict modes)  
+✅ **Strict type safety** (CEL-compliant type system)  
 
 ## Why Python CEL?
 

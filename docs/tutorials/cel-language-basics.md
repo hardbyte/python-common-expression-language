@@ -13,7 +13,7 @@ This comprehensive guide covers all CEL syntax, operators, and built-in function
 Python CEL implements a comprehensive subset of the CEL specification:
 
 ✅ **Core CEL Types**: Integers (signed/unsigned), floats, booleans, strings, bytes, lists, maps, null  
-✅ **Arithmetic Operations**: `+`, `-`, `*`, `/`, `%` with mixed-type support  
+✅ **Arithmetic Operations**: `+`, `-`, `*`, `/`, `%` (strict type matching required)  
 ✅ **Comparison Operations**: `==`, `!=`, `<`, `>`, `<=`, `>=`  
 ✅ **Logical Operations**: `&&`, `||`, `!` with short-circuit evaluation  
 ✅ **String Operations**: Concatenation, indexing, `startsWith()`, `endsWith()`, `contains()`, `size()`  
@@ -22,7 +22,7 @@ Python CEL implements a comprehensive subset of the CEL specification:
 ✅ **Member Access**: Dot notation, bracket notation, safe access patterns  
 ✅ **Ternary Operator**: `condition ? true_value : false_value`  
 ✅ **Type Functions**: `has()`, conversion functions  
-✅ **Python Integration**: Custom functions, automatic type conversion  
+✅ **Python Integration**: Custom functions, Python ↔ CEL type conversion  
 
 See [CEL Compliance](../reference/cel-compliance.md) for detailed feature status.
 
@@ -311,11 +311,12 @@ users.filter(u, u.active).map(u, u.name)  // Names of active users
 - **duration**: Time intervals
 - **bytes**: Binary data
 
-### Type Coercion Rules
+### Type Conversion Rules
 ```cel
-// Automatic conversions
-1 + 2.0         // int + double → double (3.0)
-"result: " + string(42)  // Explicit conversion required
+// Mixed-type arithmetic requires explicit conversion
+1 + 2.0         // ❌ FAILS - Use double(1) + 2.0 → 3.0
+double(1) + 2.0  // ✅ Works - Explicit conversion → 3.0
+"result: " + string(42)  // ✅ Works - Explicit conversion required
 
 // Comparison rules
 1 == 1.0        // true (numeric equality)
@@ -324,7 +325,7 @@ users.filter(u, u.active).map(u, u.name)  // Names of active users
 
 ### Key Restrictions
 - **Map keys**: Must be int, uint, bool, or string
-- **Mixed arithmetic**: Some restrictions on uint/int mixing
+- **Mixed arithmetic**: Requires explicit type conversion (e.g., `double(1) + 2.0`)
 - **Function calls**: Limited to built-ins and registered functions
 - **Loops**: Not supported (use collection macros instead)
 

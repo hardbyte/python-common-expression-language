@@ -49,23 +49,6 @@ Enable debug mode with detailed error information.
 cel --debug 'user.role == "admin"' --context-file user.json
 ```
 
-#### `--mode`, `-m`
-Set the evaluation mode for type handling.
-
-```bash
-cel '1 + 2.5' --mode python        # → 3.5 (python-friendly type promotions)
-cel '1 + 2.5' --mode strict        # → Error (default: strict CEL type rules)
-cel '1 + 2.5' -m python           # → 3.5 (short form)
-```
-
-**Values**:
-- `python` - Python-friendly type promotions for mixed arithmetic
-- `strict` (default) - Strict CEL type rules with no automatic coercion
-
-**Use Cases**:
-- `python`: Best for JSON APIs, user-friendly applications, Python integration
-- `strict`: Best for CEL spec compliance, type precision, cross-language consistency
-
 ### Context Options
 
 #### `--context`, `-c`
@@ -266,10 +249,6 @@ cel 'expression'
 # With context
 cel 'expression' --context '{"key": "value"}'
 cel 'expression' --context-file context.json
-
-# With evaluation mode
-cel 'expression' --mode python    # Python-friendly mixed arithmetic
-cel 'expression' --mode strict    # Default: strict CEL type rules
 
 # Interactive mode
 cel --interactive
