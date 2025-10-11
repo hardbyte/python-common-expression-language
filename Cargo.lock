@@ -22,9 +22,9 @@ dependencies = [
 
 [[package]]
 name = "antlr4rust"
-version = "0.3.0-beta3"
+version = "0.3.0-rc2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15e8f291e498f0e86cde1686f8881dab6c2fda0b115214b6a48dd7ec6aa17ac5"
+checksum = "d240d49ee89063f90fa0cb18aead41a5893cd544a1785983dc3bf5c3d5faa58b"
 dependencies = [
  "better_any",
  "bit-set",
@@ -108,7 +108,7 @@ dependencies = [
 name = "cel"
 version = "0.5.2"
 dependencies = [
- "cel 0.11.1",
+ "cel 0.11.4",
  "chrono",
  "log",
  "pyo3",
@@ -117,9 +117,9 @@ dependencies = [
 
 [[package]]
 name = "cel"
-version = "0.11.1"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ed6997671c8e5efbfe01fd91ac8e30c9bb433578250c14ca5735d4d75e68224"
+checksum = "2fd757373c0c269eaaca1c355cbd8dc78e1191982c0e9e6dfe1f61ff38b235ad"
 dependencies = [
  "antlr4rust",
  "base64",
