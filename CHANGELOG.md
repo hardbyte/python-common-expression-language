@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Minor removed warning level logging in cel crate
 
 ## [0.5.2] - 2025-09-12
 
