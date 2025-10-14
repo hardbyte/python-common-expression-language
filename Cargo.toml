@@ -14,3 +14,6 @@ cel = { version = "0.11.4", features = ["chrono", "json", "regex"] }
 log = "0.4.27"
 pyo3-log = "0.12.4"
 chrono = { version = "0.4.41", features = ["serde"] }
+
+[patch.crates-io]
+cel = { path = "vendor/cel" }

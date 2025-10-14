@@ -107,3 +107,20 @@ def test_nested_context_none():
     assert cel.evaluate("spec.host", cel_context) == "github.com"
     assert cel.evaluate("data['response-code']", cel_context) == "NOERROR"
     assert cel.evaluate("size(data.A)", cel_context) == 1
+
+
+def test_lazy_mapping_lookup():
+    class LazyDict(dict):
+        def __init__(self):
+            super().__init__()
+            self._storage = {}
+
+        def __getitem__(self, key):
+            if key not in self._storage:
+                self._storage[key] = f"computed-{key}"
+            return self._storage[key]
+
+    data = LazyDict()
+    context = cel.Context({"data": data})
+
+    assert cel.evaluate("data.key", context) == "computed-key"
