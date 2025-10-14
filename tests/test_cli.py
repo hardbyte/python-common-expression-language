@@ -133,6 +133,31 @@ class TestCELEvaluator:
         evaluator = CELEvaluator()
         assert evaluator.context == {}
 
+    def test_stdlib_functions_available(self):
+        """Test that stdlib functions are automatically available in CLI evaluator."""
+        evaluator = CELEvaluator()
+
+        # Test substring function from stdlib
+        result = evaluator.evaluate('substring("hello world", 0, 5)')
+        assert result == "hello"
+
+        result = evaluator.evaluate('substring("hello world", 6)')
+        assert result == "world"
+
+        result = evaluator.evaluate('substring("test", 1, 3)')
+        assert result == "es"
+
+    def test_stdlib_functions_with_context(self):
+        """Test that stdlib functions work alongside context variables."""
+        evaluator = CELEvaluator({"text": "hello world"})
+
+        # Use stdlib function with context variable
+        result = evaluator.evaluate("substring(text, 0, 5)")
+        assert result == "hello"
+
+        result = evaluator.evaluate("substring(text, 6)")
+        assert result == "world"
+
     def test_create_evaluator_with_context(self):
         """Test creating evaluator with initial context."""
         context = {"x": 10, "y": 20}

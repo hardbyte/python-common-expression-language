@@ -261,8 +261,8 @@ assert result == 6  # → 6 (unsigned integers convert to regular int)
 result = evaluate('"hello world".size()')
 assert result == 11  # → 11 (string length via size() method)
 
-result = evaluate('"hello"[1]')
-assert result == "e"  # → "e" (zero-indexed string character access)
+# Note: String indexing like "hello"[1] is not supported in CEL
+# Use string methods instead: startsWith(), endsWith(), contains(), matches()
 
 result = evaluate('"test".startsWith("te")')
 assert result == True  # → True (rich string method support)

@@ -2,7 +2,7 @@ mod context;
 
 use ::cel::objects::{Key, TryIntoValue};
 use ::cel::{Context as CelContext, ExecutionError, Program, Value};
-use log::{debug, warn};
+use log::debug;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::BoundObject;
@@ -429,7 +429,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                 "Failed to parse expression '{src}': Invalid syntax or malformed string"
             ))
         })?
-        .map_err(|e| PyValueError::new_err(format!("Failed to compile expression '{src}': {e}")))?;
+        .map_err(|e| PyValueError::new_err(format!("Failed to parse expression '{src}': {e}")))?;
 
     // Add variables and functions if we have a context
     if evaluation_context.is_some() {
@@ -515,8 +515,8 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
 
     match result {
         Err(error) => {
-            warn!("An error occurred during execution");
-            warn!("Execution error: {error:?}");
+            debug!("An error occurred during execution");
+            debug!("Execution error: {error:?}");
             Err(map_execution_error_to_python(&error))
         }
 

@@ -122,6 +122,6 @@ class TestCLIErrorHandling:
         with pytest.raises(ValueError, match="Failed to parse expression"):
             evaluator.evaluate('"unclosed quote')
 
-        # This gives a clean compile error
-        with pytest.raises(ValueError, match="Failed to compile expression"):
+        # This also gives a clean parse error
+        with pytest.raises(ValueError, match="Failed to parse expression"):
             evaluator.evaluate("(1 + 2")

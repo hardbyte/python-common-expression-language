@@ -17,15 +17,15 @@ try:
     evaluate("1 + + 2")  # Invalid syntax
     assert False, "Expected ValueError"
 except ValueError as e:
-    assert "Failed to compile expression" in str(e)
-    # → ValueError: Failed to compile expression (graceful failure)
+    assert "Failed to parse expression" in str(e)
+    # → ValueError: Failed to parse expression (graceful failure)
 
 try:
     evaluate("")  # Empty expression
     assert False, "Expected ValueError"
 except ValueError as e:
-    assert "Invalid syntax" in str(e) or "malformed" in str(e)
-    # → ValueError: Invalid syntax or malformed (safe error handling)
+    assert "Failed to parse expression" in str(e)
+    # → ValueError: Failed to parse expression (safe error handling)
 ```
 
 ### `RuntimeError` - Variable and Function Errors
@@ -99,14 +99,14 @@ try:
     evaluate("'unclosed quote", {})
     assert False, "Should have raised ValueError"
 except ValueError as e:
-    assert "Invalid syntax or malformed string" in str(e)
+    assert "Failed to parse expression" in str(e)
     # → ValueError: Malformed input handled safely (no crash)
 
 try:
     evaluate('"mixed quotes\'', {})
     assert False, "Should have raised ValueError"
 except ValueError as e:
-    assert "Invalid syntax or malformed string" in str(e)
+    assert "Failed to parse expression" in str(e)
     # → ValueError: Quote mismatch detected (process remains stable)
 ```
 
@@ -339,7 +339,7 @@ invalid_syntax = 'user.age >='  # Incomplete comparison
 success, result, errors = safe_user_expression_eval(invalid_syntax, context)
 assert success == False, "Invalid syntax should be rejected"
 assert len(errors) > 0, "Should report syntax errors"
-# → False, errors: ['Evaluation error: Failed to compile'] (malformed input caught)
+# → False, errors: ['Evaluation error: Failed to parse'] (malformed input caught)
 
 # Test 4: Empty expression
 success, result, errors = safe_user_expression_eval('', context)

@@ -39,6 +39,7 @@ from typing_extensions import Annotated
 
 # Import directly from relative modules to avoid circular imports
 from .cel import Context, evaluate
+from .stdlib import add_stdlib_to_context
 
 # Initialize Rich console
 console = Console()
@@ -74,7 +75,7 @@ class CELLexer(RegexLexer):
             # Built-in functions
             (
                 r"\b(size|has|timestamp|duration|int|uint|double|string|bytes|"
-                r"startsWith|endsWith|contains|matches)\b(?=\()",
+                r"startsWith|endsWith|contains|matches|substring)\b(?=\()",
                 token.Name.Function,
             ),
             # String literals
@@ -192,7 +193,10 @@ class CELEvaluator:
         if self.context:
             self._cel_context = Context(self.context)
         else:
-            self._cel_context = None
+            self._cel_context = Context()
+
+        # Always add stdlib functions to the context
+        add_stdlib_to_context(self._cel_context)
 
     def evaluate(self, expression: str) -> Any:
         """Evaluate a CEL expression."""
@@ -241,6 +245,7 @@ class InteractiveCELREPL:
             "double",
             "string",
             "bytes",
+            "substring",  # stdlib function
         ]
 
         # Command dispatch dictionary for cleaner organization
