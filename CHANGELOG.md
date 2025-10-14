@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2025-10-14
+
+- Added new `cel.stdlib` module with Python implementations of CEL functions missing from upstream cel-rust.
+- CLI automatically includes all stdlib functions
 - Minor removed warning level logging in cel crate
 
 ## [0.5.2] - 2025-09-12
