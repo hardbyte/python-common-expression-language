@@ -152,10 +152,10 @@ class TestCELEvaluator:
         evaluator = CELEvaluator({"text": "hello world"})
 
         # Use stdlib function with context variable
-        result = evaluator.evaluate('substring(text, 0, 5)')
+        result = evaluator.evaluate("substring(text, 0, 5)")
         assert result == "hello"
 
-        result = evaluator.evaluate('substring(text, 6)')
+        result = evaluator.evaluate("substring(text, 6)")
         assert result == "world"
 
     def test_create_evaluator_with_context(self):

@@ -50,7 +50,7 @@ class TestSubstringFunction:
 
         # With context variable
         context.add_variable("text", "hello world")
-        result = cel.evaluate('substring(text, 6)', context)
+        result = cel.evaluate("substring(text, 6)", context)
         assert result == "world"
 
         # Chained with other operations
@@ -97,13 +97,9 @@ class TestSubstringWithOtherFunctions:
         context = cel.Context()
         add_stdlib_to_context(context)
 
-        context.add_variable("data", {
-            "message": "Hello, World!",
-            "start": 0,
-            "end": 5
-        })
+        context.add_variable("data", {"message": "Hello, World!", "start": 0, "end": 5})
 
-        result = cel.evaluate('substring(data.message, data.start, data.end)', context)
+        result = cel.evaluate("substring(data.message, data.start, data.end)", context)
         assert result == "Hello"
 
     def test_substring_in_conditional(self):
@@ -113,10 +109,7 @@ class TestSubstringWithOtherFunctions:
         context.add_variable("email", "user@example.com")
 
         # Extract domain
-        result = cel.evaluate(
-            'substring(email, 5, 12) == "example" ? "valid" : "invalid"',
-            context
-        )
+        result = cel.evaluate('substring(email, 5, 12) == "example" ? "valid" : "invalid"', context)
         assert result == "valid"
 
 
@@ -149,7 +142,7 @@ class TestSubstringDocumentation:
         context.add_variable("text", "The quick brown fox")
 
         # Extract words
-        result = cel.evaluate('substring(text, 4, 9)', context)
+        result = cel.evaluate("substring(text, 4, 9)", context)
         assert result == "quick"
 
     def test_substring_string_manipulation(self):
@@ -166,7 +159,7 @@ class TestSubstringDocumentation:
 
         # Get last characters (simulate with known length)
         context.add_variable("lang", "Python")
-        result = cel.evaluate('substring(lang, 2)', context)
+        result = cel.evaluate("substring(lang, 2)", context)
         assert result == "thon"
 
 
