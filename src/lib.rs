@@ -1,15 +1,17 @@
 mod context;
 
 use ::cel::objects::{Key, TryIntoValue};
+use ::cel::types::map::MapValue;
 use ::cel::{Context as CelContext, ExecutionError, Program, Value};
 use log::debug;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::BoundObject;
+use pyo3::IntoPyObject;
 use std::panic::{self, AssertUnwindSafe};
 
 use chrono::{DateTime, Duration as ChronoDuration, Offset, TimeZone};
-use pyo3::types::{PyBool, PyBytes, PyDict, PyList, PyTuple};
+use pyo3::types::{PyBool, PyBytes, PyDict, PyList, PyMapping, PyTuple};
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -66,6 +68,17 @@ impl<'py> IntoPyObject<'py> for RustyCelType {
 
                 python_dict.into_any()
             }
+            RustyCelType(Value::DynamicMap(map)) => {
+                let python_dict = PyDict::new(py);
+
+                for (key, value) in map.iter() {
+                    let key_obj = PyMappingValue::key_to_python(py, &key);
+                    let value_obj = RustyCelType(value).into_pyobject(py)?;
+                    python_dict.set_item(key_obj.bind(py), &value_obj)?;
+                }
+
+                python_dict.into_any()
+            }
 
             // Turn everything else into a String:
             nonprimitive => format!("{nonprimitive:?}").into_pyobject(py)?.into_any(),
@@ -76,6 +89,115 @@ impl<'py> IntoPyObject<'py> for RustyCelType {
 
 #[derive(Debug)]
 struct RustyPyType<'a>(&'a Bound<'a, PyAny>);
+
+#[derive(Clone)]
+struct PyMappingValue {
+    mapping: Py<PyAny>,
+}
+
+impl PyMappingValue {
+    fn new(mapping: Py<PyAny>) -> Self {
+        Self { mapping }
+    }
+
+    fn key_to_python(py: Python<'_>, key: &Key) -> Py<PyAny> {
+        match key {
+            Key::Int(value) => value.into_pyobject(py).unwrap().unbind().into(),
+            Key::Uint(value) => value.into_pyobject(py).unwrap().unbind().into(),
+            Key::Bool(value) => value.into_pyobject(py).unwrap().unbind().into(),
+            Key::String(value) => value.as_str().into_pyobject(py).unwrap().unbind().into(),
+        }
+    }
+
+    fn py_to_key(obj: &Bound<'_, PyAny>) -> Option<Key> {
+        if obj.is_none() {
+            return None;
+        }
+
+        if let Ok(value) = obj.extract::<i64>() {
+            Some(Key::Int(value))
+        } else if let Ok(value) = obj.extract::<u64>() {
+            Some(Key::Uint(value))
+        } else if let Ok(value) = obj.extract::<bool>() {
+            Some(Key::Bool(value))
+        } else if let Ok(value) = obj.extract::<String>() {
+            Some(Key::String(value.into()))
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Debug for PyMappingValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PyMappingValue").finish()
+    }
+}
+
+impl MapValue for PyMappingValue {
+    fn get(&self, key: &Key) -> Option<Value> {
+        Python::with_gil(|py| {
+            let bound = self.mapping.bind(py);
+            let mapping = bound.downcast::<PyMapping>().ok()?;
+            let py_key = Self::key_to_python(py, key);
+            let value = mapping.get_item(py_key).ok()?;
+            RustyPyType(&value).try_into_value().ok()
+        })
+    }
+
+    fn contains_key(&self, key: &Key) -> bool {
+        Python::with_gil(|py| {
+            let bound = self.mapping.bind(py);
+            let mapping = match bound.downcast::<PyMapping>() {
+                Ok(mapping) => mapping,
+                Err(_) => return false,
+            };
+            let py_key = Self::key_to_python(py, key);
+            mapping.contains(py_key).unwrap_or(false)
+        })
+    }
+
+    fn len(&self) -> usize {
+        Python::with_gil(|py| {
+            let bound = self.mapping.bind(py);
+            bound
+                .downcast::<PyMapping>()
+                .ok()
+                .and_then(|mapping| mapping.len().ok())
+                .unwrap_or(0)
+        })
+    }
+
+    fn iter(&self) -> Box<dyn Iterator<Item = (Key, Value)> + '_> {
+        let items = Python::with_gil(|py| {
+            let bound = self.mapping.bind(py);
+            let mapping = match bound.downcast::<PyMapping>() {
+                Ok(mapping) => mapping,
+                Err(_) => return Vec::new(),
+            };
+            let list = match mapping.items() {
+                Ok(items) => items,
+                Err(_) => return Vec::new(),
+            };
+
+            list.iter()
+                .filter_map(|item| {
+                    let tuple = item.downcast::<PyTuple>().ok()?;
+                    if tuple.len() != 2 {
+                        return None;
+                    }
+                    let key_obj = tuple.get_item(0).ok()?;
+                    let value_obj = tuple.get_item(1).ok()?;
+                    let key = Self::py_to_key(&key_obj)?;
+                    let value = RustyPyType(&value_obj).try_into_value().ok()?;
+                    Some((key, value))
+                })
+                .collect::<Vec<_>>()
+        });
+
+        Box::new(items.into_iter())
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CelError {
@@ -212,35 +334,45 @@ impl TryIntoValue for RustyPyType<'_> {
                         .map(|item| RustyPyType(&item).try_into_value())
                         .collect::<Result<Vec<Value>, Self::Error>>();
                     list.map(|v| Value::List(Arc::new(v)))
-                } else if let Ok(value) = pyobject.downcast::<PyDict>() {
-                    let mut map: HashMap<Key, Value> = HashMap::new();
-                    for (key, value) in value.into_iter() {
-                        let key = if key.is_none() {
-                            return Err(CelError::ConversionError(
-                                "None cannot be used as a key in dictionaries".to_string(),
-                            ));
-                        } else if let Ok(k) = key.extract::<i64>() {
-                            Key::Int(k)
-                        } else if let Ok(k) = key.extract::<u64>() {
-                            Key::Uint(k)
-                        } else if let Ok(k) = key.extract::<bool>() {
-                            Key::Bool(k)
-                        } else if let Ok(k) = key.extract::<String>() {
-                            Key::String(k.into())
-                        } else {
-                            return Err(CelError::ConversionError(
-                                "Failed to convert PyDict key to Key".to_string(),
-                            ));
-                        };
-                        if let Ok(dict_value) = RustyPyType(&value).try_into_value() {
-                            map.insert(key, dict_value);
-                        } else {
-                            return Err(CelError::ConversionError(
-                                "Failed to convert PyDict value to Value".to_string(),
-                            ));
+                } else if let Ok(dict) = pyobject.downcast::<PyDict>() {
+                    if pyobject.is_exact_instance_of::<PyDict>() {
+                        let mut map: HashMap<Key, Value> = HashMap::new();
+                        for (key, value) in dict.iter() {
+                            let key = if key.is_none() {
+                                return Err(CelError::ConversionError(
+                                    "None cannot be used as a key in dictionaries".to_string(),
+                                ));
+                            } else if let Ok(k) = key.extract::<i64>() {
+                                Key::Int(k)
+                            } else if let Ok(k) = key.extract::<u64>() {
+                                Key::Uint(k)
+                            } else if let Ok(k) = key.extract::<bool>() {
+                                Key::Bool(k)
+                            } else if let Ok(k) = key.extract::<String>() {
+                                Key::String(k.into())
+                            } else {
+                                return Err(CelError::ConversionError(
+                                    "Failed to convert PyDict key to Key".to_string(),
+                                ));
+                            };
+                            if let Ok(dict_value) = RustyPyType(&value).try_into_value() {
+                                map.insert(key, dict_value);
+                            } else {
+                                return Err(CelError::ConversionError(
+                                    "Failed to convert PyDict value to Value".to_string(),
+                                ));
+                            }
                         }
+                        Ok(Value::Map(map.into()))
+                    } else {
+                        Ok(Value::DynamicMap(Arc::new(PyMappingValue::new(
+                            dict.clone().into_any().unbind(),
+                        ))))
                     }
-                    Ok(Value::Map(map.into()))
+                } else if let Ok(mapping) = pyobject.downcast::<PyMapping>() {
+                    Ok(Value::DynamicMap(Arc::new(PyMappingValue::new(
+                        mapping.clone().into_any().unbind(),
+                    ))))
                 } else if let Ok(value) = pyobject.extract::<Vec<u8>>() {
                     Ok(Value::Bytes(value.into()))
                 } else {
