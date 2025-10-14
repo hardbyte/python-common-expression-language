@@ -208,18 +208,18 @@ from cel import evaluate
 # Invalid syntax raises ValueError
 try:
     evaluate("1 + + 2")  # Invalid syntax
-    # → ValueError: Failed to compile expression: ...
+    # → ValueError: Failed to parse expression: ...
     assert False, "Should have raised ValueError"
 except ValueError as e:
-    assert "Failed to compile expression" in str(e)
+    assert "Failed to parse expression" in str(e)
 
 # Empty expression raises ValueError
 try:
     evaluate("")
-    # → ValueError: Invalid syntax or malformed expression
+    # → ValueError: Failed to parse expression
     assert False, "Should have raised ValueError"
 except ValueError as e:
-    assert "Invalid syntax" in str(e) or "malformed" in str(e)
+    assert "Failed to parse expression" in str(e)
 ```
 
 #### `RuntimeError` - Variable and Function Errors

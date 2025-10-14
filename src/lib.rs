@@ -429,7 +429,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                 "Failed to parse expression '{src}': Invalid syntax or malformed string"
             ))
         })?
-        .map_err(|e| PyValueError::new_err(format!("Failed to compile expression '{src}': {e}")))?;
+        .map_err(|e| PyValueError::new_err(format!("Failed to parse expression '{src}': {e}")))?;
 
     // Add variables and functions if we have a context
     if evaluation_context.is_some() {

@@ -15,6 +15,22 @@ cel --version
 
 The `cel` command-line tool provides a convenient way to evaluate CEL expressions from the command line, in scripts, or interactively. It supports context loading, file processing, and various output formats.
 
+## Standard Library Functions
+
+The CLI automatically includes all [standard library functions](../reference/cel-compliance.md#using-celstdlib-recommended) from `cel.stdlib`. These functions are available without any additional setup:
+
+### Available Functions
+
+- **`substring(str, start, end?)`** - Extract substring from a string
+  ```bash
+  cel 'substring("hello world", 0, 5)'  # → hello
+  cel 'substring("hello world", 6)'     # → world
+  ```
+
+**Note**: Use function syntax `substring("text", 0, 5)`, not method syntax `"text".substring(0, 5)`.
+
+For programmatic use (Python API), import and use `cel.stdlib.add_stdlib_to_context()` to add these functions to your context.
+
 ## Options
 
 ### Global Options

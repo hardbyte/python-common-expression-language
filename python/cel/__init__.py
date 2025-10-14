@@ -1,4 +1,4 @@
 # Import the Rust extension
 
-from . import cli
+from . import cli, stdlib
 from .cel import *

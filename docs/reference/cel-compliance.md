@@ -92,7 +92,7 @@ This implementation correctly follows the CEL specification where maps can have 
 
 #### Other Operators
 - `?:` (ternary conditional) - Conditional expressions
-- `[]` (indexing) - Lists, maps, strings
+- `[]` (indexing) - Lists and maps only (string indexing not supported)
 - `.` (member access) - Object property access
 
 ### ✅ Built-in Functions
@@ -119,8 +119,11 @@ This implementation correctly follows the CEL specification where maps can have 
 - **endsWith()**: `"hello".endsWith("lo")` → `True`
 - **matches()**: `"hello world".matches(".*world")` → `True`
 - **String concatenation**: `"hello" + " world"` → `"hello world"`
-- **String indexing**: `"hello"[1]` → `"e"`  
 - **String size**: `size("hello")` → `5`
+
+#### ❌ String Indexing Not Supported
+- **String indexing**: `"hello"[1]` is **NOT** supported (returns "No such key" error)
+- **Workaround**: Use `substring()` function (when available) or Python context functions
 
 ### ✅ Collection Macros
 - **all()**: `[1,2,3].all(x, x > 0)` → `True`
@@ -148,13 +151,39 @@ This section focuses on what you need to know to use CEL effectively in your app
 ### 🔧 Safe Patterns & Workarounds
 
 #### String Processing Workarounds
+
+**Using cel.stdlib (Recommended)**
+
+This library provides Python implementations of missing CEL functions:
+
+```python
+from cel import Context, evaluate
+from cel.stdlib import add_stdlib_to_context
+
+# Add all standard library functions at once
+context = Context()
+add_stdlib_to_context(context)
+
+# substring() is now available as a function (not a method)
+result = evaluate('substring("hello world", 0, 5)', context)  # → "hello"
+result = evaluate('substring("hello world", 6)', context)  # → "world"
+
+# Note: Use function syntax, not method syntax
+# ✅ substring("hello", 2, 4)  - correct
+# ❌ "hello".substring(2, 4)   - not supported
+```
+
+**Using Custom Python Functions**
+
+You can also add your own custom functions:
+
 ```python
 from cel import Context, evaluate
 
-# Since lowerAscii(), upperAscii(), indexOf() are missing:
+# Add custom functions for missing CEL features
 context = Context()
 context.add_function("lower", str.lower)
-context.add_function("upper", str.upper) 
+context.add_function("upper", str.upper)
 context.add_function("find", str.find)
 
 # Add variables to the context
