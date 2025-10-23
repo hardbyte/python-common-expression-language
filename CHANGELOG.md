@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4] - 2025-10-23
+
+### Updated
+
+- Updated cel-rust from 0.11.4 to 0.11.6
+- Updated PyO3 from 0.25.1 to 0.27.1
+
+### Changed
+
+- Reduced logging verbosity
 ## [0.5.3] - 2025-10-14
 
 - Added new `cel.stdlib` module with Python implementations of CEL functions missing from upstream cel-rust.

@@ -1,6 +1,6 @@
 [package]
 name = "cel"
-version = "0.5.3"
+version = "0.5.4"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -9,8 +9,8 @@ name = "cel"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.25.1", features = ["chrono", "py-clone"]}
-cel = { version = "0.11.4", features = ["chrono", "json", "regex"] }
+pyo3 = { version = "0.27", features = ["chrono", "py-clone"]}
+cel = { version = "0.11.6", features = ["chrono", "json", "regex"] }
 log = "0.4.27"
-pyo3-log = "0.12.4"
-chrono = { version = "0.4.41", features = ["serde"] }
+pyo3-log = { git = "https://github.com/a1phyr/pyo3-log.git", branch = "pyo3_0.27" }
+chrono = { version = "0.4.42", features = ["serde"] }
