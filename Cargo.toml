@@ -9,8 +9,8 @@ name = "cel"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.25.1", features = ["chrono", "py-clone"]}
+pyo3 = { version = "0.27", features = ["chrono", "py-clone"]}
 cel = { version = "0.11.6", features = ["chrono", "json", "regex"] }
 log = "0.4.27"
-pyo3-log = "0.12.4"
+pyo3-log = { git = "https://github.com/a1phyr/pyo3-log.git", branch = "pyo3_0.27" }
 chrono = { version = "0.4.42", features = ["serde"] }

@@ -2,7 +2,7 @@ mod context;
 
 use ::cel::objects::{Key, TryIntoValue};
 use ::cel::{Context as CelContext, ExecutionError, Program, Value};
-use log::debug;
+use log::warn;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::BoundObject;
@@ -32,10 +32,7 @@ impl<'py> IntoPyObject<'py> for RustyCelType {
             RustyCelType(Value::Int(i64)) => i64.into_pyobject(py)?.into_any(),
             RustyCelType(Value::UInt(u64)) => u64.into_pyobject(py)?.into_any(),
             RustyCelType(Value::Float(f)) => f.into_pyobject(py)?.into_any(),
-            RustyCelType(Value::Timestamp(ts)) => {
-                debug!("Converting a fixed offset datetime to python type");
-                ts.into_pyobject(py)?.into_any()
-            }
+            RustyCelType(Value::Timestamp(ts)) => ts.into_pyobject(py)?.into_any(),
             RustyCelType(Value::Duration(d)) => d.into_pyobject(py)?.into_any(),
             RustyCelType(Value::String(s)) => s.as_ref().to_string().into_pyobject(py)?.into_any(),
             RustyCelType(Value::List(val)) => {
@@ -200,19 +197,19 @@ impl TryIntoValue for RustyPyType<'_> {
                     Ok(Value::Duration(value))
                 } else if let Ok(value) = pyobject.extract::<String>() {
                     Ok(Value::String(value.into()))
-                } else if let Ok(value) = pyobject.downcast::<PyList>() {
+                } else if let Ok(value) = pyobject.cast::<PyList>() {
                     let list = value
                         .iter()
                         .map(|item| RustyPyType(&item).try_into_value())
                         .collect::<Result<Vec<Value>, Self::Error>>();
                     list.map(|v| Value::List(Arc::new(v)))
-                } else if let Ok(value) = pyobject.downcast::<PyTuple>() {
+                } else if let Ok(value) = pyobject.cast::<PyTuple>() {
                     let list = value
                         .iter()
                         .map(|item| RustyPyType(&item).try_into_value())
                         .collect::<Result<Vec<Value>, Self::Error>>();
                     list.map(|v| Value::List(Arc::new(v)))
-                } else if let Ok(value) = pyobject.downcast::<PyDict>() {
+                } else if let Ok(value) = pyobject.cast::<PyDict>() {
                     let mut map: HashMap<Key, Value> = HashMap::new();
                     for (key, value) in value.into_iter() {
                         let key = if key.is_none() {
@@ -407,7 +404,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
             // Clone variables and functions into our local Context
             ctx.variables = py_context_ref.variables.clone();
             ctx.functions = py_context_ref.functions.clone();
-        } else if let Ok(py_dict) = evaluation_context.downcast::<PyDict>() {
+        } else if let Ok(py_dict) = evaluation_context.cast::<PyDict>() {
             // User passed in a dict - let's process variables and functions from the dict
             ctx.update(py_dict)?;
         } else {
@@ -419,12 +416,10 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
         variables_for_env = ctx.variables.clone();
     }
 
-    // Strict mode only - preserve original expression without any preprocessing
-    let processed_src = src.clone();
-
     // Use panic::catch_unwind to handle parser panics gracefully
-    let program = panic::catch_unwind(|| Program::compile(&processed_src))
+    let program = panic::catch_unwind(|| Program::compile(&src))
         .map_err(|_| {
+            warn!("CEL parser panic for expression: '{}'", src);
             PyValueError::new_err(format!(
                 "Failed to parse expression '{src}': Invalid syntax or malformed string"
             ))
@@ -445,7 +440,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
         // Register Python functions
         for (function_name, py_function) in ctx.functions.iter() {
             // Create a wrapper function
-            let py_func_clone = Python::with_gil(|py| py_function.clone_ref(py));
+            let py_func_clone = Python::attach(|py| py_function.clone_ref(py));
             let func_name_clone = function_name.clone();
 
             // Register a function that takes Arguments (variadic) and returns a Value
@@ -455,7 +450,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
                     let py_func = py_func_clone.clone();
                     let func_name = func_name_clone.clone();
 
-                    Python::with_gil(|py| {
+                    Python::attach(|py| {
                         // Convert CEL arguments to Python objects
                         let mut py_args = Vec::new();
                         for cel_value in args.0.iter() {
@@ -479,6 +474,7 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
 
                         // Call the Python function
                         let py_result = py_func.call1(py, py_args_tuple).map_err(|e| {
+                            warn!("Python function '{}' failed: {}", func_name, e);
                             ExecutionError::FunctionError {
                                 function: func_name.clone(),
                                 message: format!("Python function call failed: {e}"),
@@ -508,18 +504,14 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
     // AssertUnwindSafe is needed because the environment contains function closures
     let result =
         panic::catch_unwind(AssertUnwindSafe(|| program.execute(&environment))).map_err(|_| {
+            warn!("CEL execution panic for expression: '{}'", src);
             PyValueError::new_err(format!(
                 "Failed to execute expression '{src}': Internal parser error"
             ))
         })?;
 
     match result {
-        Err(error) => {
-            debug!("An error occurred during execution");
-            debug!("Execution error: {error:?}");
-            Err(map_execution_error_to_python(&error))
-        }
-
+        Err(error) => Err(map_execution_error_to_python(&error)),
         Ok(value) => Ok(RustyCelType(value)),
     }
 }
