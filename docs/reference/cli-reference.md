@@ -87,9 +87,38 @@ cel 'config.valid' -f config.json
 ```
 
 **Format**: Path to valid JSON file
-**Special values**: 
+**Special values**:
 - `/dev/stdin` - Read from standard input
 - `-` - Read from standard input (shorthand)
+
+#### `--for-each`
+Evaluate expression SEPARATELY for each context file (batch processing).
+
+```bash
+# Evaluate expression for each file (repeat flag for each file)
+cel 'user.age >= 18' --for-each user1.json --for-each user2.json --for-each user3.json
+
+# With JSON output format
+cel 'product.inStock' --for-each products/p1.json --for-each products/p2.json --output json
+
+# Combine with base context (base merged into each file's context)
+cel 'value * multiplier' --context '{"multiplier": 2}' --for-each data1.json --for-each data2.json
+
+# Convenient shell loop for globs
+for file in users/*.json; do echo --for-each "$file"; done | xargs cel 'user.active'
+```
+
+**Format**: Repeat `--for-each` flag for each file path
+**Behavior**: Each file is evaluated independently with the same expression
+**Use case**: Apply one validation rule or filter across many data files
+**Output**: Table showing results for each context file with timing information
+
+**Key difference from `--context-file`**:
+- `--context-file file.json` - Loads ONE context for the expression
+- `--for-each f1.json --for-each f2.json` - Evaluates expression SEPARATELY for EACH file
+
+**Why repeat the flag?** This is standard CLI behavior (like `git add file1 file2` vs `grep -e pattern1 -e pattern2`). It makes it explicit that each file is processed independently, not merged together.
+
 
 ### Interactive Mode
 

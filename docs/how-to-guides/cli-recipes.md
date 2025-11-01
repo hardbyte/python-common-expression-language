@@ -64,23 +64,62 @@ curl -s https://api.github.com/users/octocat | \
 
 ### Batch Processing
 
-```bash
-# Process multiple files
-for config in configs/*.json; do
-  echo "Validating $config..."
-  if cel 'has("database.host") && database.host != ""' --context-file "$config" --exit-status; then
-    echo "✓ $config is valid"
-  else
-    echo "✗ $config is invalid"
-  fi
-done
 
-# Transform data files
-ls data/*.json | while read -r file; do
-  cel 'user.name + "," + user.email + "," + string(user.age)' \
-    --context-file "$file" >> users.csv
-done
+#### Batch Context Processing
+
+Evaluate one expression SEPARATELY for each context file:
+
+```bash
+# Validate age - repeat --for-each for each file
+cel 'user.age >= 18' --for-each users/user1.json --for-each users/user2.json --for-each users/user3.json
+
+# Shorter: use shell loops for glob patterns
+for file in users/*.json; do
+  printf -- "--for-each %s " "$file"
+done | xargs cel 'user.age >= 18'
+
+# Output (table format shows results for each file):
+# Expression Results: user.age >= 18
+# ┏━━━┳━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━┓
+# ┃ # ┃ Context File┃ Result ┃ Time (ms) ┃
+# ┡━━━╇━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━┩
+# │ 1 │ user1.json  │ True   │ 3.10      │
+# │ 2 │ user2.json  │ True   │ 0.16      │
+# │ 3 │ user3.json  │ False  │ 0.16      │
+# └───┴─────────────┴────────┴───────────┘
+
+# Check product inventory (with JSON output)
+cel 'product.inStock && product.price < 500' \
+  --for-each inventory/p1.json \
+  --for-each inventory/p2.json \
+  --output json
+
+# Validate configuration files - shell helper function
+check_configs() {
+  for f in configs/app-*.json; do echo "--for-each $f"; done | \
+  xargs cel 'has(config.database) && config.database.port > 0'
+}
+
+# Combine with base context (base merged into each file)
+cel 'value * multiplier' \
+  --context '{"multiplier": 1.2}' \
+  --for-each data/metrics-1.json \
+  --for-each data/metrics-2.json
 ```
+
+**Benefits over loops:**
+- Single table output showing all results
+- Timing information for each evaluation
+- More efficient (no subprocess spawning per file)
+- Better for parallel processing
+- Clearer visualization of results
+
+**Use cases:**
+- Validate data files against a schema/rule
+- Check compliance across multiple configurations
+- Filter/identify files matching criteria
+- Apply the same transformation to multiple datasets
+- Audit logs or records for specific conditions
 
 ## Validation and Testing
 

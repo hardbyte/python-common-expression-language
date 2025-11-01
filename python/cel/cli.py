@@ -534,6 +534,78 @@ def evaluate_expressions_from_file(
         console.print(table)
 
 
+def evaluate_expression_with_multiple_contexts(
+    expression: str, context_files: list[Path], base_context: Dict[str, Any], output_format: str
+) -> None:
+    """Evaluate a single expression against multiple context files with Rich output."""
+    if not context_files:
+        console.print("[yellow]No context files provided[/yellow]")
+        return
+
+    results = []
+
+    with console.status(f"[bold green]Evaluating against {len(context_files)} context files..."):
+        for i, context_file in enumerate(context_files, 1):
+            try:
+                # Load context from file
+                file_context = load_context_from_file(context_file)
+
+                # Merge with base context (file context takes precedence)
+                eval_context = {**base_context, **file_context}
+
+                # Create evaluator with this context
+                evaluator = CELEvaluator(eval_context)
+
+                # Evaluate expression
+                start_time = time.time()
+                result = evaluator.evaluate(expression)
+                eval_time = time.time() - start_time
+
+                results.append(
+                    {
+                        "context_file": str(context_file),
+                        "result": result,
+                        "time_ms": eval_time * 1000,
+                    }
+                )
+
+            except Exception as e:
+                console.print(f"[red]Error with context file '{context_file}': {e}[/red]")
+                results.append({"context_file": str(context_file), "error": str(e)})
+
+    # Display results
+    if output_format == "json":
+        json_output = json.dumps(results, indent=2, default=str)
+        syntax = Syntax(json_output, "json", theme="monokai")
+        console.print(syntax)
+    else:
+        table = Table(
+            title=f"Expression Results: {expression}", show_header=True, header_style="bold magenta"
+        )
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Context File", style="cyan")
+        table.add_column("Result", style="green")
+        table.add_column("Time (ms)", style="yellow")
+
+        for i, result in enumerate(results, 1):
+            if "error" in result:
+                context_name = Path(result["context_file"]).name
+                table.add_row(
+                    str(i),
+                    context_name,
+                    f"[red]Error: {result['error']}[/red]",
+                    "—",
+                )
+            else:
+                context_name = Path(result["context_file"]).name
+                result_str = str(result["result"])
+                if len(result_str) > 50:
+                    result_str = result_str[:47] + "..."
+                table.add_row(str(i), context_name, result_str, f"{result['time_ms']:.2f}")
+
+        console.print(table)
+
+
 @app.command()
 def main(
     expression: Annotated[Optional[str], typer.Argument(help="CEL expression to evaluate")] = None,
@@ -544,6 +616,13 @@ def main(
         Optional[Path],
         typer.Option("-f", "--context-file", help="Load context from JSON file"),
     ] = None,
+    for_each: Annotated[
+        Optional[list[Path]],
+        typer.Option(
+            "--for-each",
+            help="Evaluate expression SEPARATELY for each context file. Repeat for multiple files: --for-each file1.json --for-each file2.json",
+        ),
+    ] = None,
     file: Annotated[
         Optional[Path],
         typer.Option("--file", help="Read expressions from file (one per line)"),
@@ -551,6 +630,9 @@ def main(
     output: Annotated[str, typer.Option("-o", "--output", help="Output format")] = "auto",
     interactive: Annotated[
         bool, typer.Option("-i", "--interactive", help="Start interactive REPL mode")
+    ] = False,
+    tui: Annotated[
+        bool, typer.Option("--tui", help="Launch graphical TUI interface")
     ] = False,
     timing: Annotated[bool, typer.Option("-t", "--timing", help="Show evaluation timing")] = False,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Verbose output")] = False,
@@ -575,8 +657,14 @@ def main(
         # Load context from file
         cel 'user.name' --context-file context.json
 
+        # Batch processing - evaluate expression SEPARATELY for each file
+        cel 'user.age >= 18' --for-each user1.json --for-each user2.json --for-each user3.json
+
         # Interactive REPL mode
         cel --interactive
+
+        # Graphical TUI mode
+        cel --tui
 
         # Evaluate expressions from file
         cel --file expressions.cel --output json
@@ -602,15 +690,44 @@ def main(
     # Initialize evaluator
     evaluator = CELEvaluator(eval_context)
 
-    # Interactive mode
+    # Interactive REPL mode
     if interactive:
         repl = InteractiveCELREPL(evaluator)
         repl.run()
         return
 
+    # TUI mode
+    if tui:
+        try:
+            from .tui import run_tui
+
+            run_tui()
+        except ImportError as e:
+            console.print(
+                "[red]Error: TUI requires the 'textual' and 'pyyaml' packages. "
+                "Install with: pip install textual pyyaml[/red]"
+            )
+            console.print(f"[dim]Details: {e}[/dim]")
+            raise typer.Exit(1) from e
+        except Exception as e:
+            console.print(f"[red]Error launching TUI: {e}[/red]")
+            raise typer.Exit(1) from e
+        return
+
     # File mode
     if file:
         evaluate_expressions_from_file(file, evaluator, output)
+        return
+
+    # Batch context mode - evaluate one expression against multiple context files
+    if for_each:
+        if not expression:
+            console.print(
+                "[red]Error: --for-each requires an expression argument.[/red]"
+            )
+            console.print("\nExample: [bold]cel 'user.age >= 18' --for-each user1.json user2.json user3.json[/bold]")
+            raise typer.Exit(1)
+        evaluate_expression_with_multiple_contexts(expression, for_each, eval_context, output)
         return
 
     # Single expression evaluation

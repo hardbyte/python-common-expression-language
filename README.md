@@ -63,8 +63,14 @@ cel '1 + 2'  # 3
 # With context
 cel 'age >= 18' --context '{"age": 25}'  # true
 
-# Interactive REPL
+# Batch processing - evaluate expression SEPARATELY for each file
+cel 'user.age >= 18' --for-each user1.json --for-each user2.json --for-each user3.json
+
+# Interactive REPL mode
 cel --interactive
+
+# Modern TUI interface
+cel --tui
 ```
 
 ### Custom Functions
@@ -108,8 +114,10 @@ access_granted = evaluate(policy, context)  # True
 - ✅ **Fast Evaluation**: Microsecond-level expression evaluation via Rust
 - ✅ **Rich Type System**: Integers, floats, strings, lists, maps, timestamps, durations
 - ✅ **Python Integration**: Seamless type conversion and custom function support
-- ✅ **CLI Tools**: Interactive REPL and batch processing capabilities
+- ✅ **Interactive TUI**: Text-based UI with syntax highlighting and real-time evaluation
+- ✅ **CLI Tools**: Command-line evaluation and batch processing capabilities
 - ✅ **Safety First**: Non-Turing complete, safe for untrusted expressions
+
 
 ## Documentation
 
