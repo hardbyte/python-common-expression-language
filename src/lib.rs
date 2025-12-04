@@ -16,6 +16,88 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
+/// A compiled CEL program that can be executed multiple times with different contexts.
+///
+/// This is useful when you need to evaluate the same expression many times with different
+/// variable bindings. Compiling once and executing multiple times is significantly faster
+/// than calling `evaluate()` repeatedly.
+///
+/// # Example
+///
+/// ```python
+/// from cel import compile
+///
+/// # Compile once
+/// program = compile("price * quantity > 100")
+///
+/// # Execute many times with different contexts
+/// result1 = program.execute({"price": 10, "quantity": 20})  # True
+/// result2 = program.execute({"price": 5, "quantity": 10})   # False
+/// ```
+#[pyclass(name = "Program")]
+struct PyProgram {
+    program: Program,
+    source: String,
+}
+
+#[pymethods]
+impl PyProgram {
+    /// Execute the compiled program with the given context.
+    ///
+    /// Args:
+    ///     context: Optional evaluation context (dict or Context object)
+    ///
+    /// Returns:
+    ///     The result of the expression evaluation
+    #[pyo3(signature = (context=None))]
+    fn execute(&self, context: Option<&Bound<'_, PyAny>>) -> PyResult<Py<PyAny>> {
+        execute_compiled_program(&self.program, &self.source, context)
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Program({:?})", self.source)
+    }
+}
+
+/// Compile a CEL expression into a reusable Program object.
+///
+/// This function parses and compiles a CEL expression, returning a Program object
+/// that can be executed multiple times with different contexts. This is more efficient
+/// than calling `evaluate()` repeatedly with the same expression.
+///
+/// Args:
+///     expression: The CEL expression to compile
+///
+/// Returns:
+///     A compiled Program object
+///
+/// Raises:
+///     ValueError: If the expression has syntax errors or is malformed
+///
+/// Example:
+///     >>> from cel import compile
+///     >>> program = compile("x + y")
+///     >>> program.execute({"x": 1, "y": 2})
+///     3
+///     >>> program.execute({"x": 10, "y": 20})
+///     30
+#[pyfunction]
+fn compile(expression: String) -> PyResult<PyProgram> {
+    let program = panic::catch_unwind(|| Program::compile(&expression))
+        .map_err(|_| {
+            warn!("CEL parser panic for expression: '{}'", expression);
+            PyValueError::new_err(format!(
+                "Failed to parse expression '{expression}': Invalid syntax or malformed string"
+            ))
+        })?
+        .map_err(|e| PyValueError::new_err(format!("Failed to parse expression '{expression}': {e}")))?;
+
+    Ok(PyProgram {
+        program,
+        source: expression,
+    })
+}
+
 #[derive(Debug)]
 struct RustyCelType(Value);
 
@@ -516,11 +598,137 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
     }
 }
 
+/// Internal helper to execute a pre-compiled program with the given context.
+/// Used by both `evaluate()` (after compiling) and `PyProgram.execute()`.
+fn execute_compiled_program(
+    program: &Program,
+    src: &str,
+    evaluation_context: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Py<PyAny>> {
+    let mut environment = CelContext::default();
+    let mut ctx = context::Context::new(None, None)?;
+    let mut variables_for_env = HashMap::new();
+
+    // Process the evaluation context if provided
+    if let Some(evaluation_context) = evaluation_context {
+        // Attempt to extract directly as a Context object
+        if let Ok(py_context_ref) = evaluation_context.extract::<PyRef<context::Context>>() {
+            // Clone variables and functions into our local Context
+            ctx.variables = py_context_ref.variables.clone();
+            ctx.functions = py_context_ref.functions.clone();
+        } else if let Ok(py_dict) = evaluation_context.cast::<PyDict>() {
+            // User passed in a dict - let's process variables and functions from the dict
+            ctx.update(py_dict)?;
+        } else {
+            return Err(PyValueError::new_err(
+                "evaluation_context must be a Context object or a dict",
+            ));
+        };
+
+        variables_for_env = ctx.variables.clone();
+    }
+
+    // Add variables and functions if we have a context
+    if evaluation_context.is_some() {
+        // Add any variables from the processed context
+        for (name, value) in &variables_for_env {
+            environment
+                .add_variable(name.clone(), value.clone())
+                .map_err(|e| {
+                    PyValueError::new_err(format!("Failed to add variable '{name}': {e}"))
+                })?;
+        }
+
+        // Register Python functions
+        for (function_name, py_function) in ctx.functions.iter() {
+            // Create a wrapper function
+            let py_func_clone = Python::attach(|py| py_function.clone_ref(py));
+            let func_name_clone = function_name.clone();
+
+            // Register a function that takes Arguments (variadic) and returns a Value
+            environment.add_function(
+                function_name,
+                move |args: ::cel::extractors::Arguments| -> Result<Value, ExecutionError> {
+                    let py_func = py_func_clone.clone();
+                    let func_name = func_name_clone.clone();
+
+                    Python::attach(|py| {
+                        // Convert CEL arguments to Python objects
+                        let mut py_args = Vec::new();
+                        for cel_value in args.0.iter() {
+                            let py_arg = RustyCelType(cel_value.clone())
+                                .into_pyobject(py)
+                                .map_err(|e| ExecutionError::FunctionError {
+                                    function: func_name.clone(),
+                                    message: format!("Failed to convert argument to Python: {e}"),
+                                })?
+                                .into_any()
+                                .unbind();
+                            py_args.push(py_arg);
+                        }
+
+                        let py_args_tuple = PyTuple::new(py, py_args).map_err(|e| {
+                            ExecutionError::FunctionError {
+                                function: func_name.clone(),
+                                message: format!("Failed to create arguments tuple: {e}"),
+                            }
+                        })?;
+
+                        // Call the Python function
+                        let py_result = py_func.call1(py, py_args_tuple).map_err(|e| {
+                            warn!("Python function '{}' failed: {}", func_name, e);
+                            ExecutionError::FunctionError {
+                                function: func_name.clone(),
+                                message: format!("Python function call failed: {e}"),
+                            }
+                        })?;
+
+                        // Convert the result back to CEL Value
+                        let py_result_ref = py_result.bind(py);
+                        let cel_value =
+                            RustyPyType(py_result_ref).try_into_value().map_err(|e| {
+                                ExecutionError::FunctionError {
+                                    function: func_name.clone(),
+                                    message: format!(
+                                        "Failed to convert Python result to CEL value: {e}"
+                                    ),
+                                }
+                            })?;
+
+                        Ok(cel_value)
+                    })
+                },
+            );
+        }
+    }
+
+    // Use panic::catch_unwind to handle execution panics gracefully
+    // AssertUnwindSafe is needed because the environment contains function closures
+    let result =
+        panic::catch_unwind(AssertUnwindSafe(|| program.execute(&environment))).map_err(|_| {
+            warn!("CEL execution panic for expression: '{}'", src);
+            PyValueError::new_err(format!(
+                "Failed to execute expression '{src}': Internal parser error"
+            ))
+        })?;
+
+    match result {
+        Err(error) => Err(map_execution_error_to_python(&error)),
+        Ok(value) => Python::attach(|py| {
+            RustyCelType(value)
+                .into_pyobject(py)
+                .map(|obj| obj.unbind())
+        }),
+    }
+}
+
 #[pymodule]
 fn cel(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
+    m.add_function(wrap_pyfunction!(compile, m)?)?;
     m.add_class::<context::Context>()?;
+    m.add_class::<PyProgram>()?;
     Ok(())
 }
