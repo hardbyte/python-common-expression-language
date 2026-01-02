@@ -35,8 +35,6 @@ class Context:
 def evaluate(
     expression: str,
     context: Optional[Union[Dict[str, Any], Context]] = None,
-    *,
-    mode: Union[Literal["python", "strict"], "EvaluationMode", str] = "python",
 ) -> Any:
     """
     Evaluate a CEL expression.
@@ -44,8 +42,6 @@ def evaluate(
     Args:
         expression: The CEL expression to evaluate
         context: Optional context with variables and functions
-        mode: Evaluation mode - either "python" (default) for mixed arithmetic
-              or "strict" for strict type matching
 
     Returns:
         The result of evaluating the expression
