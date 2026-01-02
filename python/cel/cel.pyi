@@ -4,8 +4,6 @@ Type stubs for the CEL Rust extension module.
 
 from typing import Any, Callable, Dict, Literal, Optional, Union, overload
 
-from .evaluation_modes import EvaluationMode
-
 class Context:
     """CEL evaluation context for variables and functions."""
 
