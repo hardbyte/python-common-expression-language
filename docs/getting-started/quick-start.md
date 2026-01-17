@@ -90,6 +90,25 @@ assert result == "No phone"  # → "No phone" (safe field checking prevents erro
 print("✓ Context variables working correctly")
 ```
 
+## Pre-compilation for Performance
+
+Use `compile()` when evaluating the same expression many times with different contexts:
+
+```python
+from cel import compile
+
+# Compile once, execute many times
+program = compile("price * quantity > threshold")
+
+result1 = program.execute({"price": 10, "quantity": 5, "threshold": 40})
+assert result1 == True  # → True (50 > 40)
+
+result2 = program.execute({"price": 5, "quantity": 3, "threshold": 20})
+assert result2 == False  # → False (15 > 20)
+
+print("Pre-compilation working correctly")
+```
+
 ## Ready for More?
 
 You've mastered the basics of CEL evaluation with dictionary context! For advanced features like custom Python functions, context objects, and production patterns, continue to the next guide.

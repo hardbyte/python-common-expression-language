@@ -67,6 +67,21 @@ cel 'age >= 18' --context '{"age": 25}'  # true
 cel --interactive
 ```
 
+### Pre-compilation for Performance
+
+When evaluating the same expression multiple times with different contexts, use `compile()` for better performance:
+
+```python
+from cel import compile
+
+# Compile once
+program = compile("price * quantity > threshold")
+
+# Execute many times - much faster than repeated evaluate() calls
+result1 = program.execute({"price": 10, "quantity": 5, "threshold": 40})  # True
+result2 = program.execute({"price": 5, "quantity": 3, "threshold": 20})   # False
+```
+
 ### Custom Functions
 
 ```python
