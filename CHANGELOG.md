@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-02-07
+
+### Added
+
+- `compile()` API and `Program.execute()` for reuse and performance
+- `OptionalValue` wrapper to expose CEL optional values in Python
+- Compile vs execute benchmark script (`examples/performance/compile_execute_benchmark.py`)
+
+### Updated
+
+- Updated cel-rust from 0.11.6 to 0.12.0
+
+### Changed
+
+- Documentation: pre-compilation guidance and OptionalValue examples
+
 ## [0.5.4] - 2025-10-23
 
 ### Updated
@@ -115,4 +131,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PyO3 migration**: moved from deprecated `IntoPy` to new `IntoPyObject` API.
 - New conversion system improves error handling and type safety.
 - All 120 tests pass on current dependency set.
-
