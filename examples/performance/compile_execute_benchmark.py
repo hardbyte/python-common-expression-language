@@ -72,9 +72,7 @@ def main() -> None:
         program, compile_us = measure_compile(expr)
 
         eval_bench = bench_case(lambda expr=expr, ctx=ctx: cel.evaluate(expr, ctx))
-        exec_bench = bench_case(
-            lambda program=program, ctx=ctx: program.execute(ctx)
-        )
+        exec_bench = bench_case(lambda program=program, ctx=ctx: program.execute(ctx))
 
         speedup = eval_bench["avg_us"] / exec_bench["avg_us"] if exec_bench["avg_us"] > 0 else None
 
