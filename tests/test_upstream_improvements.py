@@ -119,14 +119,11 @@ class TestMixedArithmetic:
 class TestOptionalValues:
     """Test optional value functionality that may be implemented in future."""
 
-    def test_optional_of_not_implemented(self):
-        """
-        Test that optional.of() is not implemented.
-
-        When this test starts failing, optional values have been implemented.
-        """
-        with pytest.raises(RuntimeError, match="Undefined variable or function.*of"):
-            cel.evaluate("optional.of(42)")
+    def test_optional_of_implemented(self):
+        """Test optional.of() and optional.none() behavior."""
+        assert cel.evaluate("optional.of(42).orValue(0)") == 42
+        assert cel.evaluate("optional.of(null).orValue('default')") is None
+        assert cel.evaluate("optional.none().orValue('default')") == "default"
 
     def test_optional_chaining_not_implemented(self):
         """
@@ -139,16 +136,15 @@ class TestOptionalValues:
         with pytest.raises((ValueError, RuntimeError)):
             cel.evaluate("user?.profile?.name", {"user": {"profile": {"name": "Alice"}}})
 
-    @pytest.mark.xfail(reason="Optional values not implemented in cel v0.11.0", strict=False)
     def test_optional_expected_behavior(self):
         """
         Test expected optional value behavior when implemented.
 
-        This test will pass when upstream implements optional values.
+        This test verifies the CEL spec for optional values.
         """
-        # These are expectations based on CEL spec
         assert cel.evaluate("optional.of(42).orValue(0)") == 42
-        assert cel.evaluate('optional.of(null).orValue("default")') == "default"
+        assert cel.evaluate("optional.of(null).orValue('default')") is None
+        assert cel.evaluate("optional.none().orValue('default')") == "default"
 
 
 class TestMapFunctionImprovements:

@@ -95,10 +95,10 @@ print("✓ Context variables working correctly")
 Use `compile()` when evaluating the same expression many times with different contexts:
 
 ```python
-from cel import compile
+import cel
 
 # Compile once, execute many times
-program = compile("price * quantity > threshold")
+program = cel.compile("price * quantity > threshold")
 
 result1 = program.execute({"price": 10, "quantity": 5, "threshold": 40})
 assert result1 == True  # → True (50 > 40)

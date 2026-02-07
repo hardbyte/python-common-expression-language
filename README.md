@@ -72,10 +72,10 @@ cel --interactive
 When evaluating the same expression multiple times with different contexts, use `compile()` for better performance:
 
 ```python
-from cel import compile
+import cel
 
 # Compile once
-program = compile("price * quantity > threshold")
+program = cel.compile("price * quantity > threshold")
 
 # Execute many times - much faster than repeated evaluate() calls
 result1 = program.execute({"price": 10, "quantity": 5, "threshold": 40})  # True
