@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.27", features = ["chrono", "py-clone"]}
-cel = { version = "0.11.6", features = ["chrono", "json", "regex"] }
+cel = { version = "0.12.0", features = ["chrono", "json", "regex", "bytes"] }
 log = "0.4.27"
 pyo3-log = { git = "https://github.com/a1phyr/pyo3-log.git", branch = "pyo3_0.27" }
 chrono = { version = "0.4.42", features = ["serde"] }

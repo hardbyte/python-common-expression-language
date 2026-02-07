@@ -1,6 +1,6 @@
 mod context;
 
-use ::cel::objects::{Key, TryIntoValue};
+use ::cel::objects::{Key, OptionalValue, TryIntoValue};
 use ::cel::{Context as CelContext, ExecutionError, Program, Value};
 use log::warn;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
@@ -9,7 +9,7 @@ use pyo3::BoundObject;
 use std::panic::{self, AssertUnwindSafe};
 
 use chrono::{DateTime, Duration as ChronoDuration, Offset, TimeZone};
-use pyo3::types::{PyBool, PyBytes, PyDict, PyList, PyTuple};
+use pyo3::types::{PyBool, PyBytes, PyDict, PyList, PyTuple, PyType};
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -56,6 +56,82 @@ impl PyProgram {
 
     fn __repr__(&self) -> String {
         format!("Program({:?})", self.source)
+    }
+}
+
+/// A CEL optional value wrapper for Python.
+#[pyclass(name = "OptionalValue")]
+struct PyOptionalValue {
+    value: Option<Value>,
+}
+
+impl PyOptionalValue {
+    fn to_cel_value(&self) -> Value {
+        match &self.value {
+            Some(value) => Value::Opaque(Arc::new(OptionalValue::of(value.clone()))),
+            None => Value::Opaque(Arc::new(OptionalValue::none())),
+        }
+    }
+}
+
+#[pymethods]
+impl PyOptionalValue {
+    #[classmethod]
+    fn of(_cls: &Bound<'_, PyType>, value: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let value = RustyPyType(value)
+            .try_into_value()
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(Self { value: Some(value) })
+    }
+
+    #[classmethod]
+    fn none(_cls: &Bound<'_, PyType>) -> Self {
+        Self { value: None }
+    }
+
+    fn has_value(&self) -> bool {
+        self.value.is_some()
+    }
+
+    fn value(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        match &self.value {
+            Some(value) => RustyCelType(value.clone())
+                .into_pyobject(py)
+                .map(|obj| obj.unbind()),
+            None => Err(PyValueError::new_err("optional.none() dereference")),
+        }
+    }
+
+    fn or_value(&self, default: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        match &self.value {
+            Some(value) => RustyCelType(value.clone())
+                .into_pyobject(py)
+                .map(|obj| obj.unbind()),
+            None => Ok(default.clone().unbind()),
+        }
+    }
+
+    fn or_optional(&self, other: PyRef<'_, PyOptionalValue>) -> PyOptionalValue {
+        if self.value.is_some() {
+            PyOptionalValue {
+                value: self.value.clone(),
+            }
+        } else {
+            PyOptionalValue {
+                value: other.value.clone(),
+            }
+        }
+    }
+
+    fn __bool__(&self) -> bool {
+        self.value.is_some()
+    }
+
+    fn __repr__(&self) -> String {
+        match &self.value {
+            Some(value) => format!("OptionalValue({value:?})"),
+            None => "OptionalValue.none()".to_string(),
+        }
     }
 }
 
@@ -146,6 +222,29 @@ impl<'py> IntoPyObject<'py> for RustyCelType {
                 python_dict.into_any()
             }
 
+            RustyCelType(Value::Opaque(opaque)) => {
+                if opaque.runtime_type_name() == "optional_type" {
+                    if let Some(optional) = opaque.downcast_ref::<OptionalValue>() {
+                        Py::new(
+                            py,
+                            PyOptionalValue {
+                                value: optional.value().cloned(),
+                            },
+                        )?
+                        .into_bound(py)
+                        .into_any()
+                    } else {
+                        format!("{:?}", Value::Opaque(opaque.clone()))
+                            .into_pyobject(py)?
+                            .into_any()
+                    }
+                } else {
+                    format!("{:?}", Value::Opaque(opaque.clone()))
+                        .into_pyobject(py)?
+                        .into_any()
+                }
+            }
+
             // Turn everything else into a String:
             nonprimitive => format!("{nonprimitive:?}").into_pyobject(py)?.into_any(),
         };
@@ -169,6 +268,105 @@ impl fmt::Display for CelError {
     }
 }
 impl Error for CelError {}
+
+/// Build a CEL execution environment from an optional evaluation context.
+///
+/// This consolidates the shared logic used by `evaluate()` and `Program.execute()`
+/// to keep behavior consistent between the two entrypoints.
+fn build_environment(
+    evaluation_context: Option<&Bound<'_, PyAny>>,
+    environment: &mut CelContext<'_>,
+) -> PyResult<()> {
+    let mut ctx = context::Context::new(None, None)?;
+
+    // Process the evaluation context if provided
+    if let Some(evaluation_context) = evaluation_context {
+        // Attempt to extract directly as a Context object
+        if let Ok(py_context_ref) = evaluation_context.extract::<PyRef<context::Context>>() {
+            // Clone variables and functions into our local Context
+            ctx.variables = py_context_ref.variables.clone();
+            ctx.functions = py_context_ref.functions.clone();
+        } else if let Ok(py_dict) = evaluation_context.cast::<PyDict>() {
+            // User passed in a dict - let's process variables and functions from the dict
+            ctx.update(py_dict)?;
+        } else {
+            return Err(PyValueError::new_err(
+                "evaluation_context must be a Context object or a dict",
+            ));
+        };
+
+        // Add any variables from the processed context
+        for (name, value) in &ctx.variables {
+            environment
+                .add_variable(name.clone(), value.clone())
+                .map_err(|e| PyValueError::new_err(format!("Failed to add variable '{name}': {e}")))?;
+        }
+
+        // Register Python functions
+        for (function_name, py_function) in ctx.functions.iter() {
+            // Create a wrapper function
+            let py_func_clone = Python::attach(|py| py_function.clone_ref(py));
+            let func_name_clone = function_name.clone();
+
+            // Register a function that takes Arguments (variadic) and returns a Value
+            environment.add_function(
+                function_name,
+                move |args: ::cel::extractors::Arguments| -> Result<Value, ExecutionError> {
+                    let py_func = py_func_clone.clone();
+                    let func_name = func_name_clone.clone();
+
+                    Python::attach(|py| {
+                        // Convert CEL arguments to Python objects
+                        let mut py_args = Vec::new();
+                        for cel_value in args.0.iter() {
+                            let py_arg = RustyCelType(cel_value.clone())
+                                .into_pyobject(py)
+                                .map_err(|e| ExecutionError::FunctionError {
+                                    function: func_name.clone(),
+                                    message: format!("Failed to convert argument to Python: {e}"),
+                                })?
+                                .into_any()
+                                .unbind();
+                            py_args.push(py_arg);
+                        }
+
+                        let py_args_tuple = PyTuple::new(py, py_args).map_err(|e| {
+                            ExecutionError::FunctionError {
+                                function: func_name.clone(),
+                                message: format!("Failed to create arguments tuple: {e}"),
+                            }
+                        })?;
+
+                        // Call the Python function
+                        let py_result = py_func.call1(py, py_args_tuple).map_err(|e| {
+                            warn!("Python function '{}' failed: {}", func_name, e);
+                            ExecutionError::FunctionError {
+                                function: func_name.clone(),
+                                message: format!("Python function call failed: {e}"),
+                            }
+                        })?;
+
+                        // Convert the result back to CEL Value
+                        let py_result_ref = py_result.bind(py);
+                        let cel_value =
+                            RustyPyType(py_result_ref).try_into_value().map_err(|e| {
+                                ExecutionError::FunctionError {
+                                    function: func_name.clone(),
+                                    message: format!(
+                                        "Failed to convert Python result to CEL value: {e}"
+                                    ),
+                                }
+                            })?;
+
+                        Ok(cel_value)
+                    })
+                },
+            );
+        }
+    }
+
+    Ok(())
+}
 
 /// Enhanced error handling that maps CEL execution errors to appropriate Python exceptions
 fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
@@ -248,7 +446,9 @@ impl TryIntoValue for RustyPyType<'_> {
     fn try_into_value(self) -> Result<Value, Self::Error> {
         let val = match self {
             RustyPyType(pyobject) => {
-                if pyobject.is_none() {
+                if let Ok(py_optional) = pyobject.extract::<PyRef<PyOptionalValue>>() {
+                    Ok(py_optional.to_cel_value())
+                } else if pyobject.is_none() {
                     Ok(Value::Null)
                 } else if let Ok(value) = pyobject.extract::<bool>() {
                     Ok(Value::Bool(value))
@@ -473,30 +673,7 @@ impl TryIntoValue for RustyPyType<'_> {
 #[pyfunction(signature = (src, evaluation_context=None))]
 fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<RustyCelType> {
     let mut environment = CelContext::default();
-    let mut ctx = context::Context::new(None, None)?;
-    let mut variables_for_env = HashMap::new();
-
-    // Custom Rust functions can also be added to the environment...
-    //environment.add_function("add", |a: i64, b: i64| a + b);
-
-    // Process the evaluation context if provided
-    if let Some(evaluation_context) = evaluation_context {
-        // Attempt to extract directly as a Context object
-        if let Ok(py_context_ref) = evaluation_context.extract::<PyRef<context::Context>>() {
-            // Clone variables and functions into our local Context
-            ctx.variables = py_context_ref.variables.clone();
-            ctx.functions = py_context_ref.functions.clone();
-        } else if let Ok(py_dict) = evaluation_context.cast::<PyDict>() {
-            // User passed in a dict - let's process variables and functions from the dict
-            ctx.update(py_dict)?;
-        } else {
-            return Err(PyValueError::new_err(
-                "evaluation_context must be a Context object or a dict",
-            ));
-        };
-
-        variables_for_env = ctx.variables.clone();
-    }
+    build_environment(evaluation_context, &mut environment)?;
 
     // Use panic::catch_unwind to handle parser panics gracefully
     let program = panic::catch_unwind(|| Program::compile(&src))
@@ -507,80 +684,6 @@ fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyRes
             ))
         })?
         .map_err(|e| PyValueError::new_err(format!("Failed to parse expression '{src}': {e}")))?;
-
-    // Add variables and functions if we have a context
-    if evaluation_context.is_some() {
-        // Add any variables from the processed context
-        for (name, value) in &variables_for_env {
-            environment
-                .add_variable(name.clone(), value.clone())
-                .map_err(|e| {
-                    PyValueError::new_err(format!("Failed to add variable '{name}': {e}"))
-                })?;
-        }
-
-        // Register Python functions
-        for (function_name, py_function) in ctx.functions.iter() {
-            // Create a wrapper function
-            let py_func_clone = Python::attach(|py| py_function.clone_ref(py));
-            let func_name_clone = function_name.clone();
-
-            // Register a function that takes Arguments (variadic) and returns a Value
-            environment.add_function(
-                function_name,
-                move |args: ::cel::extractors::Arguments| -> Result<Value, ExecutionError> {
-                    let py_func = py_func_clone.clone();
-                    let func_name = func_name_clone.clone();
-
-                    Python::attach(|py| {
-                        // Convert CEL arguments to Python objects
-                        let mut py_args = Vec::new();
-                        for cel_value in args.0.iter() {
-                            let py_arg = RustyCelType(cel_value.clone())
-                                .into_pyobject(py)
-                                .map_err(|e| ExecutionError::FunctionError {
-                                    function: func_name.clone(),
-                                    message: format!("Failed to convert argument to Python: {e}"),
-                                })?
-                                .into_any()
-                                .unbind();
-                            py_args.push(py_arg);
-                        }
-
-                        let py_args_tuple = PyTuple::new(py, py_args).map_err(|e| {
-                            ExecutionError::FunctionError {
-                                function: func_name.clone(),
-                                message: format!("Failed to create arguments tuple: {e}"),
-                            }
-                        })?;
-
-                        // Call the Python function
-                        let py_result = py_func.call1(py, py_args_tuple).map_err(|e| {
-                            warn!("Python function '{}' failed: {}", func_name, e);
-                            ExecutionError::FunctionError {
-                                function: func_name.clone(),
-                                message: format!("Python function call failed: {e}"),
-                            }
-                        })?;
-
-                        // Convert the result back to CEL Value
-                        let py_result_ref = py_result.bind(py);
-                        let cel_value =
-                            RustyPyType(py_result_ref).try_into_value().map_err(|e| {
-                                ExecutionError::FunctionError {
-                                    function: func_name.clone(),
-                                    message: format!(
-                                        "Failed to convert Python result to CEL value: {e}"
-                                    ),
-                                }
-                            })?;
-
-                        Ok(cel_value)
-                    })
-                },
-            );
-        }
-    }
 
     // Use panic::catch_unwind to handle execution panics gracefully
     // AssertUnwindSafe is needed because the environment contains function closures
@@ -606,101 +709,7 @@ fn execute_compiled_program(
     evaluation_context: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyAny>> {
     let mut environment = CelContext::default();
-    let mut ctx = context::Context::new(None, None)?;
-    let mut variables_for_env = HashMap::new();
-
-    // Process the evaluation context if provided
-    if let Some(evaluation_context) = evaluation_context {
-        // Attempt to extract directly as a Context object
-        if let Ok(py_context_ref) = evaluation_context.extract::<PyRef<context::Context>>() {
-            // Clone variables and functions into our local Context
-            ctx.variables = py_context_ref.variables.clone();
-            ctx.functions = py_context_ref.functions.clone();
-        } else if let Ok(py_dict) = evaluation_context.cast::<PyDict>() {
-            // User passed in a dict - let's process variables and functions from the dict
-            ctx.update(py_dict)?;
-        } else {
-            return Err(PyValueError::new_err(
-                "evaluation_context must be a Context object or a dict",
-            ));
-        };
-
-        variables_for_env = ctx.variables.clone();
-    }
-
-    // Add variables and functions if we have a context
-    if evaluation_context.is_some() {
-        // Add any variables from the processed context
-        for (name, value) in &variables_for_env {
-            environment
-                .add_variable(name.clone(), value.clone())
-                .map_err(|e| {
-                    PyValueError::new_err(format!("Failed to add variable '{name}': {e}"))
-                })?;
-        }
-
-        // Register Python functions
-        for (function_name, py_function) in ctx.functions.iter() {
-            // Create a wrapper function
-            let py_func_clone = Python::attach(|py| py_function.clone_ref(py));
-            let func_name_clone = function_name.clone();
-
-            // Register a function that takes Arguments (variadic) and returns a Value
-            environment.add_function(
-                function_name,
-                move |args: ::cel::extractors::Arguments| -> Result<Value, ExecutionError> {
-                    let py_func = py_func_clone.clone();
-                    let func_name = func_name_clone.clone();
-
-                    Python::attach(|py| {
-                        // Convert CEL arguments to Python objects
-                        let mut py_args = Vec::new();
-                        for cel_value in args.0.iter() {
-                            let py_arg = RustyCelType(cel_value.clone())
-                                .into_pyobject(py)
-                                .map_err(|e| ExecutionError::FunctionError {
-                                    function: func_name.clone(),
-                                    message: format!("Failed to convert argument to Python: {e}"),
-                                })?
-                                .into_any()
-                                .unbind();
-                            py_args.push(py_arg);
-                        }
-
-                        let py_args_tuple = PyTuple::new(py, py_args).map_err(|e| {
-                            ExecutionError::FunctionError {
-                                function: func_name.clone(),
-                                message: format!("Failed to create arguments tuple: {e}"),
-                            }
-                        })?;
-
-                        // Call the Python function
-                        let py_result = py_func.call1(py, py_args_tuple).map_err(|e| {
-                            warn!("Python function '{}' failed: {}", func_name, e);
-                            ExecutionError::FunctionError {
-                                function: func_name.clone(),
-                                message: format!("Python function call failed: {e}"),
-                            }
-                        })?;
-
-                        // Convert the result back to CEL Value
-                        let py_result_ref = py_result.bind(py);
-                        let cel_value =
-                            RustyPyType(py_result_ref).try_into_value().map_err(|e| {
-                                ExecutionError::FunctionError {
-                                    function: func_name.clone(),
-                                    message: format!(
-                                        "Failed to convert Python result to CEL value: {e}"
-                                    ),
-                                }
-                            })?;
-
-                        Ok(cel_value)
-                    })
-                },
-            );
-        }
-    }
+    build_environment(evaluation_context, &mut environment)?;
 
     // Use panic::catch_unwind to handle execution panics gracefully
     // AssertUnwindSafe is needed because the environment contains function closures
@@ -730,5 +739,6 @@ fn cel(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile, m)?)?;
     m.add_class::<context::Context>()?;
     m.add_class::<PyProgram>()?;
+    m.add_class::<PyOptionalValue>()?;
     Ok(())
 }

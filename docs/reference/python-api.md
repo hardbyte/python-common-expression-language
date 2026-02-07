@@ -23,10 +23,10 @@ This function parses and compiles a CEL expression, returning a Program object t
 
 **Example:**
 ```python
-from cel import compile
+import cel
 
 # Compile once
-program = compile("x + y")
+program = cel.compile("x + y")
 
 # Execute many times with different contexts
 result1 = program.execute({"x": 1, "y": 2})
@@ -50,10 +50,10 @@ assert result2 == 30  # → 30
 The Program class represents a pre-compiled CEL expression. Use this when you need to evaluate the same expression many times with different variable bindings. Compiling once and executing multiple times is significantly faster than calling `evaluate()` repeatedly.
 
 ```python
-from cel import compile
+import cel
 
 # Compile the expression once
-program = compile("price * quantity > 100")
+program = cel.compile("price * quantity > 100")
 
 # Execute many times with different contexts
 result1 = program.execute({"price": 10, "quantity": 20})
@@ -82,9 +82,9 @@ Execute the compiled program with the given context.
 
 **Example with dict context:**
 ```python
-from cel import compile
+import cel
 
-program = compile("user.name + ' is ' + user.role")
+program = cel.compile("user.name + ' is ' + user.role")
 result = program.execute({
     "user": {"name": "Alice", "role": "admin"}
 })
@@ -93,9 +93,10 @@ assert result == "Alice is admin"
 
 **Example with Context object:**
 ```python
-from cel import compile, Context
+import cel
+from cel import Context
 
-program = compile("greet(name)")
+program = cel.compile("greet(name)")
 
 ctx = Context()
 ctx.add_variable("name", "World")
@@ -107,10 +108,10 @@ assert result == "Hello, World!"
 
 **Performance pattern - compile once, execute many:**
 ```python
-from cel import compile
+import cel
 
 # Access control policy - compiled once at startup
-policy = compile(
+policy = cel.compile(
     'user.role == "admin" || resource.owner == user.id'
 )
 
@@ -123,6 +124,76 @@ assert check_access({"id": "alice", "role": "admin"}, {"owner": "bob"}) == True
 assert check_access({"id": "bob", "role": "user"}, {"owner": "bob"}) == True
 assert check_access({"id": "charlie", "role": "user"}, {"owner": "bob"}) == False
 ```
+
+### OptionalValue
+
+**Wrapper for CEL optional values.**
+
+CEL optional values preserve the distinction between "no value" and "a value that is null".
+The Python wrapper keeps that distinction intact.
+
+```python
+import cel
+
+opt = cel.evaluate("optional.of(42)")
+assert isinstance(opt, cel.OptionalValue)
+assert opt.has_value() is True
+assert opt.value() == 42
+assert opt.or_value(0) == 42
+
+none_opt = cel.evaluate("optional.none()")
+assert none_opt.has_value() is False
+assert none_opt.or_value("default") == "default"
+```
+
+**Distinguishing `optional.none()` from `optional.of(null)`:**
+```python
+import cel
+
+opt_null = cel.evaluate("optional.of(null)")
+assert opt_null.has_value() is True
+assert opt_null.value() is None
+
+opt_none = cel.evaluate("optional.none()")
+assert opt_none.has_value() is False
+```
+
+**Passing OptionalValue into evaluation contexts:**
+```python
+import cel
+
+opt = cel.OptionalValue.of(123)
+assert cel.evaluate("opt.orValue(0)", {"opt": opt}) == 123
+
+opt_none = cel.OptionalValue.none()
+assert cel.evaluate("opt.orValue(7)", {"opt": opt_none}) == 7
+```
+
+#### Methods
+
+##### of(value) -> OptionalValue
+
+Create an optional value containing `value`.
+
+##### none() -> OptionalValue
+
+Create an empty optional value.
+
+##### has_value() -> bool
+
+Return `True` when the optional contains a value.
+
+##### value() -> Any
+
+Return the contained value or raise `ValueError` for `optional.none()`.
+
+##### or_value(default) -> Any
+
+Return the contained value if present, otherwise `default`.
+
+##### or_optional(other) -> OptionalValue
+
+Return `self` if it has a value, otherwise return `other`.
 
 ---  
 

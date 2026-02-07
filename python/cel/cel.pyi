@@ -32,6 +32,31 @@ class Context:
         """Update context with variables from a dictionary."""
         ...
 
+class Program:
+    """Compiled CEL program that can be executed multiple times."""
+
+    def execute(self, context: Optional[Union[Dict[str, Any], Context]] = None) -> Any:
+        """Execute the compiled program with an optional context."""
+        ...
+
+def compile(expression: str) -> Program:
+    """Compile a CEL expression into a reusable Program object."""
+    ...
+
+class OptionalValue:
+    """Wrapper for CEL optional values."""
+
+    @classmethod
+    def of(cls, value: Any) -> OptionalValue: ...
+
+    @classmethod
+    def none(cls) -> OptionalValue: ...
+
+    def has_value(self) -> bool: ...
+    def value(self) -> Any: ...
+    def or_value(self, default: Any) -> Any: ...
+    def or_optional(self, other: OptionalValue) -> OptionalValue: ...
+
 def evaluate(
     expression: str,
     context: Optional[Union[Dict[str, Any], Context]] = None,
