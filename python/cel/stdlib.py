@@ -5,6 +5,8 @@ This module provides Python implementations of CEL standard library functions
 that are missing from the upstream cel-rust implementation.
 """
 
+from typing import Any
+
 
 def substring(s: str, start: int, end: int | None = None) -> str:
     """
@@ -42,7 +44,7 @@ STDLIB_FUNCTIONS = {
 }
 
 
-def add_stdlib_to_context(context):
+def add_stdlib_to_context(context: Any) -> None:
     """
     Add all stdlib functions to a CEL Context.
 

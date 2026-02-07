@@ -166,7 +166,9 @@ fn compile(expression: String) -> PyResult<PyProgram> {
                 "Failed to parse expression '{expression}': Invalid syntax or malformed string"
             ))
         })?
-        .map_err(|e| PyValueError::new_err(format!("Failed to parse expression '{expression}': {e}")))?;
+        .map_err(|e| {
+            PyValueError::new_err(format!("Failed to parse expression '{expression}': {e}"))
+        })?;
 
     Ok(PyProgram {
         program,
@@ -299,7 +301,9 @@ fn build_environment(
         for (name, value) in &ctx.variables {
             environment
                 .add_variable(name.clone(), value.clone())
-                .map_err(|e| PyValueError::new_err(format!("Failed to add variable '{name}': {e}")))?;
+                .map_err(|e| {
+                    PyValueError::new_err(format!("Failed to add variable '{name}': {e}"))
+                })?;
         }
 
         // Register Python functions
