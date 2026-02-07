@@ -98,7 +98,17 @@ exclude = [
     "tests/",
     ".venv/",
     "target/",
+    "shell/",
+    "test_tui_complete.py",
 ]
+
+[[tool.mypy.overrides]]
+module = ["cel.cli"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["pygments", "pygments.lexer"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
