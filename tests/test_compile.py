@@ -8,8 +8,8 @@ significant performance benefits for repeated evaluation of the same expression.
 import datetime
 
 import cel
-from cel import Context
 import pytest
+from cel import Context
 
 
 class TestCompileBasics:
