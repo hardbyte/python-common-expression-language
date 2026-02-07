@@ -10,6 +10,7 @@ This module consolidates all type-related testing including:
 
 import datetime
 import math
+from collections.abc import Mapping
 
 import cel
 import pytest
@@ -217,6 +218,44 @@ class TestCollectionTypes:
         tuple_result = cel.evaluate("data[1]", {"data": tuple_data})
 
         assert list_result == tuple_result == 2
+
+    def test_dict_subclass_mapping_access(self):
+        """Dict subclasses should resolve member access via mapping protocol."""
+
+        class LazyDict(dict):
+            def __init__(self):
+                super().__init__()
+                self["key"] = None
+
+            def __getitem__(self, key):
+                if super().__getitem__(key) is None:
+                    self[key] = "value"
+                return super().__getitem__(key)
+
+        lazy = LazyDict()
+        assert cel.evaluate("data.key", {"data": lazy}) == "value"
+
+        ctx = cel.Context(variables={"data": lazy})
+        assert cel.evaluate("data.key", ctx) == "value"
+
+    def test_mapping_protocol_access(self):
+        """Custom Mapping implementations should resolve member access."""
+
+        class CustomMapping(Mapping):
+            def __init__(self, data):
+                self._data = data
+
+            def __getitem__(self, key):
+                return self._data[key]
+
+            def __iter__(self):
+                return iter(self._data)
+
+            def __len__(self):
+                return len(self._data)
+
+        mapping = CustomMapping({"key": "value"})
+        assert cel.evaluate("data.key", {"data": mapping}) == "value"
 
 
 class TestComplexStructures:
