@@ -235,7 +235,8 @@ class TestCollectionTypes:
         lazy = LazyDict()
         assert cel.evaluate("data.key", {"data": lazy}) == "value"
 
-        ctx = cel.Context(variables={"data": lazy})
+        lazy_ctx = LazyDict()
+        ctx = cel.Context(variables={"data": lazy_ctx})
         assert cel.evaluate("data.key", ctx) == "value"
 
     def test_mapping_protocol_access(self):
