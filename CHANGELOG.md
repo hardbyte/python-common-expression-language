@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-02-07
+
+### Fixed
+
+- Mapping conversion now respects dict subclasses and custom `Mapping` implementations, preserving `__getitem__` behavior for member access (issue #22)
+
 ## [0.5.5] - 2026-02-07
 
 ### Added

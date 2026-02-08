@@ -9,7 +9,8 @@ use pyo3::BoundObject;
 use std::panic::{self, AssertUnwindSafe};
 
 use chrono::{DateTime, Duration as ChronoDuration, Offset, TimeZone};
-use pyo3::types::{PyBool, PyBytes, PyDict, PyList, PyTuple, PyType};
+use pyo3::types::{PyBool, PyBytes, PyDict, PyList, PyMapping, PyTuple, PyType, PyTypeMethods};
+use pyo3::PyTypeInfo;
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -271,6 +272,50 @@ impl fmt::Display for CelError {
 }
 impl Error for CelError {}
 
+impl<'a> RustyPyType<'a> {
+    fn key_from_py(key: &Bound<'_, PyAny>) -> Result<Key, CelError> {
+        if key.is_none() {
+            return Err(CelError::ConversionError(
+                "None cannot be used as a key in dictionaries".to_string(),
+            ));
+        }
+
+        if let Ok(k) = key.extract::<i64>() {
+            Ok(Key::Int(k))
+        } else if let Ok(k) = key.extract::<u64>() {
+            Ok(Key::Uint(k))
+        } else if let Ok(k) = key.extract::<bool>() {
+            Ok(Key::Bool(k))
+        } else if let Ok(k) = key.extract::<String>() {
+            Ok(Key::String(k.into()))
+        } else {
+            Err(CelError::ConversionError(
+                "Failed to convert Python mapping key to Key".to_string(),
+            ))
+        }
+    }
+
+    fn mapping_to_value(mapping: &Bound<'_, PyMapping>) -> Result<Value, CelError> {
+        let keys = mapping
+            .keys()
+            .map_err(|e| CelError::ConversionError(format!("Failed to read mapping keys: {e}")))?;
+
+        let mut map: HashMap<Key, Value> = HashMap::new();
+        for key in keys.iter() {
+            let key_converted = Self::key_from_py(&key)?;
+            let value = mapping.get_item(&key).map_err(|e| {
+                CelError::ConversionError(format!("Failed to read mapping item: {e}"))
+            })?;
+            let value_converted = RustyPyType(&value).try_into_value().map_err(|e| {
+                CelError::ConversionError(format!("Failed to convert mapping value: {e}"))
+            })?;
+            map.insert(key_converted, value_converted);
+        }
+
+        Ok(Value::Map(map.into()))
+    }
+}
+
 /// Build a CEL execution environment from an optional evaluation context.
 ///
 /// This consolidates the shared logic used by `evaluate()` and `Program.execute()`
@@ -496,34 +541,32 @@ impl TryIntoValue for RustyPyType<'_> {
                         .collect::<Result<Vec<Value>, Self::Error>>();
                     list.map(|v| Value::List(Arc::new(v)))
                 } else if let Ok(value) = pyobject.cast::<PyDict>() {
-                    let mut map: HashMap<Key, Value> = HashMap::new();
-                    for (key, value) in value.into_iter() {
-                        let key = if key.is_none() {
-                            return Err(CelError::ConversionError(
-                                "None cannot be used as a key in dictionaries".to_string(),
-                            ));
-                        } else if let Ok(k) = key.extract::<i64>() {
-                            Key::Int(k)
-                        } else if let Ok(k) = key.extract::<u64>() {
-                            Key::Uint(k)
-                        } else if let Ok(k) = key.extract::<bool>() {
-                            Key::Bool(k)
-                        } else if let Ok(k) = key.extract::<String>() {
-                            Key::String(k.into())
-                        } else {
-                            return Err(CelError::ConversionError(
-                                "Failed to convert PyDict key to Key".to_string(),
-                            ));
-                        };
-                        if let Ok(dict_value) = RustyPyType(&value).try_into_value() {
+                    let py = pyobject.py();
+                    let is_exact_dict =
+                        pyobject.get_type().as_type_ptr() == PyDict::type_object(py).as_type_ptr();
+
+                    if is_exact_dict {
+                        let mut map: HashMap<Key, Value> = HashMap::new();
+                        for (key, value) in value.into_iter() {
+                            let key = Self::key_from_py(&key)?;
+                            let dict_value = RustyPyType(&value).try_into_value().map_err(|e| {
+                                CelError::ConversionError(format!(
+                                    "Failed to convert PyDict value to Value: {e}"
+                                ))
+                            })?;
                             map.insert(key, dict_value);
-                        } else {
-                            return Err(CelError::ConversionError(
-                                "Failed to convert PyDict value to Value".to_string(),
-                            ));
                         }
+                        Ok(Value::Map(map.into()))
+                    } else {
+                        let mapping = pyobject.cast::<PyMapping>().map_err(|e| {
+                            CelError::ConversionError(format!(
+                                "Failed to cast dict subclass to mapping: {e}"
+                            ))
+                        })?;
+                        Self::mapping_to_value(mapping)
                     }
-                    Ok(Value::Map(map.into()))
+                } else if let Ok(mapping) = pyobject.cast::<PyMapping>() {
+                    Self::mapping_to_value(mapping)
                 } else if let Ok(value) = pyobject.extract::<Vec<u8>>() {
                     Ok(Value::Bytes(value.into()))
                 } else {
