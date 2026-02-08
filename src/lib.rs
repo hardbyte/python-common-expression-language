@@ -290,7 +290,7 @@ impl<'a> RustyPyType<'a> {
             Ok(Key::String(k.into()))
         } else {
             Err(CelError::ConversionError(
-                "Failed to convert PyDict key to Key".to_string(),
+                "Failed to convert Python mapping key to Key".to_string(),
             ))
         }
     }
