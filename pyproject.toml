@@ -3,11 +3,13 @@
 name = "common-expression-language"
 description = "Python bindings for the Common Expression Language (CEL)"
 readme = "README.md"
+license = "Apache-2.0"
 authors = [
     {name = "Brian Thorne", email = "brian@hardbyte.nz"}
 ]
 requires-python = ">=3.11"
 classifiers = [
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
