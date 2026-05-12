@@ -468,6 +468,14 @@ fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
                 "Function '{function}' error: {message}. Check function arguments and their types."
             ))
         },
+        ExecutionError::NoSuchOverload => {
+            PyTypeError::new_err(
+                "No such overload. The operation isn't defined for the given operand types — \
+                 for example, mixing signed and unsigned integers (1 + 2u), indexing into a \
+                 string, or using an unsupported operator. Use explicit conversion \
+                 (int(x), uint(x), double(x)) or check the CEL specification."
+            )
+        },
         _ => {
             // Fallback for any other execution errors - provide helpful message based on error content
             let error_str = format!("{error:?}");

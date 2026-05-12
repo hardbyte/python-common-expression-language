@@ -76,7 +76,7 @@ class TestStrictModeEvaluation:
             context = Context(ctx) if ctx else None
 
             # Should fail in Strict mode
-            with pytest.raises(TypeError, match="Unsupported.*operation"):
+            with pytest.raises(TypeError, match="overload|Unsupported"):
                 evaluate(expr, context)
 
     def test_same_type_arithmetic_works_in_strict_mode(self):
@@ -153,7 +153,7 @@ class TestStrictModeEvaluation:
 
         for expr in mixed_type_arithmetic_comprehensions:
             # Should fail due to mixed arithmetic inside comprehension
-            with pytest.raises(TypeError, match="Unsupported.*operation"):
+            with pytest.raises(TypeError, match="overload|Unsupported"):
                 evaluate(expr)
 
     def test_comprehensions_with_mixed_comparisons_work(self):

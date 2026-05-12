@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Updated
+
+- Updated cel-rust from 0.12.0 to 0.13.0
+
+### Changed
+
+- **Behaviour change** (cel 0.13): bytes concatenation with `+` now works per the CEL spec (`b'hello' + b'world'` returns `b'helloworld'`). Previously raised `TypeError`.
+- **Behaviour change** (cel 0.13): logical `&&` and `||` are now "err-resilient" per CEL spec — `X && false` short-circuits to `false` and `X || true` short-circuits to `true` even when `X` is not a boolean. Conversely, `false || X` and `true && X` now raise `TypeError` when `X` is not boolean (previously `false || X` returned `X`).
+- **Error mapping**: more operations now route through CEL's `NoSuchOverload` (e.g. `1 + 2u`, `1 * 2u`, indexing into a string). These map to `TypeError` with a generic message listing common causes and conversion functions (`int(x)`, `uint(x)`, `double(x)`). The previous type-specific messages (e.g. "Cannot mix signed and unsigned integers") are still produced for the operand orderings cel-rust dispatches via `UnsupportedBinaryOperator`. Tests asserting on specific message text may need updating.
+- **Behaviour change** (cel 0.13): no implicit type coercion on map index access; indexing into a string now raises `TypeError` (`NoSuchOverload`) per CEL spec.
+
 ## [0.5.6] - 2026-02-07
 
 ### Fixed

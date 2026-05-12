@@ -461,12 +461,12 @@ Choose your path based on your current experience and goals:
 **🏢 Solve Specific Problems:**
 - **[Access Control Policies](../how-to-guides/access-control-policies.md)** - Perfect CEL use case - policies and security rules
 - **[Business Logic & Data Transformation](../how-to-guides/business-logic-data-transformation.md)** - Configurable business rules and validation
-- **[Production Patterns & Best Practices](../how-to-guides/production-patterns-best-practices.md)** - Deploy CEL safely in production
+- **[Error Handling](../how-to-guides/error-handling.md)** - Exception types and safe-evaluation patterns
 
 **💡 Recommended Learning Paths:**
 
 - **New to CEL:** Thinking in CEL → [Your First Integration](your-first-integration.md) → [Access Control Policies](../how-to-guides/access-control-policies.md)
 - **Have CEL experience:** Use this as a design reference when building complex applications
-- **Evaluating CEL:** This tutorial + [CEL Compliance](../reference/cel-compliance.md) will help you decide if CEL fits your needs
+- **Evaluating CEL:** This tutorial + the [CEL spec](https://github.com/google/cel-spec) will help you decide if CEL fits your needs
 
 Armed with these concepts, you're ready to build safe, maintainable, and powerful expression-based systems!

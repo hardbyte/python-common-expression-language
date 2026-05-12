@@ -459,26 +459,26 @@ from cel import evaluate
 # String + int operations raise TypeError
 try:
     evaluate('"hello" + 42')  # String + int
-    # → TypeError: Unsupported addition operation between string and int
+    # → TypeError: No such overload (or Unsupported addition operation, depending on operand order)
     assert False, "Should have raised TypeError"
 except TypeError as e:
-    assert "Unsupported addition operation" in str(e)
+    assert "overload" in str(e).lower() or "Unsupported addition operation" in str(e)
 
 # Mixed signed/unsigned int operations raise TypeError
 try:
-    evaluate("1u + 2")  # Mixed signed/unsigned int  
-    # → TypeError: Cannot mix signed and unsigned integers
+    evaluate("1u + 2")  # Mixed signed/unsigned int
+    # → TypeError: Cannot mix signed and unsigned integers (or "No such overload" depending on order)
     assert False, "Should have raised TypeError"
 except TypeError as e:
-    assert "Cannot mix signed and unsigned integers" in str(e)
+    assert "overload" in str(e).lower() or "signed and unsigned" in str(e)
 
 # Unsupported multiplication raises TypeError
 try:
     evaluate('"text" * "more"')  # String multiplication
-    # → TypeError: Unsupported multiplication operation between strings
+    # → TypeError: No such overload (or Unsupported multiplication operation)
     assert False, "Should have raised TypeError"
 except TypeError as e:
-    assert "Unsupported multiplication operation" in str(e)
+    assert "overload" in str(e).lower() or "Unsupported multiplication operation" in str(e)
 ```
 
 #### Mixed Type Arithmetic Errors
@@ -492,7 +492,7 @@ from cel import evaluate
 try:
     evaluate("1 + 2.5")  # int + double
 except TypeError as e:
-    assert "Unsupported addition operation" in str(e)
+    assert "overload" in str(e).lower() or "Unsupported addition operation" in str(e)
     print(f"Mixed arithmetic error: {e}")
 
 # Mixed types from context
@@ -500,7 +500,7 @@ context = {"int_val": 10, "float_val": 2.5}
 try:
     evaluate("int_val * float_val", context)
 except TypeError as e:
-    assert "Unsupported multiplication operation" in str(e)
+    assert "overload" in str(e).lower() or "Unsupported multiplication operation" in str(e)
     print(f"Context type mixing error: {e}")
 
 # To fix mixed arithmetic, use consistent types:

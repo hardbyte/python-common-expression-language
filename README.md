@@ -179,7 +179,7 @@ uv run pytest
 ## Contributing
 
 Contributions are welcome! Please see our [documentation](https://python-common-expression-language.readthedocs.io/) for:
-- [CEL compliance status](docs/reference/cel-compliance.md)
+- [CHANGELOG](CHANGELOG.md) — release notes and behaviour changes
 - Development setup and guidelines
 - Areas where help is needed
 

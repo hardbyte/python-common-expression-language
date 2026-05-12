@@ -17,7 +17,7 @@ The `cel` command-line tool provides a convenient way to evaluate CEL expression
 
 ## Standard Library Functions
 
-The CLI automatically includes all [standard library functions](../reference/cel-compliance.md#using-celstdlib-recommended) from `cel.stdlib`. These functions are available without any additional setup:
+The CLI automatically includes all standard library functions from `cel.stdlib`. These functions are available without any additional setup:
 
 ### Available Functions
 

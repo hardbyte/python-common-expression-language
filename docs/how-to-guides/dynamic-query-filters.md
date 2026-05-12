@@ -239,4 +239,4 @@ This ensures security constraints cannot be circumvented by user input.
 
 - [Access Control Policies](access-control-policies.md) - User permission patterns
 - [Business Logic & Data Transformation](business-logic-data-transformation.md) - Validate filter configurations
-- [Production Patterns & Best Practices](production-patterns-best-practices.md) - Security and performance patterns
+- [Error Handling](error-handling.md) - Exception types and safe-evaluation patterns

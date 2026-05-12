@@ -444,7 +444,7 @@ Congratulations! You've mastered basic CEL evaluation with dictionary context. N
 **🏢 Jump to Specific Applications:**
 - **[Access Control Policies](../how-to-guides/access-control-policies.md)** - Build permission systems (requires Context knowledge)
 - **[Business Logic & Data Transformation](../how-to-guides/business-logic-data-transformation.md)** - Implement business rules
-- **[Production Patterns & Best Practices](../how-to-guides/production-patterns-best-practices.md)** - Deploy CEL safely
+- **[Error Handling](../how-to-guides/error-handling.md)** - Exception types and safe-evaluation patterns
 
 **💡 Recommended Learning Path:**
 

@@ -84,20 +84,16 @@ class TestArithmeticEdgeCases:
 class TestBytesArithmetic:
     """Test bytes operations and concatenation."""
 
-    @pytest.mark.xfail(
-        reason="cel-interpreter 0.10.0 does not implement bytes concatenation (CEL spec requires it)"
-    )
     def test_bytes_concatenation_context(self):
-        """CEL spec requires bytes concatenation with + operator, but cel-interpreter 0.10.0 doesn't implement it."""
+        """CEL spec: bytes concatenation with + operator (supported as of cel 0.13)."""
         part1 = b"hello"
         part2 = b"world"
         result = cel.evaluate("part1 + b' ' + part2", {"part1": part1, "part2": part2})
         assert result == b"hello world"
 
-    def test_bytes_concatenation_not_supported(self):
-        """Test direct bytes concatenation (CEL spec requires this but cel-interpreter 0.10.0 doesn't support it)."""
-        with pytest.raises(TypeError, match="Unsupported addition operation"):
-            cel.evaluate("b'hello' + b'world'")
+    def test_bytes_concatenation_literal(self):
+        """Test direct bytes concatenation between literals (supported as of cel 0.13)."""
+        assert cel.evaluate("b'hello' + b'world'") == b"helloworld"
 
     def test_bytes_concatenation_workaround(self):
         """Test bytes concatenation workaround using string conversion."""

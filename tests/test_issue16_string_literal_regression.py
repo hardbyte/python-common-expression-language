@@ -112,11 +112,11 @@ class TestIssue16StringLiteralRegression:
         ctx = Context({"value": 0.4})  # Float in context
 
         # Mixed arithmetic should fail in strict mode
-        with pytest.raises(TypeError, match="Unsupported.*operation"):
+        with pytest.raises(TypeError, match="overload|Unsupported"):
             evaluate("1 + 2.5", ctx)
 
         # Mixed type with context variables should also fail
-        with pytest.raises(TypeError, match="Unsupported.*operation"):
+        with pytest.raises(TypeError, match="overload|Unsupported"):
             evaluate("value + 1", ctx)  # 0.4 + 1 should fail in strict mode
 
     def test_complex_expressions_with_strings_and_numbers(self):

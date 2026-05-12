@@ -565,7 +565,7 @@ Congratulations! You've mastered the Context class and custom Python functions. 
 **🏢 Build Production Applications:**
 - **[Access Control Policies](../how-to-guides/access-control-policies.md)** - Start here for permission systems and security rules
 - **[Business Logic & Data Transformation](../how-to-guides/business-logic-data-transformation.md)** - Configurable rule engines and data processing
-- **[Production Patterns & Best Practices](../how-to-guides/production-patterns-best-practices.md)** - Flask/FastAPI integration, performance, and security
+- **[Error Handling](../how-to-guides/error-handling.md)** - Exception types and safe-evaluation patterns
 
 **💡 Recommended Next Steps:**
 
