@@ -134,7 +134,12 @@ class TestErrorMessageQuality:
 
             error_msg = str(exc_info.value).lower()
             assert "overload" in error_msg or "operation" in error_msg
-            assert "int(" in error_msg or "uint(" in error_msg or "double(" in error_msg or "type" in error_msg
+            assert (
+                "int(" in error_msg
+                or "uint(" in error_msg
+                or "double(" in error_msg
+                or "type" in error_msg
+            )
 
 
 class TestExceptionTypes:
