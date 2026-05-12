@@ -17,21 +17,21 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    # issues: write — rustsec/audit-check creates issues for new advisories.
+    # checks: write — rustsec/audit-check posts check annotations.
     permissions:
       issues: write
-      issues-reason: to create issues
       checks: write
-      checks-reason: to create check
     steps:
-      - uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v5
+
       - name: Run Rust security audit
-        uses: rustsec/audit-check@v1.4.1
+        uses: rustsec/audit-check@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       
@@ -56,8 +56,8 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-      
+        uses: actions/checkout@v5
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
