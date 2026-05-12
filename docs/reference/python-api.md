@@ -319,6 +319,75 @@ result = evaluate('validate_email("invalid-email")', context)
 assert result == False
 ```
 
+##### set_variable_resolver(resolver: Callable[[str], Any]) -> None
+
+Register a callback for **lazy variable resolution**. Instead of materializing
+every variable upfront with `add_variable`, the resolver is invoked on demand
+with the name of each variable an expression references.
+
+**Parameters:**
+- `resolver`: A callable taking a variable name (`str`) and returning either
+  the value or `None`. Returning `None` falls through to variables registered
+  via `add_variable`.
+
+**When to use it:**
+- The full variable set is expensive to build (database queries, file I/O,
+  remote API calls) and you only want to pay for variables the expression
+  actually references.
+- The variable set isn't known ahead of time — the resolver decides on the fly.
+
+**Behaviour notes:**
+- The resolver is consulted **before** statically-registered variables.
+  Return `None` from the resolver to delegate to those.
+- Exceptions raised by the resolver are logged and treated as `None` — they
+  do not propagate to the caller.
+- The callback runs synchronously while the GIL is held; keep it tight.
+
+**Example — only load what's referenced:**
+
+```python
+import json
+import os
+import tempfile
+from cel import Context, evaluate
+
+with tempfile.TemporaryDirectory() as cfg_dir:
+    # Each "setting" is a file on disk
+    for name, content in [("max_users", "100"), ("admin_email", '"ops@example.com"')]:
+        with open(os.path.join(cfg_dir, name), "w") as f:
+            f.write(content)
+
+    loaded = []
+
+    def load_setting(name):
+        path = os.path.join(cfg_dir, name)
+        if not os.path.exists(path):
+            return None
+        loaded.append(name)
+        with open(path) as f:
+            return json.loads(f.read())
+
+    ctx = Context()
+    ctx.set_variable_resolver(load_setting)
+
+    # Only `max_users` is referenced — `admin_email` is never loaded
+    assert evaluate("max_users > 50", ctx) is True
+    assert loaded == ["max_users"]
+```
+
+**Example — combine with statically-registered variables:**
+
+```python
+from cel import Context, evaluate
+
+# Resolver handles dynamic lookups; static variables provide defaults
+ctx = Context(variables={"environment": "prod"})
+ctx.set_variable_resolver(lambda name: {"feature_flags": ["new_ui"]}.get(name))
+
+assert evaluate("environment", ctx) == "prod"          # → static
+assert evaluate("'new_ui' in feature_flags", ctx) is True  # → resolver
+```
+
 ---
 
 ## Type System
