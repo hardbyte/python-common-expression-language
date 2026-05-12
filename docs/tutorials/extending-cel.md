@@ -340,7 +340,7 @@ This example demonstrates how custom functions enable complex business logic whi
 
 ### Function Best Practices
 
-These patterns become essential when building production applications like those shown in [Access Control Policies](../how-to-guides/access-control-policies.md) and [Production Patterns & Best Practices](../how-to-guides/production-patterns-best-practices.md).
+These patterns become essential when building production applications like those shown in [Access Control Policies](../how-to-guides/access-control-policies.md).
 
 #### 1. Error Handling
 
@@ -674,12 +674,11 @@ Choose your next step based on what you want to build:
 - **[Business Logic & Data Transformation](../how-to-guides/business-logic-data-transformation.md)** - Build configurable rule engines with advanced Context patterns
 
 **🚀 Production Deployment:**
-- **[Production Patterns & Best Practices](../how-to-guides/production-patterns-best-practices.md)** - Performance optimization, security, and integration patterns
-- **[Error Handling Guide](../how-to-guides/error-handling.md)** - Robust error handling for production systems
+- **[Error Handling Guide](../how-to-guides/error-handling.md)** - Exception types and safe-evaluation patterns
 
 **📖 Reference Material:**
 - **[Python API Reference](../reference/python-api.md)** - Complete API documentation for advanced usage
-- **[CEL Compliance](../reference/cel-compliance.md)** - Feature support and limitations
+- **[CEL specification](https://github.com/google/cel-spec)** - The official CEL spec
 
 **💡 Pro Tip:** With these advanced skills, you're ready to tackle enterprise-scale applications. Start with [Access Control Policies](../how-to-guides/access-control-policies.md) or [Business Logic & Data Transformation](../how-to-guides/business-logic-data-transformation.md) based on your use case.
 

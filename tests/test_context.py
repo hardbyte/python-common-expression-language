@@ -107,3 +107,82 @@ def test_nested_context_none():
     assert cel.evaluate("spec.host", cel_context) == "github.com"
     assert cel.evaluate("data['response-code']", cel_context) == "NOERROR"
     assert cel.evaluate("size(data.A)", cel_context) == 1
+
+
+class TestVariableResolver:
+    """Tests for lazy variable resolution via set_variable_resolver."""
+
+    def test_resolver_supplies_variable(self):
+        """Resolver callback can provide variables not registered statically."""
+        ctx = cel.Context()
+        ctx.set_variable_resolver(
+            lambda name: {"name": "Alice", "age": 30} if name == "user" else None
+        )
+        assert cel.evaluate("user.name", ctx) == "Alice"
+        assert cel.evaluate("user.age", ctx) == 30
+
+    def test_resolver_is_called_lazily(self):
+        """Resolver only fires for names the expression actually references."""
+        accessed = []
+
+        def lookup(name):
+            accessed.append(name)
+            return {"limit": 50}.get(name)
+
+        ctx = cel.Context()
+        ctx.set_variable_resolver(lookup)
+        assert cel.evaluate("limit > 10", ctx) is True
+        assert accessed == ["limit"]
+
+    def test_resolver_none_falls_through_to_static_variables(self):
+        """Returning None from the resolver delegates to add_variable()-registered values."""
+        ctx = cel.Context(variables={"static_var": 42})
+        ctx.set_variable_resolver(lambda name: None)
+        assert cel.evaluate("static_var", ctx) == 42
+
+    def test_resolver_undefined_raises(self):
+        """When neither the resolver nor static variables supply a name, evaluate raises."""
+        ctx = cel.Context()
+        ctx.set_variable_resolver(lambda name: None)
+        with pytest.raises(RuntimeError, match="Undefined variable or function"):
+            cel.evaluate("missing", ctx)
+
+    def test_resolver_exception_is_swallowed(self):
+        """An exception from the resolver is treated as 'not handled' rather than propagated."""
+        ctx = cel.Context(variables={"x": 7})
+
+        def explosive(name):
+            raise ValueError(f"boom on {name}")
+
+        ctx.set_variable_resolver(explosive)
+        # Falls through to the static variable
+        assert cel.evaluate("x", ctx) == 7
+
+    def test_resolver_works_with_compiled_program(self):
+        """Resolver applies through compile()+execute(), not just evaluate()."""
+        program = cel.compile("user.name")
+        ctx = cel.Context()
+        ctx.set_variable_resolver(lambda name: {"name": "Bob"} if name == "user" else None)
+        assert program.execute(ctx) == "Bob"
+
+    def test_resolver_returns_various_types(self):
+        """Resolver values can be any supported Python type."""
+
+        def lookup(name):
+            return {
+                "i": 42,
+                "f": 3.14,
+                "s": "hello",
+                "b": True,
+                "l": [1, 2, 3],
+                "m": {"k": "v"},
+            }.get(name)
+
+        ctx = cel.Context()
+        ctx.set_variable_resolver(lookup)
+        assert cel.evaluate("i", ctx) == 42
+        assert cel.evaluate("f", ctx) == 3.14
+        assert cel.evaluate("s", ctx) == "hello"
+        assert cel.evaluate("b", ctx) is True
+        assert cel.evaluate("size(l)", ctx) == 3
+        assert cel.evaluate("m.k", ctx) == "v"

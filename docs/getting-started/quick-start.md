@@ -345,12 +345,12 @@ def evaluate_expression(expression: str, context: dict = None):
     """Evaluate expression with proper exception handling."""
     return evaluate(expression, context or {})
 
-# For cases where you need fallback values  
+# For cases where you need fallback values
 def evaluate_with_default(expression: str, context: dict = None, default = None):
     """Evaluate with fallback value on errors."""
     try:
         return evaluate(expression, context or {})
-    except (ValueError, TypeError, RuntimeError):
+    except (ValueError, TypeError, RuntimeError, KeyError, IndexError):
         return default
 
 # Result-like pattern for detailed error information
@@ -406,7 +406,7 @@ def validate_user_rules(rules: list[str], user_context: dict) -> dict[str, bool]
     for rule in rules:
         try:
             results[rule] = bool(evaluate_expression(rule, user_context))
-        except (ValueError, TypeError, RuntimeError):
+        except (ValueError, TypeError, RuntimeError, KeyError, IndexError):
             results[rule] = False  # Invalid rules are considered failed
     return results
 
@@ -444,7 +444,7 @@ Congratulations! You've mastered basic CEL evaluation with dictionary context. N
 **🏢 Jump to Specific Applications:**
 - **[Access Control Policies](../how-to-guides/access-control-policies.md)** - Build permission systems (requires Context knowledge)
 - **[Business Logic & Data Transformation](../how-to-guides/business-logic-data-transformation.md)** - Implement business rules
-- **[Production Patterns & Best Practices](../how-to-guides/production-patterns-best-practices.md)** - Deploy CEL safely
+- **[Error Handling](../how-to-guides/error-handling.md)** - Exception types and safe-evaluation patterns
 
 **💡 Recommended Learning Path:**
 

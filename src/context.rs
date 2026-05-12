@@ -43,6 +43,9 @@ use std::collections::HashMap;
 pub struct Context {
     pub variables: HashMap<String, Value>,
     pub functions: HashMap<String, Py<PyAny>>,
+    /// Optional Python callable for lazy variable resolution. Invoked with a
+    /// variable name; returns the value (or None to fall through to `variables`).
+    pub resolver: Option<Py<PyAny>>,
 }
 
 #[pyo3::pymethods]
@@ -122,6 +125,7 @@ impl Context {
         let mut context = Context {
             variables: HashMap::new(),
             functions: HashMap::new(),
+            resolver: None,
         };
 
         if let Some(variables) = variables {
@@ -201,6 +205,42 @@ impl Context {
     ///     >>> # Note: This would need proper error handling in practice
     fn add_function(&mut self, name: String, function: Py<PyAny>) {
         self.functions.insert(name, function);
+    }
+
+    /// Registers a Python callable for lazy variable resolution.
+    ///
+    /// When evaluating an expression, CEL will call `resolver(name)` for each
+    /// unbound variable name encountered. The callback should return the value
+    /// (any Python type convertible to a CEL value) or `None` to fall through
+    /// to variables registered with `add_variable`.
+    ///
+    /// This is useful when materializing the full set of variables up front is
+    /// expensive — for example, a dict-like backed by a database, filesystem,
+    /// or remote API where you only want to fetch values the expression
+    /// actually references.
+    ///
+    /// Args:
+    ///     resolver (Callable[[str], Any]): Function that takes a variable name
+    ///         and returns the value or None.
+    ///
+    /// Notes:
+    ///     - The resolver is consulted *before* explicitly-registered variables.
+    ///       Return None from the resolver to delegate to those.
+    ///     - Exceptions raised by the resolver are logged and treated as None.
+    ///     - The callback is invoked from Rust holding the GIL; keep it simple
+    ///       and avoid blocking on long-running I/O if possible.
+    ///
+    /// Example:
+    ///     >>> from cel import Context, evaluate
+    ///     >>> store = {"user": {"name": "Alice", "age": 30}}
+    ///     >>> def lookup(name):
+    ///     ...     return store.get(name)
+    ///     >>> ctx = Context()
+    ///     >>> ctx.set_variable_resolver(lookup)
+    ///     >>> evaluate("user.name", ctx)
+    ///     'Alice'
+    fn set_variable_resolver(&mut self, resolver: Py<PyAny>) {
+        self.resolver = Some(resolver);
     }
 
     /// Adds a variable to the context.

@@ -13,27 +13,20 @@ Getting Python CEL up and running is quick and easy.
 
     ```bash
     uv add common-expression-language
-    # → Adding common-expression-language to dependencies
-    # → Resolved 15 packages in 1.23s
-    # → Installed common-expression-language-0.11.0
     ```
 
 === "uv tool (CLI only)"
 
     Install the CLI tool globally:
-    
+
     ```bash
     uv tool install common-expression-language
-    # → Installed common-expression-language 0.11.0
-    # → Installed executables: cel
     ```
 
 === "pip"
 
     ```bash
     pip install common-expression-language
-    # → Collecting common-expression-language
-    # → Successfully installed common-expression-language-0.11.0
     ```
 
 
@@ -56,8 +49,6 @@ print("✓ Basic evaluation working correctly")
 
 ```bash
 cel --version
-# → cel 0.11.0
-
 cel '1 + 2'
 # → 3
 ```
@@ -81,17 +72,10 @@ cd python-common-expression-language
 
 # Install in development mode
 pip install maturin
-# → Successfully installed maturin-1.4.0
-
 maturin develop
-# → 🔗 Found pyo3 bindings
-# → 📦 Built wheel for CPython 3.11 to target/wheels/
-# → 📦 Installed common-expression-language-0.11.0
 
 # Or with uv
 uv run maturin develop
-# → 🔗 Found pyo3 bindings
-# → 📦 Built wheel and installed successfully
 ```
 
 ## Troubleshooting

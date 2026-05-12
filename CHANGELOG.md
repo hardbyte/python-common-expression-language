@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Updated
+
+- Updated cel-rust from 0.12.0 to 0.13.0.
+
+### Added
+
+- `Context.set_variable_resolver(callback)` exposes cel 0.13's `VariableResolver` trait to Python. The callback receives a variable name and returns the value (or `None` to fall through to variables registered with `add_variable`). Useful for backing a CEL context with on-demand sources (database lookups, lazily-loaded config files, etc.) without materializing the full set of variables upfront. Exceptions raised by the resolver are logged and treated as "not handled".
+- Idiomatic Python exception mapping for several CEL runtime errors that previously fell through to `ValueError`:
+  - Arithmetic overflow → `OverflowError` (e.g. `9223372036854775807 + 1`, including the new overflow-safe int math in cel 0.13).
+  - Division by zero / modulo by zero → `ZeroDivisionError`.
+  - List index out of bounds → `IndexError`.
+  - Missing map key (e.g. `{"a": 1}.b`) → `KeyError`.
+
+### Changed
+
+- **Behaviour change** (cel 0.13): bytes concatenation with `+` now works per the CEL spec (`b'hello' + b'world'` returns `b'helloworld'`). Previously raised `TypeError`.
+- **Behaviour change** (cel 0.13): logical `&&` and `||` are now "err-resilient" per CEL spec — `X && false` short-circuits to `false` and `X || true` short-circuits to `true` even when `X` is not a boolean. Conversely, `false || X` and `true && X` now raise `TypeError` when `X` is not boolean (previously `false || X` returned `X`).
+- **Error mapping**: more operations now route through CEL's `NoSuchOverload` (e.g. `1 + 2u`, `1 * 2u`, indexing into a string). These map to `TypeError` with a generic message listing common causes and conversion functions (`int(x)`, `uint(x)`, `double(x)`). The previous type-specific messages (e.g. "Cannot mix signed and unsigned integers") are still produced for the operand orderings cel-rust dispatches via `UnsupportedBinaryOperator`. Tests asserting on specific message text may need updating.
+- **Behaviour change** (cel 0.13): no implicit type coercion on map index access; indexing into a string now raises `TypeError` (`NoSuchOverload`) per CEL spec.
+- **Behaviour change** (cel 0.13): integer arithmetic overflow now raises `OverflowError` instead of silently wrapping. Affects `+`, `-`, `*` on both `int` and `uint` at the type's bounds.
+
+### Performance
+
+- Microbenchmarks comparing cel 0.13 vs 0.12 (release build, taking the min of 3 runs per scenario):
+
+  | Scenario              | compile  | compiled execute | evaluate |
+  |-----------------------|---------:|-----------------:|---------:|
+  | `x + y * 2`           |   +2.8%  |          +8.4%   |   +3.3%  |
+  | `greet + ' ' + name`  |  +23.0%  |          +4.3%   |   +0.5%  |
+  | `size(items)` (1k)    |   ~0%    |         +63.4%   |  +53.2%  |
+  | map field access      |   −7.1%  |          +8.3%   |   +6.5%  |
+  | custom Python fn      |   +1.4%  |          +6.7%   |   −1.9%  |
+
+  Most scenarios are within ~10% of 0.12; the `size(items)` regression on a 1000-element list is cel 0.13's dyn-Val refactor adding per-element boxing overhead at the Python→CEL boundary. Smaller lists are not noticeably affected.
+
 ## [0.5.6] - 2026-02-07
 
 ### Fixed

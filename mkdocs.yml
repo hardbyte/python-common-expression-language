@@ -80,7 +80,6 @@ nav:
     - Extending CEL: tutorials/extending-cel.md
   - Cookbook:
     - Recipe Index: cookbook.md
-    - Production Patterns & Best Practices: how-to-guides/production-patterns-best-practices.md
     - Business Logic & Data Transformation: how-to-guides/business-logic-data-transformation.md
     - Dynamic Query Filters: how-to-guides/dynamic-query-filters.md
     - Access Control Policies: how-to-guides/access-control-policies.md
@@ -89,7 +88,6 @@ nav:
   - Reference:
     - Python API: reference/python-api.md
     - CLI Reference: reference/cli-reference.md
-    - CEL Compliance: reference/cel-compliance.md
   - Development:
     - Contributing & Developer Guide: contributing.md
 

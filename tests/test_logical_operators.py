@@ -105,36 +105,37 @@ class TestLogicalOperators:
         """Test logical operators with null values."""
         context = {"null_val": None, "true_val": True, "false_val": False}
 
-        # In CEL, null is generally falsy, but exact behavior may vary
-        # These tests verify current behavior
+        # CEL requires boolean operands for &&/||; null is not bool. cel 0.13 raises
+        # TypeError (NoSuchOverload) unless an err-resilient short-circuit applies.
         try:
             result = cel.evaluate("null_val && true_val", context)
             assert result is False or result is None
-        except ValueError:
-            # Some CEL implementations may throw errors for null in logical context
+        except (ValueError, TypeError):
             pass
 
     def test_logical_type_coercion(self):
         """Test that logical operators correctly reject mixed types per CEL specification.
 
-        CEL specification requires boolean operands for logical operators.
-        Mixed-type operations should fail with "No such overload".
+        CEL specification requires boolean operands for logical operators. Mixed-type
+        operations raise TypeError ("No such overload") unless an err-resilient
+        short-circuit applies (e.g. `X || true` returns true).
         """
-        # These should fail - non-boolean operands not allowed per CEL spec
-        with pytest.raises(ValueError, match="No such overload"):
+        with pytest.raises(TypeError, match="No such overload"):
             cel.evaluate("'string' && true")
 
-        with pytest.raises(ValueError, match="No such overload"):
+        with pytest.raises(TypeError, match="No such overload"):
             cel.evaluate("'' && true")
 
-        with pytest.raises(ValueError, match="No such overload"):
+        with pytest.raises(TypeError, match="No such overload"):
             cel.evaluate("42 || false")
 
-        with pytest.raises(ValueError, match="No such overload"):
-            cel.evaluate("0 || true")
-
-        with pytest.raises(ValueError, match="No such overload"):
+        with pytest.raises(TypeError, match="No such overload"):
             cel.evaluate("!'string'")
+
+    def test_logical_or_err_resilient_short_circuits(self):
+        """`X || true` short-circuits to true even when X is not a bool (cel 0.13)."""
+        assert cel.evaluate("0 || true") is True
+        assert cel.evaluate("'string' || true") is True
 
     def test_logical_in_conditionals(self):
         """Test logical operators in conditional expressions."""

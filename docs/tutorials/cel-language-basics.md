@@ -24,7 +24,7 @@ Python CEL implements a comprehensive subset of the CEL specification:
 ✅ **Type Functions**: `has()`, conversion functions  
 ✅ **Python Integration**: Custom functions, Python ↔ CEL type conversion  
 
-See [CEL Compliance](../reference/cel-compliance.md) for detailed feature status.
+See the [CEL specification](https://github.com/google/cel-spec) for the language reference.
 
 ## Literals
 
@@ -356,13 +356,13 @@ Now that you've learned the complete CEL syntax, choose your next path based on 
 - **[Thinking in CEL](thinking-in-cel.md)** - Core concepts, design principles, and when to use CEL
 
 **🛠️ Solve Specific Problems:**
-- **[Access Control Policies](../how-to-guides/access-control-policies.md)** - Build sophisticated permission systems
+- **[Access Control Policies](../how-to-guides/access-control-policies.md)** - Build permission systems
 - **[Business Logic & Data Transformation](../how-to-guides/business-logic-data-transformation.md)** - Implement configurable business rules
-- **[Production Patterns & Best Practices](../how-to-guides/production-patterns-best-practices.md)** - Deploy CEL in production environments
+- **[Error Handling](../how-to-guides/error-handling.md)** - Exception types and safe-evaluation patterns
 
 **📖 Reference Material:**
-- **[CEL Compliance](../reference/cel-compliance.md)** - Detailed feature implementation status
 - **[Python API Reference](../reference/python-api.md)** - Complete Python API documentation
+- **[CEL specification](https://github.com/google/cel-spec)** - The official CEL spec
 
 **💡 Pro Tip:** If you're new to CEL, we recommend: **Language Basics → [Your First Integration](your-first-integration.md) → [Access Control Policies](../how-to-guides/access-control-policies.md)**
 

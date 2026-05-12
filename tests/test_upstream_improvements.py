@@ -85,21 +85,13 @@ class TestMixedArithmetic:
     """Test mixed signed/unsigned arithmetic that currently fails."""
 
     def test_mixed_int_uint_addition_fails(self):
-        """
-        Test that mixed int/uint addition currently fails.
-
-        When this test starts failing, mixed arithmetic has been fixed.
-        """
-        with pytest.raises(TypeError, match="Cannot mix signed and unsigned integers"):
+        """Mixed int/uint addition raises TypeError per CEL spec (no implicit coercion)."""
+        with pytest.raises(TypeError, match="overload|signed and unsigned"):
             cel.evaluate("1 + 2u")
 
     def test_mixed_int_uint_multiplication_fails(self):
-        """
-        Test that mixed int/uint multiplication currently fails.
-
-        When this test starts failing, mixed arithmetic has been fixed.
-        """
-        with pytest.raises(TypeError, match="Unsupported.*operation"):
+        """Mixed int/uint multiplication raises TypeError per CEL spec."""
+        with pytest.raises(TypeError, match="overload|Unsupported"):
             cel.evaluate("3 * 2u")
 
     @pytest.mark.xfail(
@@ -151,12 +143,8 @@ class TestMapFunctionImprovements:
     """Test map() function improvements for mixed type handling."""
 
     def test_map_mixed_arithmetic_currently_fails(self):
-        """
-        Test that map() with mixed arithmetic currently fails.
-
-        When this test starts failing, map() type coercion has been improved.
-        """
-        with pytest.raises(TypeError, match="Unsupported.*operation.*Int.*Float"):
+        """map() with mixed int/float arithmetic raises TypeError per CEL spec."""
+        with pytest.raises(TypeError, match="overload|Unsupported"):
             cel.evaluate("[1, 2, 3].map(x, x * 2.0)")
 
     @pytest.mark.xfail(
@@ -179,27 +167,35 @@ class TestLogicalOperatorBehavior:
         """
         Test OR operator behavior follows CEL specification requirements.
 
-        Per CEL specification, logical operators require boolean first operands.
-        Mixed-type operations like "42 || false" should fail with "No such overload".
+        Per CEL specification, logical operators require boolean operands; mixed-type
+        operations raise TypeError. As of cel 0.13 the operators are err-resilient,
+        meaning `X || true` short-circuits to true (and `X && false` to false) even
+        when X is not a bool.
 
         Reference: https://github.com/tektoncd/triggers/issues/644
         """
-        # These correctly fail - first operand must be boolean per CEL spec
-        with pytest.raises(ValueError, match="No such overload"):
-            cel.evaluate("42 || false")  # Non-boolean first operand fails
+        # Non-bool LHS with no short-circuit path → TypeError
+        with pytest.raises(TypeError, match="No such overload"):
+            cel.evaluate("42 || false")
 
-        with pytest.raises(ValueError, match="No such overload"):
-            cel.evaluate('0 || "default"')  # Non-boolean first operand fails
+        with pytest.raises(TypeError, match="No such overload"):
+            cel.evaluate('0 || "default"')
 
-        # CEL's logical operators with boolean first operand work correctly
-        assert cel.evaluate("true || 99")  # Short-circuits to True
-        assert cel.evaluate("false || 99") == 99  # Returns second operand per CEL spec
-        assert cel.evaluate("false || 'default'") == "default"  # Any type for second operand
+        # Boolean short-circuits
+        assert cel.evaluate("true || 99")  # LHS true short-circuits to true
+        assert cel.evaluate("true || 'anything'") is True
 
-        # AND operator has stricter requirements for both operands
-        assert not cel.evaluate("false && 99")  # Short-circuits to False
-        with pytest.raises(ValueError, match="No such overload"):
-            cel.evaluate("true && 99")  # AND requires both operands to be boolean when evaluated
+        # `false || X` no longer returns X — both operands must be bool, or one must
+        # provide a definitive short-circuit. Neither applies here.
+        with pytest.raises(TypeError, match="No such overload"):
+            cel.evaluate("false || 99")
+        with pytest.raises(TypeError, match="No such overload"):
+            cel.evaluate("false || 'default'")
+
+        # AND err-resilient short-circuit when RHS is definitively false
+        assert not cel.evaluate("false && 99")
+        with pytest.raises(TypeError, match="No such overload"):
+            cel.evaluate("true && 99")
 
     def test_or_operator_correct_boolean_behavior(self):
         """
@@ -230,7 +226,7 @@ class TestLogicalOperatorBehavior:
         assert cel.evaluate("false ? 42 : 0") == 0
 
         # Non-boolean condition fails as expected
-        with pytest.raises(ValueError, match="No such overload"):
+        with pytest.raises(TypeError, match="No such overload"):
             cel.evaluate("42 ? true : false")
 
 

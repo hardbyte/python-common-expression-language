@@ -19,33 +19,10 @@ class TestCelCompliantBooleanOperations:
 
     def test_not_operator_with_non_boolean_fails(self):
         """Test that NOT operator correctly fails with non-boolean operands."""
-        # Numbers should fail
-        with pytest.raises(ValueError, match="No such overload"):
-            evaluate("!0")
-
-        with pytest.raises(ValueError, match="No such overload"):
-            evaluate("!1")
-
-        with pytest.raises(ValueError, match="No such overload"):
-            evaluate("!42")
-
-        # Strings should fail
-        with pytest.raises(ValueError, match="No such overload"):
-            evaluate("!''")
-
-        with pytest.raises(ValueError, match="No such overload"):
-            evaluate("!'hello'")
-
-        # Collections should fail
-        with pytest.raises(ValueError, match="No such overload"):
-            evaluate("![]")
-
-        with pytest.raises(ValueError, match="No such overload"):
-            evaluate("!{}")
-
-        # Null should fail
-        with pytest.raises(ValueError, match="No such overload"):
-            evaluate("!null")
+        non_bool_exprs = ["!0", "!1", "!42", "!''", "!'hello'", "![]", "!{}", "!null"]
+        for expr in non_bool_exprs:
+            with pytest.raises(TypeError, match="No such overload"):
+                evaluate(expr)
 
     def test_logical_and_with_boolean_operands(self):
         """Test AND operator with boolean operands (correct CEL behavior)."""
@@ -55,15 +32,22 @@ class TestCelCompliantBooleanOperations:
         assert evaluate("false && false") is False
 
     def test_logical_and_with_mixed_types_fails(self):
-        """Test that AND operator correctly fails with mixed-type operands."""
-        with pytest.raises(ValueError, match="No such overload"):
+        """Test that AND operator fails with mixed-type operands when no short-circuit applies.
+
+        CEL spec: errors short-circuit through AND when the other operand is definitively
+        false. So `42 && false` returns false (short-circuit), but cases where the boolean
+        operand is true (or both are non-bool) propagate the type error.
+        """
+        with pytest.raises(TypeError, match="No such overload"):
             evaluate("'string' && true")
 
-        with pytest.raises(ValueError, match="No such overload"):
-            evaluate("42 && false")
-
-        with pytest.raises(ValueError, match="No such overload"):
+        with pytest.raises(TypeError, match="No such overload"):
             evaluate("true && 1")
+
+    def test_logical_and_err_resilient_short_circuit(self):
+        """CEL spec: `error && false` short-circuits to false even if LHS isn't a bool."""
+        assert evaluate("42 && false") is False
+        assert evaluate("'string' && false") is False
 
     def test_logical_or_with_boolean_operands(self):
         """Test OR operator with boolean operands (correct CEL behavior)."""
@@ -72,26 +56,25 @@ class TestCelCompliantBooleanOperations:
         assert evaluate("false || true") is True
         assert evaluate("false || false") is False
 
-    def test_logical_or_special_cel_behavior(self):
-        """Test OR operator's special CEL behavior with boolean first operand."""
-        # When first operand is boolean false, returns second operand
-        assert evaluate("false || 99") == 99
-        assert evaluate("false || 'text'") == "text"
-        assert evaluate("false || null") is None
-
-        # When first operand is boolean true, short-circuits to true
+    def test_logical_or_err_resilient_short_circuit(self):
+        """CEL spec: `X || true` short-circuits to true regardless of LHS type."""
+        # When second operand is boolean true, short-circuits to true even if first isn't bool
         assert evaluate("true || 99") is True
         assert evaluate("true || 'anything'") is True
+        assert evaluate("'string' || true") is True
 
-    def test_logical_or_with_non_boolean_first_operand_fails(self):
-        """Test that OR operator correctly fails when first operand is not boolean."""
-        with pytest.raises(ValueError, match="No such overload"):
+    def test_logical_or_propagates_type_error_when_no_short_circuit(self):
+        """OR raises when neither operand provides a definitive boolean to short-circuit."""
+        with pytest.raises(TypeError, match="No such overload"):
+            evaluate("false || 99")
+
+        with pytest.raises(TypeError, match="No such overload"):
+            evaluate("false || 'text'")
+
+        with pytest.raises(TypeError, match="No such overload"):
             evaluate("42 || false")
 
-        with pytest.raises(ValueError, match="No such overload"):
-            evaluate("'string' || true")
-
-        with pytest.raises(ValueError, match="No such overload"):
+        with pytest.raises(TypeError, match="No such overload"):
             evaluate("0 || 'default'")
 
     def test_ternary_operator_requires_boolean_condition(self):
@@ -101,10 +84,10 @@ class TestCelCompliantBooleanOperations:
         assert evaluate("false ? 'yes' : 'no'") == "no"
 
         # Non-boolean conditions should fail
-        with pytest.raises(ValueError, match="No such overload"):
+        with pytest.raises(TypeError, match="No such overload"):
             evaluate("42 ? 'yes' : 'no'")
 
-        with pytest.raises(ValueError, match="No such overload"):
+        with pytest.raises(TypeError, match="No such overload"):
             evaluate("'string' ? 'yes' : 'no'")
 
     def test_boolean_comparisons_work_correctly(self):

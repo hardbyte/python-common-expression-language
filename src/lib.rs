@@ -1,9 +1,13 @@
 mod context;
 
+use ::cel::context::VariableResolver;
 use ::cel::objects::{Key, OptionalValue, TryIntoValue};
 use ::cel::{Context as CelContext, ExecutionError, Program, Value};
 use log::warn;
-use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
+use pyo3::exceptions::{
+    PyIndexError, PyKeyError, PyOverflowError, PyRuntimeError, PyTypeError, PyValueError,
+    PyZeroDivisionError,
+};
 use pyo3::prelude::*;
 use pyo3::BoundObject;
 use std::panic::{self, AssertUnwindSafe};
@@ -316,13 +320,50 @@ impl<'a> RustyPyType<'a> {
     }
 }
 
+/// Bridges a Python callable to cel-rust's `VariableResolver` trait so users
+/// can resolve variables lazily on demand instead of materializing them up front.
+///
+/// The callback receives the variable name as a string and returns either a
+/// supported Python value or `None` (meaning "not handled — fall back to the
+/// statically-defined variables map"). Any exception raised by the callback
+/// is treated as "not handled" and a warning is logged.
+struct PyVariableResolver {
+    callback: Py<PyAny>,
+}
+
+impl VariableResolver for PyVariableResolver {
+    fn resolve(&self, variable: &str) -> Option<Value> {
+        Python::attach(|py| {
+            let result = match self.callback.call1(py, (variable,)) {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!("Variable resolver raised for '{variable}': {e}");
+                    return None;
+                }
+            };
+            if result.is_none(py) {
+                return None;
+            }
+            let bound = result.bind(py);
+            match RustyPyType(bound).try_into_value() {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    warn!("Variable resolver for '{variable}' returned an unsupported value: {e}");
+                    None
+                }
+            }
+        })
+    }
+}
+
 /// Build a CEL execution environment from an optional evaluation context.
 ///
 /// This consolidates the shared logic used by `evaluate()` and `Program.execute()`
 /// to keep behavior consistent between the two entrypoints.
-fn build_environment(
+fn build_environment<'r>(
     evaluation_context: Option<&Bound<'_, PyAny>>,
-    environment: &mut CelContext<'_>,
+    environment: &mut CelContext<'r>,
+    resolver_out: &'r mut Option<PyVariableResolver>,
 ) -> PyResult<()> {
     let mut ctx = context::Context::new(None, None)?;
 
@@ -333,6 +374,11 @@ fn build_environment(
             // Clone variables and functions into our local Context
             ctx.variables = py_context_ref.variables.clone();
             ctx.functions = py_context_ref.functions.clone();
+            if let Some(cb) = py_context_ref.resolver.as_ref() {
+                *resolver_out = Some(PyVariableResolver {
+                    callback: Python::attach(|py| cb.clone_ref(py)),
+                });
+            }
         } else if let Ok(py_dict) = evaluation_context.cast::<PyDict>() {
             // User passed in a dict - let's process variables and functions from the dict
             ctx.update(py_dict)?;
@@ -414,6 +460,13 @@ fn build_environment(
         }
     }
 
+    // Attach the lazy resolver if one was provided. The resolver lives in
+    // `*resolver_out` (caller-owned), and the cel::Context borrows it for
+    // its lifetime `'r`.
+    if let Some(resolver) = resolver_out.as_ref() {
+        environment.set_variable_resolver(resolver);
+    }
+
     Ok(())
 }
 
@@ -467,6 +520,31 @@ fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
             PyRuntimeError::new_err(format!(
                 "Function '{function}' error: {message}. Check function arguments and their types."
             ))
+        },
+        ExecutionError::NoSuchOverload => {
+            PyTypeError::new_err(
+                "No such overload. The operation isn't defined for the given operand types — \
+                 for example, mixing signed and unsigned integers (1 + 2u), indexing into a \
+                 string, or using an unsupported operator. Use explicit conversion \
+                 (int(x), uint(x), double(x)) or check the CEL specification."
+            )
+        },
+        ExecutionError::Overflow(op, left, right) => {
+            PyOverflowError::new_err(format!(
+                "Arithmetic overflow in '{op}' on {left:?} and {right:?}."
+            ))
+        },
+        ExecutionError::DivisionByZero(_) => {
+            PyZeroDivisionError::new_err("division by zero in CEL expression")
+        },
+        ExecutionError::RemainderByZero(_) => {
+            PyZeroDivisionError::new_err("modulo by zero in CEL expression")
+        },
+        ExecutionError::IndexOutOfBounds(value) => {
+            PyIndexError::new_err(format!("index out of bounds: {value:?}"))
+        },
+        ExecutionError::NoSuchKey(name) => {
+            PyKeyError::new_err(name.to_string())
         },
         _ => {
             // Fallback for any other execution errors - provide helpful message based on error content
@@ -720,7 +798,8 @@ impl TryIntoValue for RustyPyType<'_> {
 #[pyfunction(signature = (src, evaluation_context=None))]
 fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<RustyCelType> {
     let mut environment = CelContext::default();
-    build_environment(evaluation_context, &mut environment)?;
+    let mut resolver_slot: Option<PyVariableResolver> = None;
+    build_environment(evaluation_context, &mut environment, &mut resolver_slot)?;
 
     // Use panic::catch_unwind to handle parser panics gracefully
     let program = panic::catch_unwind(|| Program::compile(&src))
@@ -756,7 +835,8 @@ fn execute_compiled_program(
     evaluation_context: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyAny>> {
     let mut environment = CelContext::default();
-    build_environment(evaluation_context, &mut environment)?;
+    let mut resolver_slot: Option<PyVariableResolver> = None;
+    build_environment(evaluation_context, &mut environment, &mut resolver_slot)?;
 
     // Use panic::catch_unwind to handle execution panics gracefully
     // AssertUnwindSafe is needed because the environment contains function closures

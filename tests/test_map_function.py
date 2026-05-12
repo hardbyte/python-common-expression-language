@@ -48,15 +48,15 @@ class TestMapFunctionSupport:
 
         # This is the documented issue: mixed int/float arithmetic in map()
         # See docs/reference/cel-compliance.md for details
-        with pytest.raises(TypeError, match="Unsupported.*operation.*Int.*Float"):
+        with pytest.raises(TypeError, match="overload|Unsupported"):
             evaluate("[1, 2, 3].map(x, x * 2.0)")
 
         # Complex mixed arithmetic should also fail
-        with pytest.raises(TypeError, match="Unsupported.*operation.*Int.*Float"):
+        with pytest.raises(TypeError, match="overload|Unsupported"):
             evaluate("[1, 2, 3].map(x, x * 2 + 1.5)")
 
         # Integer + float literal fails due to type mismatch
-        with pytest.raises(TypeError, match="Unsupported.*operation.*Int.*Float"):
+        with pytest.raises(TypeError, match="overload|Unsupported"):
             evaluate("[1, 2, 3].map(x, x + 1.0)")
 
     def test_map_function_workarounds(self):

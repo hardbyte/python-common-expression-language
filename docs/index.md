@@ -108,16 +108,16 @@ Built on Rust with PyO3 - evaluate expressions in **microseconds**, not millisec
 | **Function calls** (with custom Python functions) | 20-50 μs | 20,000+ ops/sec | **~5x faster** |
 | *Pure Python equivalent* | *100-800 μs* | *1,000-10,000 ops/sec* | *baseline* |
 
-*Performance varies by hardware. [Run your own benchmarks →](how-to-guides/production-patterns-best-practices.md#performance-benchmarking)*
+*Performance varies by hardware. See `examples/performance/compile_execute_benchmark.py` to run your own benchmarks.*
 
 ### 🛡️ **Safety**
 Safe by Design: Built on a memory-safe Rust core. The non-Turing complete nature of CEL prevents infinite loops, and comprehensive error handling traps evaluation errors as Python exceptions.
 
 ### 🎯 **Production Ready**
-200+ tests, comprehensive CLI, type safety, and ~80% CEL compliance with transparent documentation.
+380+ tests, comprehensive CLI, type safety, and high CEL spec compliance.
 
-### 🚀 **Future-Proof**
-Built on cel-rust v0.11.1 with modern architecture - upcoming features like type introspection, optional values, and enhanced string functions will work seamlessly.
+### 🚀 **Up to Date**
+Built on cel-rust 0.13 — tracks upstream improvements in correctness and performance.
 
 ### 🔧 **Developer Friendly**
 Dual interfaces (Python API + CLI), rich error messages, extensive documentation, and full IDE support.
@@ -214,11 +214,10 @@ Simple, readable policies that handle complex business logic.
 - [**Extending CEL**](tutorials/extending-cel.md) - Advanced context and custom functions
 
 🛠️ **Solve Problems:**
-- [**Access Control Policies**](how-to-guides/access-control-policies.md) - Sophisticated permission systems
-- [**Production Patterns & Best Practices**](how-to-guides/production-patterns-best-practices.md) - Comprehensive production guide
-- [**Business Logic & Data Transformation**](how-to-guides/business-logic-data-transformation.md) - Transform data and implement business rules
+- [**Access Control Policies**](how-to-guides/access-control-policies.md) - Permission systems
+- [**Business Logic & Data Transformation**](how-to-guides/business-logic-data-transformation.md) - Business rules
 - [**Dynamic Query Filters**](how-to-guides/dynamic-query-filters.md) - Build safe, dynamic queries
-- [**Error Handling**](how-to-guides/error-handling.md) - Robust error handling strategies
+- [**Error Handling**](how-to-guides/error-handling.md) - Exceptions and safe-evaluation patterns
 
 ---
 

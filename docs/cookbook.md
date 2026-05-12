@@ -325,7 +325,7 @@ print(result)  # → True (cached on subsequent calls)
 > - Never trust user-provided expressions without sandboxing
 > - Monitor expression performance for DoS protection
 
-**→ [Full Production Guide](how-to-guides/production-patterns-best-practices.md) | [API Reference](reference/python-api.md)**
+**→ [API Reference](reference/python-api.md) | [Error Handling](how-to-guides/error-handling.md)**
 
 ---
 
@@ -337,8 +337,7 @@ print(result)  # → True (cached on subsequent calls)
 2. **Learn Fundamentals**: [CEL Language Basics](tutorials/cel-language-basics.md) - Master the syntax
 3. **Practice**: [CLI Recipes](#cli-recipes) - Get comfortable with the tools
 4. **Build**: [Business Logic](#data-transformation) - Implement your first real use case
-5. **Secure**: [Error Handling](#error-handling) - Make it production-ready
-6. **Scale**: [Production Patterns](#production-patterns) - Deploy with confidence
+5. **Handle errors**: [Error Handling](#error-handling) - Make it production-ready
 
 ## 💡 Can't Find What You're Looking For?
 

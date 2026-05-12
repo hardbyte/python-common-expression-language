@@ -59,16 +59,9 @@ uv sync --dev
 
 # Build the Rust extension
 uv run maturin develop
-# → 🔗 Found pyo3 bindings
-# → 📦 Built wheel for CPython 3.11 to target/wheels/common_expression_language-0.11.0-cp311-cp311-linux_x86_64.whl
-# → 📦 Installed common-expression-language-0.11.0
 
 # Run tests to verify setup
 uv run pytest
-# → ========================= test session starts =========================
-# → collected 300+ items
-# → tests/test_basics.py ........ [ 95%]
-# → ========================= 300 passed in 2.34s =========================
 ```
 
 ### Code Organization
@@ -152,7 +145,7 @@ def test_lower_ascii_not_implemented(self):
         cel.evaluate('"HELLO".lowerAscii()')
         # → RuntimeError: Undefined variable or function 'lowerAscii'
 
-@pytest.mark.xfail(reason="String utilities not implemented in cel v0.11.1", strict=False)
+@pytest.mark.xfail(reason="String utility not implemented upstream yet", strict=False)
 def test_lower_ascii_expected_behavior(self):
     """This test will pass when upstream implements lowerAscii()."""
     result = cel.evaluate('"HELLO".lowerAscii()')
@@ -266,16 +259,10 @@ See https://pyo3.rs/main/type-stub to opt-in to the automated types when impleme
 ```bash
 # Clean rebuild
 uv run maturin develop --release
-# → 🔗 Found pyo3 bindings
-# → 📦 Built wheel for CPython 3.11 to target/wheels/common_expression_language-0.11.0-cp311-cp311-linux_x86_64.whl
-# → 📦 Installed common-expression-language-0.11.0
 
 # Check Rust toolchain
 rustc --version
-# → rustc 1.75.0 (82e1608df 2023-12-21)
-
 cargo --version
-# → cargo 1.75.0 (1d8b05cdd 2023-11-20)
 ```
 
 **Test Failures:**
