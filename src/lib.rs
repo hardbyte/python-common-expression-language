@@ -3,7 +3,10 @@ mod context;
 use ::cel::objects::{Key, OptionalValue, TryIntoValue};
 use ::cel::{Context as CelContext, ExecutionError, Program, Value};
 use log::warn;
-use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
+use pyo3::exceptions::{
+    PyIndexError, PyKeyError, PyOverflowError, PyRuntimeError, PyTypeError, PyValueError,
+    PyZeroDivisionError,
+};
 use pyo3::prelude::*;
 use pyo3::BoundObject;
 use std::panic::{self, AssertUnwindSafe};
@@ -475,6 +478,23 @@ fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
                  string, or using an unsupported operator. Use explicit conversion \
                  (int(x), uint(x), double(x)) or check the CEL specification."
             )
+        },
+        ExecutionError::Overflow(op, left, right) => {
+            PyOverflowError::new_err(format!(
+                "Arithmetic overflow in '{op}' on {left:?} and {right:?}."
+            ))
+        },
+        ExecutionError::DivisionByZero(_) => {
+            PyZeroDivisionError::new_err("division by zero in CEL expression")
+        },
+        ExecutionError::RemainderByZero(_) => {
+            PyZeroDivisionError::new_err("modulo by zero in CEL expression")
+        },
+        ExecutionError::IndexOutOfBounds(value) => {
+            PyIndexError::new_err(format!("index out of bounds: {value:?}"))
+        },
+        ExecutionError::NoSuchKey(name) => {
+            PyKeyError::new_err(name.to_string())
         },
         _ => {
             // Fallback for any other execution errors - provide helpful message based on error content
