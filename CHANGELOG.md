@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Context.set_variable_resolver(callback)` exposes cel 0.13's `VariableResolver` trait to Python. The callback receives a variable name and returns the value (or `None` to fall through to variables registered with `add_variable`). Useful for backing a CEL context with on-demand sources (database lookups, lazily-loaded config files, etc.) without materializing the full set of variables upfront. Exceptions raised by the resolver are logged and treated as "not handled".
 - Idiomatic Python exception mapping for several CEL runtime errors that previously fell through to `ValueError`:
   - Arithmetic overflow → `OverflowError` (e.g. `9223372036854775807 + 1`, including the new overflow-safe int math in cel 0.13).
   - Division by zero / modulo by zero → `ZeroDivisionError`.

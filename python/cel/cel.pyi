@@ -26,6 +26,14 @@ class Context:
         """Add a function to the context."""
         ...
 
+    def set_variable_resolver(self, resolver: Callable[[str], Any]) -> None:
+        """Register a callback for lazy variable resolution.
+
+        The callback receives a variable name and returns the value, or None
+        to fall through to variables added via add_variable().
+        """
+        ...
+
     def update(self, variables: Dict[str, Any]) -> None:
         """Update context with variables from a dictionary."""
         ...
