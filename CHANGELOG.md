@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-04
+
+Upgrades to cel-rust 0.14, ships an extended standard library that mirrors
+cel-go, and exposes expression static analysis. A 1.0 release is intentionally
+deferred until the upstream `cel` crate supports the CEL protobuf AST
+(`cel.expr.Expr` / `CheckedExpr`) so that cross-implementation portability can
+be offered — see the Notes section below.
+
+### Updated
+
+- Updated cel-rust from 0.13.0 to 0.14.0.
+- Updated PyO3 from 0.27 to 0.29. This resolves two upstream advisories that
+  affected earlier PyO3 versions: an out-of-bounds read in `nth`/`nth_back` for
+  `PyList`/`PyTuple` iterators (high), and a missing `Sync` bound on
+  `PyCFunction::new_closure` closures (moderate).
+- Switched `pyo3-log` from a git fork (pinned to a PyO3 0.27 branch) to the
+  released `pyo3-log` 0.13.4 crate, removing the git dependency.
+- Refreshed transitive dependencies (chrono 0.4.45, log 0.4.33, regex 1.12.4,
+  serde_json 1.0.150, arc-swap 1.9.2).
+
+### Added
+
+- **Extended standard library** (`cel.stdlib`): opt-in function libraries that
+  mirror [cel-go](https://github.com/google/cel-go)'s extensions and fill gaps
+  in cel-rust's built-ins. Register them with
+  `cel.stdlib.add_stdlib_to_context(context)` (all libraries) or pass
+  `extensions=[...]` to select individual ones. The CLI enables them
+  automatically. Libraries:
+  - `core`: `bool`, `dyn`, `type`, `min`, `max`
+  - `strings`: `charAt`, `indexOf`, `lastIndexOf`, `substring`, `replace`,
+    `split`, `join`, `lowerAscii`, `upperAscii`, `trim`, `reverse`,
+    `strings.quote`
+  - `math`: `math.greatest`, `math.least`, `math.abs`, `math.sign`,
+    `math.ceil`, `math.floor`, `math.round`, `math.trunc`, `math.isNaN`,
+    `math.isInf`, `math.isFinite`, `math.sqrt`, and the `math.bit*` operations
+  - `sets`: `sets.contains`, `sets.equivalent`, `sets.intersects`
+  - `encoders`: `base64.encode`, `base64.decode`
+  - `lists`: `contains`, `distinct`, `flatten`, `slice`, `sort`, `reverse`,
+    `first`, `last`, `lists.range`
+- **Expression static analysis** on `Program`: `variables()`, `functions()`
+  and `references()` report the identifiers an expression uses without
+  evaluating it. `Program.source` exposes the original CEL text.
+- **Method-call syntax for custom functions**: a registered function can now be
+  called either as `f(x, y)` or as `x.f(y)`. When called as a method the
+  receiver is passed as the first argument, matching CEL's semantics. This is
+  what lets the standard-library extensions be written as members
+  (`"s".charAt(i)`, `[1,2].contains(x)`).
+
+### Changed
+
+- **Behaviour change** (cel 0.14): `contains` is now a **string-only** built-in.
+  `[1, 2, 3].contains(2)` and `{...}.contains(k)` no longer resolve to a
+  built-in — use the `in` operator (`2 in [1, 2, 3]`, `"k" in m`) for list/map
+  membership, or enable the `lists` extension in `cel.stdlib` which restores a
+  multi-type `contains`.
+- **Behaviour change** (cel 0.14): `min` and `max` are no longer part of the
+  core standard library. They are provided by the `core` extension in
+  `cel.stdlib`.
+- **Behaviour change** (cel 0.14): built-in functions and overloads now take
+  precedence over user-registered functions of the same name (e.g. registering
+  a function called `double` will not override the built-in `double()`
+  conversion). Give custom functions names that do not collide with built-ins.
+- **Error messages**: type-mismatch errors now report canonical CEL type names
+  (e.g. `Unsupported operation: string + int`) and several additional
+  execution errors map to idiomatic Python exceptions
+  (`UnsupportedIndex`, `ValuesNotComparable`, `UnexpectedType`,
+  `InvalidArgumentCount` → `TypeError`).
+
+### Performance
+
+- The CEL standard-library environment is now built once and shared across all
+  evaluations (via cel 0.14's `Env`/`Context::with_env`) instead of being
+  rebuilt on every `evaluate()`/`Program.execute()` call.
+
+### Notes
+
+- **Cross-implementation portability / "bytecode"** is explicitly out of scope.
+  CEL has no bytecode format; portable interchange in the ecosystem uses the
+  protobuf AST (`cel.expr.Expr` / `CheckedExpr`), which the upstream `cel` Rust
+  crate cannot yet produce or consume (it has no protobuf support and no type
+  checker). The portable artifact for this library is the CEL **source
+  string**; `Program.references()` provides static analysis.
+
 ## [0.6.0] - 2026-05-12
 
 ### Updated

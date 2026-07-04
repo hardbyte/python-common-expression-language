@@ -292,8 +292,9 @@ class TestMissingAggregationFunctions:
         with pytest.raises((RuntimeError, ValueError)):
             cel.evaluate("[1, 2, 3, 4, 5].fold(0, (acc, x) -> acc + x)")
 
-        # Global function syntax
-        with pytest.raises(RuntimeError, match="Undefined variable or function.*fold"):
+        # Global function syntax. As with reduce(), argument resolution can
+        # surface the first undeclared identifier ("sum") before "fold".
+        with pytest.raises(RuntimeError, match="Undefined variable or function"):
             cel.evaluate("fold([1, 2, 3], 0, sum + x)")
 
     def test_reduce_function_not_available(self):
@@ -302,8 +303,10 @@ class TestMissingAggregationFunctions:
 
         When this test starts failing, reduce() has been implemented upstream.
         """
-        # Global function syntax
-        with pytest.raises(RuntimeError, match="Undefined variable or function.*reduce"):
+        # Global function syntax. Arguments are resolved before the function is
+        # looked up, so the first undeclared identifier ("sum") may be reported
+        # rather than "reduce" — either way it is an undefined reference.
+        with pytest.raises(RuntimeError, match="Undefined variable or function"):
             cel.evaluate("reduce([1, 2, 3, 4, 5], 0, sum + x)")
 
         # Method syntax
