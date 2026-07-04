@@ -18,6 +18,14 @@ be offered — see the Notes section below.
 ### Updated
 
 - Updated cel-rust from 0.13.0 to 0.14.0.
+- Updated PyO3 from 0.27 to 0.29. This resolves two upstream advisories that
+  affected earlier PyO3 versions: an out-of-bounds read in `nth`/`nth_back` for
+  `PyList`/`PyTuple` iterators (high), and a missing `Sync` bound on
+  `PyCFunction::new_closure` closures (moderate).
+- Switched `pyo3-log` from a git fork (pinned to a PyO3 0.27 branch) to the
+  released `pyo3-log` 0.13.4 crate, removing the git dependency.
+- Refreshed transitive dependencies (chrono 0.4.45, log 0.4.33, regex 1.12.4,
+  serde_json 1.0.150, arc-swap 1.9.2).
 
 ### Added
 
