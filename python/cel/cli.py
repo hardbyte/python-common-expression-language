@@ -39,7 +39,7 @@ from typing_extensions import Annotated
 
 # Import directly from relative modules to avoid circular imports
 from .cel import Context, evaluate
-from .stdlib import add_stdlib_to_context
+from .stdlib import STDLIB_FUNCTIONS, add_stdlib_to_context
 
 # Initialize Rich console
 console = Console()
@@ -74,8 +74,10 @@ class CELLexer(RegexLexer):
             (r"\b(in|if|else|and|or|not)\b", token.Keyword),
             # Built-in functions
             (
-                r"\b(size|has|timestamp|duration|int|uint|double|string|bytes|"
-                r"startsWith|endsWith|contains|matches|substring)\b(?=\()",
+                r"\b(size|has|timestamp|duration|int|uint|double|string|bytes|bool|dyn|type|"
+                r"startsWith|endsWith|contains|matches|substring|charAt|indexOf|lastIndexOf|"
+                r"replace|split|join|lowerAscii|upperAscii|trim|reverse|min|max|"
+                r"distinct|flatten|slice|sort|first|last)\b(?=\()",
                 token.Name.Function,
             ),
             # String literals
@@ -245,7 +247,15 @@ class InteractiveCELREPL:
             "double",
             "string",
             "bytes",
-            "substring",  # stdlib function
+            # Extended standard-library functions (registered by the CLI).
+            # Simple names only; namespaced helpers (math.*, sets.*, base64.*,
+            # lists.*) are surfaced via the namespace prefixes below.
+            *sorted(name for name in STDLIB_FUNCTIONS if "." not in name),
+            "math",
+            "sets",
+            "base64",
+            "lists",
+            "strings",
         ]
 
         # Command dispatch dictionary for cleaner organization

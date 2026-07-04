@@ -6,7 +6,7 @@
 
 **Fast, Safe, and Expressive evaluation of Google's Common Expression Language (CEL) in Python, powered by Rust.**
 
-The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, and safety. This Python package wraps the Rust implementation [cel-interpreter](https://crates.io/crates/cel-interpreter) v0.10.0, providing microsecond-level expression evaluation with seamless Python integration.
+The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, and safety. This Python package wraps the Rust implementation [cel](https://crates.io/crates/cel) v0.14.0, providing microsecond-level expression evaluation with seamless Python integration.
 
 ## 🚀 Use Cases
 
@@ -121,10 +121,43 @@ access_granted = evaluate(policy, context)  # True
 ## Features
 
 - ✅ **Fast Evaluation**: Microsecond-level expression evaluation via Rust
-- ✅ **Rich Type System**: Integers, floats, strings, lists, maps, timestamps, durations
-- ✅ **Python Integration**: Seamless type conversion and custom function support
+- ✅ **Rich Type System**: Integers, floats, strings, lists, maps, timestamps, durations, bytes, optionals
+- ✅ **Python Integration**: Seamless type conversion and custom function support (callable as `f(x)` or `x.f()`)
+- ✅ **Extended Standard Library**: Optional `strings`, `math`, `sets`, `encoders` and `lists` extensions that mirror [cel-go](https://github.com/google/cel-go) (see `cel.stdlib`)
+- ✅ **Static Analysis**: Inspect the variables and functions an expression references before running it (`Program.references()`)
 - ✅ **CLI Tools**: Interactive REPL and batch processing capabilities
 - ✅ **Safety First**: Non-Turing complete, safe for untrusted expressions
+
+### Expression introspection
+
+```python
+import cel
+
+program = cel.compile("resource.owner == user.id && size(roles) > 0")
+program.variables()  # ['resource', 'roles', 'user']
+program.functions()  # ['_&&_', '_==_', '_>_', 'size']
+```
+
+### Extended standard library
+
+```python
+import cel
+from cel.stdlib import add_stdlib_to_context
+
+ctx = cel.Context()
+add_stdlib_to_context(ctx)  # adds strings, math, sets, encoders, lists
+
+cel.evaluate('"Hello World".lowerAscii()', ctx)   # 'hello world'
+cel.evaluate("math.greatest([3, 1, 2])", ctx)     # 3
+cel.evaluate("[1, 2, 3].contains(2)", ctx)        # True
+cel.evaluate('base64.encode(b"hi")', ctx)         # 'aGk='
+```
+
+> **Portability note:** CEL has no portable "bytecode". Cross-implementation
+> interchange in the CEL ecosystem uses the protobuf AST (`cel.expr.Expr` /
+> `CheckedExpr`), which the upstream `cel` Rust crate does not yet produce or
+> consume. The portable artifact for this library is the CEL **source string**;
+> use `Program.references()` for static analysis. See the docs for details.
 
 ## Documentation
 
@@ -192,4 +225,4 @@ This project is licensed under the same terms as the original cel-interpreter cr
 - [📖 **Documentation**](https://python-common-expression-language.readthedocs.io/)
 - [🌐 **CEL Homepage**](https://cel.dev/)
 - [📋 **CEL Specification**](https://github.com/google/cel-spec)
-- [⚙️ **cel-interpreter Rust crate**](https://crates.io/crates/cel-interpreter)
+- [⚙️ **cel Rust crate**](https://crates.io/crates/cel)

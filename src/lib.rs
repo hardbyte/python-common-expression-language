@@ -2,7 +2,7 @@ mod context;
 
 use ::cel::context::VariableResolver;
 use ::cel::objects::{Key, OptionalValue, TryIntoValue};
-use ::cel::{Context as CelContext, ExecutionError, Program, Value};
+use ::cel::{Context as CelContext, Env, ExecutionError, FunctionContext, Program, Value};
 use log::warn;
 use pyo3::exceptions::{
     PyIndexError, PyKeyError, PyOverflowError, PyRuntimeError, PyTypeError, PyValueError,
@@ -19,7 +19,28 @@ use pyo3::PyTypeInfo;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+
+/// The CEL standard-library environment (built-in functions, overloads and
+/// macros), built once and shared across every evaluation.
+///
+/// `Context::default()` rebuilds `Env::stdlib()` on each call, which re-registers
+/// every built-in overload. Since the standard library never changes, we build it
+/// a single time and hand out cheap `Arc` clones via [`stdlib_env`], letting
+/// `evaluate()` and `Program.execute()` reuse the same environment. User-supplied
+/// variables and functions still live on the per-call `Context`, so this sharing
+/// is safe and has no observable effect beyond being faster.
+static STDLIB_ENV: LazyLock<Arc<Env>> = LazyLock::new(|| Arc::new(Env::stdlib()));
+
+/// Returns a cheap `Arc` clone of the shared standard-library [`Env`].
+fn stdlib_env() -> Arc<Env> {
+    STDLIB_ENV.clone()
+}
+
+/// Builds a fresh execution environment backed by the shared standard library.
+fn new_environment() -> CelContext<'static> {
+    CelContext::with_env(stdlib_env())
+}
 
 /// A compiled CEL program that can be executed multiple times with different contexts.
 ///
@@ -57,6 +78,72 @@ impl PyProgram {
     #[pyo3(signature = (context=None))]
     fn execute(&self, context: Option<&Bound<'_, PyAny>>) -> PyResult<Py<PyAny>> {
         execute_compiled_program(&self.program, &self.source, context)
+    }
+
+    /// The variable names referenced by this expression.
+    ///
+    /// This performs static analysis of the compiled expression without
+    /// evaluating it, returning the names of the variables the expression
+    /// reads. Useful for validating that a context supplies everything an
+    /// expression needs, or for restricting which variables an expression may
+    /// touch.
+    ///
+    /// Note: names bound by comprehension macros (the ``x`` in
+    /// ``[1, 2].map(x, x * 2)``) are reported as variables, since they appear
+    /// as identifiers in the expression.
+    ///
+    /// Returns:
+    ///     A sorted list of referenced variable names.
+    fn variables(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .program
+            .references()
+            .variables()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// The function names referenced by this expression.
+    ///
+    /// This performs static analysis of the compiled expression without
+    /// evaluating it. Both named functions (``size``, ``startsWith``) and the
+    /// CEL operator overload identifiers for operators used in the expression
+    /// (e.g. ``_+_`` or ``_>_``) are included.
+    ///
+    /// Returns:
+    ///     A sorted list of referenced function/operator names.
+    fn functions(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .program
+            .references()
+            .functions()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// Static analysis of the names this expression references.
+    ///
+    /// Returns:
+    ///     A dict with two keys, ``"variables"`` and ``"functions"``, each
+    ///     mapping to a sorted list of names. Equivalent to calling
+    ///     :meth:`variables` and :meth:`functions`.
+    fn references<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("variables", self.variables())?;
+        dict.set_item("functions", self.functions())?;
+        Ok(dict)
+    }
+
+    /// The original CEL source this program was compiled from.
+    #[getter]
+    fn source(&self) -> &str {
+        &self.source
     }
 
     fn __repr__(&self) -> String {
@@ -388,13 +475,11 @@ fn build_environment<'r>(
             ));
         };
 
-        // Add any variables from the processed context
+        // Add any variables from the processed context. The values are already
+        // `cel::Value`s, so `add_variable_from_value` (infallible, `Into<Value>`)
+        // is the right entry point — no conversion or error handling needed here.
         for (name, value) in &ctx.variables {
-            environment
-                .add_variable(name.clone(), value.clone())
-                .map_err(|e| {
-                    PyValueError::new_err(format!("Failed to add variable '{name}': {e}"))
-                })?;
+            environment.add_variable_from_value(name.clone(), value.clone());
         }
 
         // Register Python functions
@@ -403,18 +488,40 @@ fn build_environment<'r>(
             let py_func_clone = Python::attach(|py| py_function.clone_ref(py));
             let func_name_clone = function_name.clone();
 
-            // Register a function that takes Arguments (variadic) and returns a Value
+            // Register a wrapper that bridges the CEL call to the Python callable.
+            //
+            // We take the raw `FunctionContext` (rather than the `Arguments`
+            // extractor) so that method-call syntax works: when an expression
+            // calls `target.func(a, b)`, CEL puts `target` in `ftx.this` and
+            // `[a, b]` in `ftx.args`. We prepend `this` to the argument list so
+            // the Python function receives `(target, a, b)`. This means a Python
+            // function `f(x, y)` can be invoked as either `f(x, y)` or
+            // `x.f(y)` — matching CEL's "receiver call is sugar for a function
+            // call with the receiver as the first argument" semantics and the
+            // way the standard library extensions (e.g. `list.contains(x)`,
+            // `"s".charAt(i)`) are written.
             environment.add_function(
                 function_name,
-                move |args: ::cel::extractors::Arguments| -> Result<Value, ExecutionError> {
+                move |ftx: &FunctionContext| -> Result<Value, ExecutionError> {
                     let py_func = py_func_clone.clone();
                     let func_name = func_name_clone.clone();
 
+                    // Collect the CEL argument values: the method target (if
+                    // this was a receiver-style call) first, then the explicit
+                    // arguments.
+                    let mut cel_args: Vec<Value> = Vec::with_capacity(ftx.args.len() + 1);
+                    if let Some(this) = &ftx.this {
+                        cel_args.push(this.as_ref().try_into()?);
+                    }
+                    for arg in ftx.args.iter() {
+                        cel_args.push(arg.as_ref().try_into()?);
+                    }
+
                     Python::attach(|py| {
                         // Convert CEL arguments to Python objects
-                        let mut py_args = Vec::new();
-                        for cel_value in args.0.iter() {
-                            let py_arg = RustyCelType(cel_value.clone())
+                        let mut py_args = Vec::with_capacity(cel_args.len());
+                        for cel_value in cel_args {
+                            let py_arg = RustyCelType(cel_value)
                                 .into_pyobject(py)
                                 .map_err(|e| ExecutionError::FunctionError {
                                     function: func_name.clone(),
@@ -470,7 +577,38 @@ fn build_environment<'r>(
     Ok(())
 }
 
-/// Enhanced error handling that maps CEL execution errors to appropriate Python exceptions
+/// Human-readable CEL type name for a value (e.g. `int`, `uint`, `string`).
+///
+/// Used to build type-focused error messages. `Value::type_of()` returns a
+/// `ValueType` whose `Display` impl already yields the canonical CEL type name.
+fn cel_type_name(value: &Value) -> String {
+    value.type_of().to_string()
+}
+
+/// A concise, user-facing rendering of a value for error messages.
+///
+/// Scalars render as their bare value (`5`, `hello`) rather than leaking the
+/// internal `Debug` wrapper (`Int(5)`, `String("hello")`); anything else falls
+/// back to `Debug`.
+fn cel_value_display(value: &Value) -> String {
+    match value {
+        Value::Int(i) => i.to_string(),
+        Value::UInt(u) => u.to_string(),
+        Value::Float(f) => f.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::String(s) => s.as_ref().clone(),
+        Value::Null => "null".to_string(),
+        other => format!("{other:?}"),
+    }
+}
+
+/// Maps CEL execution errors to the most appropriate Python exception type with
+/// an actionable message.
+///
+/// The goal is that CEL runtime failures surface as the Python exception a
+/// developer would expect (`ZeroDivisionError` for `1/0`, `KeyError` for a
+/// missing map key, `OverflowError` for integer overflow, and so on) rather
+/// than a single opaque error type.
 fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
     match error {
         ExecutionError::UndeclaredReference(name) => {
@@ -478,43 +616,76 @@ fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
                 "Undefined variable or function: '{name}'. Check that the variable is defined in the context or that the function name is spelled correctly."
             ))
         },
-        ExecutionError::UnsupportedBinaryOperator(op, left_type, right_type) => {
-            let left_type_str = format!("{left_type:?}");
-            let right_type_str = format!("{right_type:?}");
-            match *op {
-                "add" => {
-                    if (left_type_str.contains("Int") && right_type_str.contains("UInt")) ||
-                       (left_type_str.contains("UInt") && right_type_str.contains("Int")) {
-                        PyTypeError::new_err(format!(
-                            "Cannot mix signed and unsigned integers in arithmetic: {left_type:?} + {right_type:?}. Use explicit conversion: int(value) or uint(value)"
-                        ))
-                    } else {
-                        PyTypeError::new_err(format!(
-                            "Unsupported addition operation: {left_type:?} + {right_type:?}. Check that both operands are compatible types (int+int, double+double, string+string, etc.)"
-                        ))
-                    }
-                },
-                "mul" => {
-                    PyTypeError::new_err(format!(
-                        "Unsupported multiplication operation: {left_type:?} * {right_type:?}. Ensure both operands are numeric and of compatible types. Use explicit conversion if needed: double(value)*double(value)"
-                    ))
-                },
-                "sub" => {
-                    PyTypeError::new_err(format!(
-                        "Unsupported subtraction operation: {left_type:?} - {right_type:?}. Ensure both operands are numeric and of compatible types."
-                    ))
-                },
-                "div" => {
-                    PyTypeError::new_err(format!(
-                        "Unsupported division operation: {left_type:?} / {right_type:?}. Ensure both operands are numeric and of compatible types."
-                    ))
-                },
-                _ => {
-                    PyTypeError::new_err(format!(
-                        "Unsupported operation '{op}' between {left_type:?} and {right_type:?}. Check the CEL specification for supported operations between these types."
-                    ))
-                }
+        ExecutionError::UnsupportedBinaryOperator(op, left, right) => {
+            let left_type = cel_type_name(left);
+            let right_type = cel_type_name(right);
+            let symbol = match *op {
+                "add" => "+",
+                "sub" => "-",
+                "mul" => "*",
+                "div" => "/",
+                "rem" => "%",
+                other => other,
+            };
+            if (left_type == "int" && right_type == "uint")
+                || (left_type == "uint" && right_type == "int")
+            {
+                PyTypeError::new_err(format!(
+                    "Cannot mix signed and unsigned integers: {left_type} {symbol} {right_type}. \
+                     Convert explicitly with int(value) or uint(value)."
+                ))
+            } else {
+                PyTypeError::new_err(format!(
+                    "Unsupported operation: {left_type} {symbol} {right_type}. CEL does not coerce \
+                     between types — both operands must be the same type. Convert explicitly with \
+                     int(x), uint(x), double(x) or string(x) as appropriate."
+                ))
             }
+        },
+        ExecutionError::UnsupportedIndex(container, index) => {
+            PyTypeError::new_err(format!(
+                "Cannot index a {} value with a {} key.",
+                cel_type_name(container),
+                cel_type_name(index)
+            ))
+        },
+        ExecutionError::ValuesNotComparable(left, right) => {
+            PyTypeError::new_err(format!(
+                "Values of type {} and {} cannot be compared.",
+                cel_type_name(left),
+                cel_type_name(right)
+            ))
+        },
+        ExecutionError::UnexpectedType { got, want } => {
+            PyTypeError::new_err(format!("Unexpected type: got '{got}', want '{want}'."))
+        },
+        ExecutionError::UnsupportedKeyType(value) => {
+            PyTypeError::new_err(format!(
+                "Value of type {} cannot be used as a map key. Keys must be int, uint, bool or string.",
+                cel_type_name(value)
+            ))
+        },
+        ExecutionError::InvalidArgumentCount { expected, actual } => {
+            PyTypeError::new_err(format!(
+                "Invalid number of arguments: expected {expected}, got {actual}."
+            ))
+        },
+        ExecutionError::NotSupportedAsMethod { method, target } => {
+            PyTypeError::new_err(format!(
+                "Method '{method}' is not supported on a {} value.",
+                cel_type_name(target)
+            ))
+        },
+        ExecutionError::UnsupportedTargetType { target } => {
+            PyTypeError::new_err(format!(
+                "Unsupported target type: {} cannot be used here.",
+                cel_type_name(target)
+            ))
+        },
+        ExecutionError::MissingArgumentOrTarget => {
+            PyTypeError::new_err(
+                "A function was called without a required argument or method target.",
+            )
         },
         ExecutionError::FunctionError { function, message } => {
             PyRuntimeError::new_err(format!(
@@ -523,15 +694,18 @@ fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
         },
         ExecutionError::NoSuchOverload => {
             PyTypeError::new_err(
-                "No such overload. The operation isn't defined for the given operand types — \
-                 for example, mixing signed and unsigned integers (1 + 2u), indexing into a \
-                 string, or using an unsupported operator. Use explicit conversion \
-                 (int(x), uint(x), double(x)) or check the CEL specification."
+                "No such overload: the operation is not defined for the given operand types. \
+                 CEL does not coerce between types, so common causes are mixing int with uint or \
+                 double (1 + 2u, 1 + 2.5), indexing into a string, or calling a function with the \
+                 wrong argument types. Convert explicitly with int(x), uint(x), double(x) or \
+                 string(x), or check the CEL specification."
             )
         },
         ExecutionError::Overflow(op, left, right) => {
             PyOverflowError::new_err(format!(
-                "Arithmetic overflow in '{op}' on {left:?} and {right:?}."
+                "Arithmetic overflow in '{op}' on {} and {}.",
+                cel_value_display(left),
+                cel_value_display(right)
             ))
         },
         ExecutionError::DivisionByZero(_) => {
@@ -541,28 +715,19 @@ fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
             PyZeroDivisionError::new_err("modulo by zero in CEL expression")
         },
         ExecutionError::IndexOutOfBounds(value) => {
-            PyIndexError::new_err(format!("index out of bounds: {value:?}"))
+            PyIndexError::new_err(format!("index out of bounds: {}", cel_value_display(value)))
         },
         ExecutionError::NoSuchKey(name) => {
             PyKeyError::new_err(name.to_string())
         },
-        _ => {
-            // Fallback for any other execution errors - provide helpful message based on error content
-            let error_str = format!("{error:?}");
-            if error_str.contains("UndeclaredReference") {
-                PyRuntimeError::new_err(format!(
-                    "Undefined variable or function. Check that all variables are defined in the context and function names are spelled correctly. Error: {error}"
-                ))
-            } else if error_str.contains("UnsupportedBinaryOperator") {
-                PyTypeError::new_err(format!(
-                    "Unsupported operation between incompatible types. Check the CEL specification for supported operations. Error: {error}"
-                ))
-            } else {
-                PyValueError::new_err(format!(
-                    "CEL execution error: {error}. This may indicate an unsupported operation or invalid expression."
-                ))
-            }
-        }
+        ExecutionError::InternalError(message) => {
+            PyRuntimeError::new_err(format!("Internal CEL error: {message}"))
+        },
+        // `ExecutionError` is `#[non_exhaustive]`; keep a helpful catch-all for any
+        // variant added upstream that we do not yet map explicitly.
+        _ => PyValueError::new_err(format!(
+            "CEL execution error: {error}. This may indicate an unsupported operation or invalid expression."
+        )),
     }
 }
 
@@ -797,7 +962,7 @@ impl TryIntoValue for RustyPyType<'_> {
 ///     - Python API Reference: For detailed API documentation
 #[pyfunction(signature = (src, evaluation_context=None))]
 fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<RustyCelType> {
-    let mut environment = CelContext::default();
+    let mut environment = new_environment();
     let mut resolver_slot: Option<PyVariableResolver> = None;
     build_environment(evaluation_context, &mut environment, &mut resolver_slot)?;
 
@@ -834,7 +999,7 @@ fn execute_compiled_program(
     src: &str,
     evaluation_context: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyAny>> {
-    let mut environment = CelContext::default();
+    let mut environment = new_environment();
     let mut resolver_slot: Option<PyVariableResolver> = None;
     build_environment(evaluation_context, &mut environment, &mut resolver_slot)?;
 

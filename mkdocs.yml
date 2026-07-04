@@ -87,6 +87,8 @@ nav:
     - CLI Usage Recipes: how-to-guides/cli-recipes.md
   - Reference:
     - Python API: reference/python-api.md
+    - Extended Standard Library: reference/standard-library.md
+    - Expression Introspection: reference/introspection.md
     - CLI Reference: reference/cli-reference.md
   - Development:
     - Contributing & Developer Guide: contributing.md

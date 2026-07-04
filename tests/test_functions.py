@@ -10,16 +10,34 @@ class TestBuiltInCollectionFunctions:
     """Test built-in collection functions that work in CEL."""
 
     def test_min_function_works(self):
-        """Test that min() function works correctly."""
-        assert cel.evaluate("min([3, 1, 4, 1, 5])") == 1
-        assert cel.evaluate("min([1.5, 2.3, 0.8])") == 0.8
-        assert cel.evaluate("min(['banana', 'apple', 'cherry'])") == "apple"
+        """min() is provided by the extended stdlib (cel-rust 0.14 dropped it)."""
+        from cel.stdlib import add_stdlib_to_context
+
+        ctx = cel.Context()
+        add_stdlib_to_context(ctx)
+        assert cel.evaluate("min([3, 1, 4, 1, 5])", ctx) == 1
+        assert cel.evaluate("min([1.5, 2.3, 0.8])", ctx) == 0.8
+        assert cel.evaluate("min(['banana', 'apple', 'cherry'])", ctx) == "apple"
+        # Variadic form is also supported.
+        assert cel.evaluate("min(3, 1, 2)", ctx) == 1
 
     def test_max_function_works(self):
-        """Test that max() function works correctly."""
-        assert cel.evaluate("max([3, 1, 4, 1, 5])") == 5
-        assert cel.evaluate("max([1.5, 2.3, 0.8])") == 2.3
-        assert cel.evaluate("max(['banana', 'apple', 'cherry'])") == "cherry"
+        """max() is provided by the extended stdlib (cel-rust 0.14 dropped it)."""
+        from cel.stdlib import add_stdlib_to_context
+
+        ctx = cel.Context()
+        add_stdlib_to_context(ctx)
+        assert cel.evaluate("max([3, 1, 4, 1, 5])", ctx) == 5
+        assert cel.evaluate("max([1.5, 2.3, 0.8])", ctx) == 2.3
+        assert cel.evaluate("max(['banana', 'apple', 'cherry'])", ctx) == "cherry"
+        assert cel.evaluate("max(3, 1, 2)", ctx) == 3
+
+    def test_min_max_not_in_core(self):
+        """min()/max() are not part of the cel-rust core stdlib in 0.14."""
+        with pytest.raises(RuntimeError, match="Undefined variable or function"):
+            cel.evaluate("min([1, 2, 3])")
+        with pytest.raises(RuntimeError, match="Undefined variable or function"):
+            cel.evaluate("max([1, 2, 3])")
 
 
 def test_custom_function():
@@ -574,14 +592,14 @@ class TestFunctionIntegrationWithCELFeatures:
         def is_even(x):
             return x % 2 == 0
 
-        context = {"double": multiply_by_two, "even": is_even, "numbers": [1, 2, 3, 4, 5]}
-
-        # Note: CEL's map() might not work directly with custom functions
-        # due to type system limitations, but we can test other combinations
+        # Note: "double" is a built-in CEL conversion function in cel-rust 0.14,
+        # and built-ins take precedence over user functions of the same name, so
+        # we register the custom helper under a non-colliding name.
+        context = {"times_two": multiply_by_two, "even": is_even, "numbers": [1, 2, 3, 4, 5]}
 
         # Test function with list filtering (conceptual - may need adaptation)
         # This tests the function itself, integration with CEL macros may vary
-        assert cel.evaluate("double(5)", context) == 10
+        assert cel.evaluate("times_two(5)", context) == 10
         assert cel.evaluate("even(4)", context)
         assert not cel.evaluate("even(3)", context)
 

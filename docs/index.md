@@ -114,10 +114,10 @@ Built on Rust with PyO3 - evaluate expressions in **microseconds**, not millisec
 Safe by Design: Built on a memory-safe Rust core. The non-Turing complete nature of CEL prevents infinite loops, and comprehensive error handling traps evaluation errors as Python exceptions.
 
 ### 🎯 **Production Ready**
-380+ tests, comprehensive CLI, type safety, and high CEL spec compliance.
+450+ tests, comprehensive CLI, type safety, and high CEL spec compliance.
 
 ### 🚀 **Up to Date**
-Built on cel-rust 0.13 — tracks upstream improvements in correctness and performance.
+Built on cel-rust 0.14 — tracks upstream improvements in correctness and performance.
 
 ### 🔧 **Developer Friendly**
 Dual interfaces (Python API + CLI), rich error messages, extensive documentation, and full IDE support.

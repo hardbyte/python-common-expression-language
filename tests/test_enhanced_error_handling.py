@@ -55,8 +55,8 @@ class TestEnhancedErrorHandling:
             cel.evaluate("'hello' + 42", {})
 
         error_msg = str(exc_info.value)
-        assert "Unsupported addition operation" in error_msg
-        assert "Check that both operands are compatible types" in error_msg
+        assert "Unsupported operation" in error_msg
+        assert "string" in error_msg and "int" in error_msg
 
     def test_function_error_runtime_error(self):
         """Test that function errors raise RuntimeError with function context."""

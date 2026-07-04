@@ -41,8 +41,34 @@ class Context:
 class Program:
     """Compiled CEL program that can be executed multiple times."""
 
+    @property
+    def source(self) -> str:
+        """The original CEL source this program was compiled from."""
+        ...
+
     def execute(self, context: Optional[Union[Dict[str, Any], Context]] = None) -> Any:
         """Execute the compiled program with an optional context."""
+        ...
+
+    def variables(self) -> list[str]:
+        """Return the sorted variable names this expression references.
+
+        Performs static analysis without evaluating the expression. Names bound
+        by comprehension macros (e.g. the ``x`` in ``[1, 2].map(x, x * 2)``) are
+        included, since they appear as identifiers.
+        """
+        ...
+
+    def functions(self) -> list[str]:
+        """Return the sorted function/operator names this expression references.
+
+        Includes named functions (``size``) and CEL operator overload
+        identifiers for operators used in the expression (e.g. ``_+_``).
+        """
+        ...
+
+    def references(self) -> Dict[str, list[str]]:
+        """Return ``{"variables": [...], "functions": [...]}`` for this expression."""
         ...
 
 def compile(expression: str) -> Program:

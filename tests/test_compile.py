@@ -93,9 +93,9 @@ class TestCompileWithFunctions:
 
     def test_execute_with_custom_function(self):
         """Test executing with a custom Python function."""
-        program = cel.compile("double(x)")
+        program = cel.compile("times_two(x)")
         ctx = Context()
-        ctx.add_function("double", lambda x: x * 2)
+        ctx.add_function("times_two", lambda x: x * 2)
         ctx.add_variable("x", 21)
         result = program.execute(ctx)
         assert result == 42
