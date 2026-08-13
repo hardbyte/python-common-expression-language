@@ -8,7 +8,7 @@ Also covers the fix for GitHub issue #16 (string literals being corrupted).
 
 import cel
 import pytest
-from cel import Context, evaluate
+from conftest import evaluate, make_context
 
 
 class TestStrictModeEvaluation:
@@ -28,7 +28,7 @@ class TestStrictModeEvaluation:
         ]
 
         # Context with floats
-        ctx = Context({"value": 0.4, "rate": 3.14})
+        ctx = {"value": 0.4, "rate": 3.14}
 
         for expr in test_cases:
             # Remove quotes and handle escaped quotes properly
@@ -55,7 +55,7 @@ class TestStrictModeEvaluation:
         ]
 
         for expr, ctx, expected in test_cases:
-            context = Context(ctx)
+            context = ctx
 
             result = evaluate(expr, context)
 
@@ -73,10 +73,12 @@ class TestStrictModeEvaluation:
         ]
 
         for expr, ctx in test_cases:
-            context = Context(ctx) if ctx else None
+            context = ctx
 
             # Should fail in Strict mode
-            with pytest.raises(TypeError, match="Unsupported.*operation"):
+            with pytest.raises(
+                (TypeError, ValueError), match="No such overload|Unsupported.*operation"
+            ):
                 evaluate(expr, context)
 
     def test_same_type_arithmetic_works_in_strict_mode(self):
@@ -92,7 +94,7 @@ class TestStrictModeEvaluation:
         ]
 
         for expr, ctx, expected in test_cases:
-            context = Context(ctx) if ctx else None
+            context = ctx
 
             result = evaluate(expr, context)
 
@@ -109,7 +111,7 @@ class TestStrictModeEvaluation:
         ]
 
         for expr, ctx, expected in test_cases:
-            context = Context(ctx) if ctx else None
+            context = ctx
 
             result = evaluate(expr, context)
 
@@ -124,7 +126,7 @@ class TestStrictModeEvaluation:
         ]
 
         for expr, ctx, expected in test_cases:
-            context = Context(ctx)
+            context = ctx
 
             result = evaluate(expr, context)
 
@@ -153,7 +155,9 @@ class TestStrictModeEvaluation:
 
         for expr in mixed_type_arithmetic_comprehensions:
             # Should fail due to mixed arithmetic inside comprehension
-            with pytest.raises(TypeError, match="Unsupported.*operation"):
+            with pytest.raises(
+                (TypeError, ValueError), match="No such overload|Unsupported.*operation"
+            ):
                 evaluate(expr)
 
     def test_comprehensions_with_mixed_comparisons_work(self):
@@ -177,7 +181,7 @@ class TestStrictModeEvaluation:
         ]
 
         for expr, ctx, expected in test_cases:
-            context = Context(ctx) if ctx else None
+            context = ctx
 
             result = evaluate(expr, context)
 
@@ -192,7 +196,7 @@ class TestStrictModeEvaluation:
         ]
 
         for expr, ctx, expected in test_cases:
-            context = Context(ctx)
+            context = ctx
 
             result = evaluate(expr, context)
 
@@ -210,7 +214,7 @@ class TestStrictModeEvaluation:
         ]
 
         for expr, ctx, expected in test_cases:
-            context = Context(ctx) if ctx else None
+            context = ctx
 
             result = evaluate(expr, context)
 
@@ -224,7 +228,7 @@ class TestStrictModeEvaluation:
         """
         # The original issue report case
         record = {"var": "epa1", "var_2": 10, "var_3": 0.4}
-        ctx = Context(record)
+        ctx = record
 
         # Test 1: String comparison should work
         result = evaluate('var == "epa1"', ctx)

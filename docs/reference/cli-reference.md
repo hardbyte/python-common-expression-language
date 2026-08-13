@@ -43,7 +43,7 @@ cel --help
 cel -h
 ```
 
-#### `--version`, `-v`  
+#### `--version`, `-v`
 Show version information and exit.
 
 ```bash
@@ -87,7 +87,7 @@ cel 'config.valid' -f config.json
 ```
 
 **Format**: Path to valid JSON file
-**Special values**: 
+**Special values**:
 - `/dev/stdin` - Read from standard input
 - `-` - Read from standard input (shorthand)
 
@@ -121,7 +121,7 @@ cel 'user.name' --format raw --context-file user.json
 **Values**:
 - `auto` (default) - Automatically detect best format
 - `json` - JSON format
-- `yaml` - YAML format  
+- `yaml` - YAML format
 - `raw` - Raw string output (no quotes for strings)
 - `pretty` - Pretty-printed format
 
@@ -179,7 +179,7 @@ Display current context variables in a formatted table.
 
 ```
 CEL> context
-           Context Variables           
+           Context Variables
 ┏━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
 ┃ Variable ┃ Type ┃ Value             ┃
 ┡━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
@@ -230,7 +230,7 @@ Show help message.
 
 ```
 CEL> help
-                   REPL Commands                    
+                   REPL Commands
 ┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ Command        ┃ Description                     ┃
 ┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩

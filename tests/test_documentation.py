@@ -53,10 +53,8 @@ def test_context_methods_have_docstrings():
     assert "function" in add_function_doc.lower()
     assert "name" in add_function_doc.lower()
 
-    # Check update method
-    update_doc = cel.Context.update.__doc__
-    assert update_doc is not None
-    assert "dictionary" in update_doc.lower() or "variables" in update_doc.lower()
+    # The narrow API intentionally has no update method.
+    assert not hasattr(cel.Context, "update")
 
 
 def test_context_constructor_signature():
@@ -64,13 +62,8 @@ def test_context_constructor_signature():
     sig = inspect.signature(cel.Context)
     params = list(sig.parameters.keys())
 
-    # Should accept variables and functions parameters
-    assert "variables" in params
-    assert "functions" in params
-
-    # Both should be optional (have defaults)
-    assert sig.parameters["variables"].default is None
-    assert sig.parameters["functions"].default is None
+    # The narrow API intentionally exposes a no-argument constructor.
+    assert params == []
 
 
 def test_evaluate_function_signature():
@@ -82,9 +75,9 @@ def test_evaluate_function_signature():
     assert "src" in params
     assert sig.parameters["src"].default == inspect.Parameter.empty
 
-    # Should have optional evaluation_context
-    assert "evaluation_context" in params
-    assert sig.parameters["evaluation_context"].default is None
+    # The execution context is required and concrete.
+    assert params == ["src", "context"]
+    assert sig.parameters["context"].default is inspect.Parameter.empty
 
 
 def test_help_text_contains_examples():
@@ -129,4 +122,6 @@ def test_api_discoverability():
     context_attrs = dir(cel.Context)
     assert "add_variable" in context_attrs
     assert "add_function" in context_attrs
-    assert "update" in context_attrs
+    assert "update" not in context_attrs
+    assert "prepare" in dir(cel)
+    assert "PreparedValue" in dir(cel)

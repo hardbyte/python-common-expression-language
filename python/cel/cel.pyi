@@ -1,45 +1,21 @@
-"""
-Type stubs for the CEL Rust extension module.
-"""
+"""Type stubs for the CEL Rust extension module."""
 
-from typing import Any, Callable, Dict, Literal, Optional, Union, overload
+from typing import Any, Callable
+
+class PreparedValue:
+    """Opaque immutable CEL value created by :func:`prepare`."""
 
 class Context:
-    """CEL evaluation context for variables and functions."""
+    """Reusable native CEL context for prepared values and Python functions."""
 
-    @overload
     def __init__(self) -> None: ...
-    @overload
-    def __init__(self, variables: Dict[str, Any]) -> None: ...
-    @overload
-    def __init__(
-        self,
-        variables: Optional[Dict[str, Any]] = None,
-        *,
-        functions: Optional[Dict[str, Callable[..., Any]]] = None,
-    ) -> None: ...
-    def add_variable(self, name: str, value: Any) -> None:
-        """Add a variable to the context."""
-        ...
-
-    def add_function(self, name: str, func: Callable[..., Any]) -> None:
-        """Add a function to the context."""
-        ...
-
-    def update(self, variables: Dict[str, Any]) -> None:
-        """Update context with variables from a dictionary."""
-        ...
+    def add_variable(self, name: str, value: PreparedValue) -> None: ...
+    def add_function(self, name: str, function: Callable[..., Any]) -> None: ...
 
 class Program:
-    """Compiled CEL program that can be executed multiple times."""
+    """Compiled CEL program."""
 
-    def execute(self, context: Optional[Union[Dict[str, Any], Context]] = None) -> Any:
-        """Execute the compiled program with an optional context."""
-        ...
-
-def compile(expression: str) -> Program:
-    """Compile a CEL expression into a reusable Program object."""
-    ...
+    def execute(self, context: Context) -> Any: ...
 
 class OptionalValue:
     """Wrapper for CEL optional values."""
@@ -53,18 +29,6 @@ class OptionalValue:
     def or_value(self, default: Any) -> Any: ...
     def or_optional(self, other: OptionalValue) -> OptionalValue: ...
 
-def evaluate(
-    expression: str,
-    context: Optional[Union[Dict[str, Any], Context]] = None,
-) -> Any:
-    """
-    Evaluate a CEL expression.
-
-    Args:
-        expression: The CEL expression to evaluate
-        context: Optional context with variables and functions
-
-    Returns:
-        The result of evaluating the expression
-    """
-    ...
+def prepare(value: Any) -> PreparedValue: ...
+def compile(expression: str) -> Program: ...
+def evaluate(expression: str, context: Context) -> Any: ...

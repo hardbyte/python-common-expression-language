@@ -14,27 +14,27 @@ flowchart LR
     subgraph Python["&nbsp;&nbsp;🐍 Python Layer&nbsp;&nbsp;"]
         API["&nbsp;&nbsp;cel.evaluate()<br/>&nbsp;&nbsp;Context class<br/>&nbsp;&nbsp;CLI tool&nbsp;&nbsp;"]
     end
-    
+
     subgraph Rust["&nbsp;&nbsp;🦀 Rust Wrapper (PyO3)&nbsp;&nbsp;"]
         Wrapper["&nbsp;&nbsp;Type conversion<br/>&nbsp;&nbsp;Error handling<br/>&nbsp;&nbsp;Function calls&nbsp;&nbsp;"]
     end
-    
+
     subgraph CEL["&nbsp;&nbsp;⚡ CEL Engine (upstream)&nbsp;&nbsp;"]
         Engine["&nbsp;&nbsp;CEL parser<br/>&nbsp;&nbsp;Expression evaluation<br/>&nbsp;&nbsp;Built-in functions&nbsp;&nbsp;"]
     end
-    
+
     Python --> Rust
     Rust --> CEL
-    
+
     style Python fill:#e8f4f8,color:#2c3e50
-    style Rust fill:#fdf2e9,color:#2c3e50  
+    style Rust fill:#fdf2e9,color:#2c3e50
     style CEL fill:#f0f9ff,color:#2c3e50
 ```
 
 **Key Files:**
 
 - `src/lib.rs` - Main evaluation engine and type conversions
-- `src/context.rs` - Context management and Python function integration  
+- `src/context.rs` - Context management and Python function integration
 - `python/cel/` - Python module structure and CLI
 - `tests/` - Comprehensive test suite with 300+ tests
 
@@ -104,7 +104,7 @@ uv run pytest
 uv run pytest tests/test_basics.py        # Core functionality
 # → ========================= 25 passed in 0.12s =========================
 
-uv run pytest tests/test_arithmetic.py    # Math operations  
+uv run pytest tests/test_arithmetic.py    # Math operations
 # → ========================= 42 passed in 0.18s =========================
 
 uv run pytest tests/test_context.py       # Variable handling
@@ -142,20 +142,49 @@ We use a proactive detection system to monitor for upstream improvements:
 2. **Positive Detection**: Expected failures (`@pytest.mark.xfail`) ready to pass when features arrive
 
 ```python
+import cel
+Context = cel.Context
+
+
+def add_variables(context, values):
+    for name, value in values.items():
+        if callable(value):
+            context.add_function(name, value)
+        else:
+            context.add_variable(name, cel.prepare(value))
+    return context
+
+
+def make_context(values=None):
+    context = cel.Context()
+    if values:
+        add_variables(context, values)
+    return context
+
+
+def as_context(value=None):
+    if isinstance(value, cel.Context):
+        return value
+    return make_context(value)
+
+
+def evaluate(expression, context=None):
+    return cel.evaluate(expression, as_context(context))
+
 import pytest
 import cel
 
-# Example: Detecting when string functions become available  
+# Example: Detecting when string functions become available
 def test_lower_ascii_not_implemented(self):
     """When this test starts failing, lowerAscii() has been implemented."""
     with pytest.raises(RuntimeError, match="Undefined variable or function.*lowerAscii"):
-        cel.evaluate('"HELLO".lowerAscii()')
+        evaluate('"HELLO".lowerAscii()', cel.Context())
         # → RuntimeError: Undefined variable or function 'lowerAscii'
 
 @pytest.mark.xfail(reason="String utilities not implemented in cel v0.11.1", strict=False)
 def test_lower_ascii_expected_behavior(self):
     """This test will pass when upstream implements lowerAscii()."""
-    result = cel.evaluate('"HELLO".lowerAscii()')
+    result = evaluate('"HELLO".lowerAscii()', cel.Context())
     # → "hello" (when implemented)
     assert result == "hello"
 ```
@@ -189,7 +218,7 @@ uv run pytest tests/test_upstream_improvements.py -v --tb=no | grep -E "(XPASS|F
 
 **Interpreting Results:**
 - **PASSED** = Limitation still exists (expected)
-- **XFAIL** = Expected failure (ready for when feature arrives)  
+- **XFAIL** = Expected failure (ready for when feature arrives)
 - **XPASS** = 🎉 Feature now available! (remove xfail marker)
 
 ### Dependency Update Process
@@ -199,7 +228,7 @@ When updating the `cel` crate dependency:
 1. **Run detection tests first** to identify new capabilities
 2. **Update Cargo.toml** with new version
 3. **Fix compilation issues** (API changes)
-4. **Remove xfail markers** for now-passing tests  
+4. **Remove xfail markers** for now-passing tests
 5. **Update documentation** to reflect new features
 6. **Test thoroughly** to ensure no regressions
 
@@ -226,22 +255,22 @@ from typing import Optional, Union, Dict, Any, Callable
 import cel
 
 # Type hints for public APIs
-def evaluate(expression: str, context: Optional[Union[Dict[str, Any], 'Context']] = None) -> Any:
-    """Evaluate a CEL expression with optional context."""
+def evaluate(expression: str, context: Context) -> Any:
+    """Evaluate a CEL expression with a required Context."""
     pass
 
-# Comprehensive docstrings  
+# Comprehensive docstrings
 def add_function(self, name: str, func: Callable) -> None:
     """Add a Python function to the CEL evaluation context.
-    
+
     Args:
         name: Function name to use in CEL expressions
         func: Python callable to invoke
-        
+
     Example:
         >>> context = cel.Context()
         >>> context.add_function("double", lambda x: x * 2)
-        >>> cel.evaluate("double(21)", context)
+        >>> evaluate("double(21)", context)
         42
     """
 ```
@@ -291,7 +320,7 @@ uv run pytest tests/test_failing.py -v -s
 uv run pytest tests/test_file.py::test_name --pdb
 # → ========================= test session starts =========================
 # → >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PDB set_trace >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-# → (Pdb) 
+# → (Pdb)
 ```
 
 **Type Conversion Issues:**

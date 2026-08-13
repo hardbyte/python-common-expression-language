@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "cel"
-version = "0.5.6"
+version = "0.6.0"
 dependencies = [
  "cel 0.13.0",
  "chrono",
@@ -124,7 +124,7 @@ dependencies = [
 [[package]]
 name = "cel"
 version = "0.13.0"
-source = "git+https://github.com/GeniosAI/cel-rust.git?rev=1f35435e5ad3261083cf7f337b922765d01dcb63#1f35435e5ad3261083cf7f337b922765d01dcb63"
+source = "git+https://github.com/GeniosAI/cel-rust.git?rev=b9a85818c6f3d2b3098250bab8a3022154485895#b9a85818c6f3d2b3098250bab8a3022154485895"
 dependencies = [
  "antlr4rust",
  "base64",

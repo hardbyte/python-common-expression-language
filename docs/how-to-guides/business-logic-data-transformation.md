@@ -13,12 +13,41 @@ Your application has complex business rules that change frequently based on mark
 Implement a configurable business rules engine where rules are defined as CEL expressions that business users can understand and modify:
 
 ```python
-from cel import evaluate, Context
+import cel
+Context = cel.Context
+
+
+def add_variables(context, values):
+    for name, value in values.items():
+        if callable(value):
+            context.add_function(name, value)
+        else:
+            context.add_variable(name, cel.prepare(value))
+    return context
+
+
+def make_context(values=None):
+    context = cel.Context()
+    if values:
+        add_variables(context, values)
+    return context
+
+
+def as_context(value=None):
+    if isinstance(value, cel.Context):
+        return value
+    return make_context(value)
+
+
+def evaluate(expression, context=None):
+    return cel.evaluate(expression, as_context(context))
+
+# Context/evaluate are provided by the documentation adapter
 from datetime import datetime, timedelta
 
 class BusinessRulesEngine:
     """Execute configurable business rules using CEL."""
-    
+
     def __init__(self):
         self.rules = {
             # Insurance pricing rules
@@ -28,46 +57,46 @@ class BusinessRulesEngine:
                 vehicle.type == "truck" ? 1200 :
                 1000
             """,
-            
+
             "age_multiplier": """
                 driver.age < 25 ? 1.5 :
                 driver.age < 35 ? 1.2 :
                 driver.age < 60 ? 1.0 :
                 1.1
             """,
-            
+
             "experience_discount": """
                 driver.years_experience >= 10 ? 0.9 :
                 driver.years_experience >= 5 ? 0.95 :
                 1.0
             """,
-            
+
             "safety_features_discount": """
                 vehicle.anti_theft ? 0.95 : 1.0
             """,
-            
+
             "claims_penalty": """
                 driver.claims_count == 0 ? 0.9 :
                 driver.claims_count == 1 ? 1.0 :
                 driver.claims_count == 2 ? 1.2 :
                 1.4
             """,
-            
+
             # Loan eligibility rules
             "credit_score_eligible": "applicant.credit_score >= 650",
-            
+
             "income_sufficient": """
                 loan.monthly_payment <= (double(applicant.monthly_income) * 0.28)
             """,
-            
+
             "debt_to_income_acceptable": """
                 (applicant.existing_debt + loan.monthly_payment) <= (double(applicant.monthly_income) * 0.36)
             """,
-            
+
             "employment_stable": """
                 applicant.employment_months >= 24 || applicant.employment_type == "self_employed"
             """,
-            
+
             # Shipping cost rules
             "shipping_base_cost": """
                 package.weight <= 1 ? 5.99 :
@@ -75,85 +104,85 @@ class BusinessRulesEngine:
                 package.weight <= 20 ? 15.99 :
                 double(package.weight) * 1.2
             """,
-            
+
             "shipping_distance_multiplier": """
                 shipping.distance <= 50 ? 1.0 :
                 shipping.distance <= 200 ? 1.2 :
                 shipping.distance <= 1000 ? 1.5 :
                 2.0
             """,
-            
+
             "express_shipping_multiplier": "shipping.express ? 2.0 : 1.0",
-            
+
             "free_shipping_eligible": """
                 order.total >= 100 || customer.premium_member
             """
         }
-    
+
     def calculate_insurance_premium(self, driver, vehicle):
         """Calculate insurance premium using business rules."""
         context = Context()
-        context.add_variable("driver", driver)
-        context.add_variable("vehicle", vehicle)
-        
+        context.add_variable("driver", cel.prepare(driver))
+        context.add_variable("vehicle", cel.prepare(vehicle))
+
         # Calculate each component
-        base_premium = evaluate(self.rules["base_premium"], context)
-        age_multiplier = evaluate(self.rules["age_multiplier"], context)
-        experience_discount = evaluate(self.rules["experience_discount"], context)
-        safety_discount = evaluate(self.rules["safety_features_discount"], context)
-        claims_penalty = evaluate(self.rules["claims_penalty"], context)
-        
+        base_premium = evaluate(self.rules["base_premium"], as_context(context))
+        age_multiplier = evaluate(self.rules["age_multiplier"], as_context(context))
+        experience_discount = evaluate(self.rules["experience_discount"], as_context(context))
+        safety_discount = evaluate(self.rules["safety_features_discount"], as_context(context))
+        claims_penalty = evaluate(self.rules["claims_penalty"], as_context(context))
+
         # Final calculation
-        premium = (base_premium * 
-                  age_multiplier * 
-                  experience_discount * 
-                  safety_discount * 
+        premium = (base_premium *
+                  age_multiplier *
+                  experience_discount *
+                  safety_discount *
                   claims_penalty)
-        
+
         return round(premium, 2)
-    
+
     def check_loan_eligibility(self, applicant, loan):
         """Check loan eligibility using business rules."""
         context = Context()
-        context.add_variable("applicant", applicant)
-        context.add_variable("loan", loan)
-        
+        context.add_variable("applicant", cel.prepare(applicant))
+        context.add_variable("loan", cel.prepare(loan))
+
         # Check each eligibility criterion
         criteria = {
-            "credit_score": evaluate(self.rules["credit_score_eligible"], context),
-            "income": evaluate(self.rules["income_sufficient"], context),
-            "debt_to_income": evaluate(self.rules["debt_to_income_acceptable"], context),
-            "employment": evaluate(self.rules["employment_stable"], context)
+            "credit_score": evaluate(self.rules["credit_score_eligible"], as_context(context)),
+            "income": evaluate(self.rules["income_sufficient"], as_context(context)),
+            "debt_to_income": evaluate(self.rules["debt_to_income_acceptable"], as_context(context)),
+            "employment": evaluate(self.rules["employment_stable"], as_context(context))
         }
-        
+
         # All criteria must pass
         eligible = all(criteria.values())
-        
+
         return {
             "eligible": eligible,
             "criteria": criteria,
             "reasons": [k for k, v in criteria.items() if not v]
         }
-    
+
     def calculate_shipping_cost(self, package, shipping, order, customer):
         """Calculate shipping cost using business rules."""
         context = Context()
-        context.add_variable("package", package)
-        context.add_variable("shipping", shipping)
-        context.add_variable("order", order)
-        context.add_variable("customer", customer)
-        
+        context.add_variable("package", cel.prepare(package))
+        context.add_variable("shipping", cel.prepare(shipping))
+        context.add_variable("order", cel.prepare(order))
+        context.add_variable("customer", cel.prepare(customer))
+
         # Check if free shipping applies
-        if evaluate(self.rules["free_shipping_eligible"], context):
+        if evaluate(self.rules["free_shipping_eligible"], as_context(context)):
             return 0.0
-        
+
         # Calculate shipping cost
-        base_cost = evaluate(self.rules["shipping_base_cost"], context)
-        distance_multiplier = evaluate(self.rules["shipping_distance_multiplier"], context)
-        express_multiplier = evaluate(self.rules["express_shipping_multiplier"], context)
-        
+        base_cost = evaluate(self.rules["shipping_base_cost"], as_context(context))
+        distance_multiplier = evaluate(self.rules["shipping_distance_multiplier"], as_context(context))
+        express_multiplier = evaluate(self.rules["express_shipping_multiplier"], as_context(context))
+
         total_cost = base_cost * distance_multiplier * express_multiplier
-        
+
         return round(total_cost, 2)
 
 # Example usage
@@ -227,11 +256,11 @@ You need to transform data from various sources into a consistent format. The tr
 Use CEL expressions to define transformation rules that can be easily understood and modified:
 
 ```python
-from cel import evaluate, Context
+# Context/evaluate are provided by the documentation adapter
 
 class DataTransformationPipeline:
     """Transform data using configurable CEL expressions."""
-    
+
     def __init__(self):
         # Define transformation rules as CEL expressions
         self.transformations = {
@@ -264,7 +293,7 @@ class DataTransformationPipeline:
                     "unknown"
                 """
             },
-            
+
             # Calculate derived fields
             "calculate_metrics": {
                 "engagement_score": """
@@ -285,41 +314,41 @@ class DataTransformationPipeline:
                 """
             }
         }
-    
+
     def transform_user_data(self, input_data, current_year=2024):
         """Transform user data using CEL expressions."""
         context = Context()
-        context.add_variable("input", input_data)
-        context.add_variable("current_year", current_year)
-        
+        context.add_variable("input", cel.prepare(input_data))
+        context.add_variable("current_year", cel.prepare(current_year))
+
         # Add helper functions
         context.add_function("grade_to_score", self._grade_to_score)
-        
+
         # Apply normalization transformations
         normalized = {}
         for field, expression in self.transformations["normalize_user"].items():
             try:
-                result = evaluate(expression, context)
+                result = evaluate(expression, as_context(context))
                 if result is not None:
                     normalized[field] = result
             except Exception as e:
                 # Handle transformation errors gracefully
                 normalized[field] = None
-        
+
         # Add normalized data to context for metric calculations
-        context.add_variable("user", normalized)
-        
+        context.add_variable("user", cel.prepare(normalized))
+
         # Calculate derived metrics
         for field, expression in self.transformations["calculate_metrics"].items():
             try:
-                result = evaluate(expression, context)
+                result = evaluate(expression, as_context(context))
                 normalized[field] = result
             except Exception as e:
                 # Handle calculation errors gracefully
                 normalized[field] = None
-        
+
         return normalized
-    
+
     def _grade_to_score(self, grade):
         """Convert letter grade to numeric score."""
         grade_map = {"A": 95, "B": 85, "C": 75, "D": 65, "F": 50}
@@ -331,7 +360,7 @@ pipeline = DataTransformationPipeline()
 # Data source 1: Has first_name, last_name, age
 source1_data = {
     "first_name": "John",
-    "last_name": "Doe", 
+    "last_name": "Doe",
     "age": 30,
     "email": "JOHN.DOE@EXAMPLE.COM",
     "rating": 4,  # 1-5 scale
@@ -360,7 +389,7 @@ source2_data = {
 # Transform both data sources
 result1 = pipeline.transform_user_data(source1_data)
 result2 = pipeline.transform_user_data(source2_data)
-# → result1: {"full_name": "John Doe", "email": "JOHN.DOE@EXAMPLE.COM", "age": 30, "score": 80.0, "status": "active", 
+# → result1: {"full_name": "John Doe", "email": "JOHN.DOE@EXAMPLE.COM", "age": 30, "score": 80.0, "status": "active",
 #            "engagement_score": 85, "risk_level": "low", "subscription_tier": "platinum"}
 # → result2: {"full_name": "Jane Smith", "email": "jane.smith@example.com", "age": 34, "score": 85, "status": "ACTIVE",
 #            "engagement_score": 50, "risk_level": "medium", "subscription_tier": "silver"}
@@ -372,7 +401,7 @@ assert "engagement_score" in result1
 
 # Verify transformed data from source 2
 assert "full_name" in result2
-assert "email" in result2  
+assert "email" in result2
 assert "engagement_score" in result2
 
 # Both results now have consistent structure:
@@ -394,10 +423,10 @@ assert "email" in result1 and "email" in result2
 ```python
 class ComposableRulesEngine(BusinessRulesEngine):
     """Rules engine with rule composition and inheritance."""
-    
+
     def __init__(self):
         super().__init__()
-        
+
         # Define rule hierarchies
         self.rule_hierarchies = {
             "discount_rules": {
@@ -407,7 +436,7 @@ class ComposableRulesEngine(BusinessRulesEngine):
                 "seasonal_discount": "is_holiday_season() ? 0.15 : 0.0",
                 "combined_discount": "min(base_discount + volume_discount + loyalty_discount + seasonal_discount, 0.5)"
             },
-            
+
             "risk_assessment": {
                 "financial_risk": "applicant.debt_ratio > 0.4 ? 0.3 : (applicant.debt_ratio > 0.2 ? 0.1 : 0.0)",
                 "credit_risk": "applicant.credit_score < 600 ? 0.4 : (applicant.credit_score < 700 ? 0.2 : 0.0)",
@@ -415,36 +444,36 @@ class ComposableRulesEngine(BusinessRulesEngine):
                 "total_risk": "min(financial_risk + credit_risk + employment_risk, 1.0)"
             }
         }
-    
+
     def evaluate_rule_hierarchy(self, hierarchy_name, context_data):
         """Evaluate all rules in a hierarchy."""
         if hierarchy_name not in self.rule_hierarchies:
             return {}
-        
+
         context = Context()
         for key, value in context_data.items():
-            context.add_variable(key, value)
-        
+            context.add_variable(key, cel.prepare(value))
+
         # Add helper functions
         context.add_function("is_holiday_season", self._is_holiday_season)
         context.add_function("min", min)
         context.add_function("max", max)
-        
+
         hierarchy = self.rule_hierarchies[hierarchy_name]
         results = {}
-        
+
         # Evaluate rules in order, making previous results available
         for rule_name, rule_expression in hierarchy.items():
             try:
-                result = evaluate(rule_expression, context)
+                result = evaluate(rule_expression, as_context(context))
                 results[rule_name] = result
-                context.add_variable(rule_name, result)  # Make available to subsequent rules
+                context.add_variable(rule_name, cel.prepare(result))  # Make available to subsequent rules
             except Exception as e:
                 # Handle rule evaluation error gracefully
                 results[rule_name] = None
-        
+
         return results
-    
+
     def _is_holiday_season(self):
         """Check if current date is in holiday season."""
         now = datetime.now()
@@ -480,7 +509,7 @@ assert discount_results["volume_discount"] == 0.05, "Volume discount should be 5
 assert discount_results["loyalty_discount"] == 0.05, "Loyalty discount should be 5% for 2-4 years"
 
 # Verify seasonal discount (behavior depends on actual date)
-seasonal_discount = discount_results["seasonal_discount"] 
+seasonal_discount = discount_results["seasonal_discount"]
 assert seasonal_discount >= 0.0, "Seasonal discount should be non-negative"
 print(f"Seasonal discount: {seasonal_discount} ({'holiday season' if seasonal_discount > 0 else 'regular season'})")
 # → Seasonal discount: 0.15 (holiday season)  # or 0.0 (regular season) depending on current date
@@ -535,7 +564,7 @@ print(f"✓ Risk assessment working: {risk_results['total_risk']} total risk")
 ```python
 def create_conditional_transformer():
     """Transform data with conditional field mapping."""
-    
+
     mapping_rules = {
         "phone": """
             has(input.phone) ? format_phone(input.phone) :
@@ -543,16 +572,16 @@ def create_conditional_transformer():
             has(input.telephone) ? format_phone(input.telephone) :
             null
         """,
-        
+
         "address": """
             has(input.address) ? input.address :
-            (has(input.street) && has(input.city)) ? 
-                input.street + ", " + input.city + 
+            (has(input.street) && has(input.city)) ?
+                input.street + ", " + input.city +
                 (has(input.state) ? ", " + input.state : "") +
                 (has(input.zip) ? " " + string(input.zip) : "") :
             null
         """,
-        
+
         "full_address": """
             has(user.address) ? user.address :
             join_address_parts([
@@ -563,7 +592,7 @@ def create_conditional_transformer():
             ])
         """
     }
-    
+
     def format_phone(phone):
         """Format phone number consistently."""
         digits = "".join(filter(str.isdigit, str(phone)))
@@ -572,17 +601,17 @@ def create_conditional_transformer():
         elif len(digits) == 11 and digits[0] == "1":
             return f"+1 ({digits[1:4]}) {digits[4:7]}-{digits[7:]}"
         return phone
-    
+
     def get_field(path, default=""):
         """Safely get nested field value."""
         # This is a placeholder - in real use, would get from current context
         return default
-    
+
     def join_address_parts(parts):
         """Join non-empty address parts."""
         non_empty = [p for p in parts if p and p.strip()]
         return ", ".join(non_empty) if non_empty else ""
-    
+
     return mapping_rules, {
         "format_phone": format_phone,
         "get_field": get_field,
@@ -602,11 +631,11 @@ assert "format_phone" in funcs
 ```python
 class DynamicRulesEngine:
     """Rules engine that loads rules from external sources."""
-    
+
     def __init__(self):
         self.rules = {}
         self.rule_metadata = {}
-    
+
     def load_rules_from_config(self, rules_config):
         """Load rules from configuration dictionary."""
         for rule_name, rule_data in rules_config.items():
@@ -618,7 +647,7 @@ class DynamicRulesEngine:
                 "author": rule_data.get("author", "system"),
                 "tags": rule_data.get("tags", [])
             }
-    
+
     def validate_rule(self, rule_expression, test_context=None):
         """Validate a rule expression."""
         if test_context is None:
@@ -629,55 +658,55 @@ class DynamicRulesEngine:
                 "test_list": [1, 2, 3],
                 "test_object": {"field": "value"}
             }
-        
+
         try:
-            result = evaluate(rule_expression, test_context)
+            result = evaluate(rule_expression, as_context(test_context))
             return True, result, None
         except Exception as e:
             return False, None, str(e)
-    
+
     def update_rule(self, rule_name, new_expression, metadata=None, validation_context=None):
         """Update a rule with validation."""
         is_valid, test_result, error = self.validate_rule(new_expression, validation_context)
-        
+
         if not is_valid:
             raise ValueError(f"Invalid rule expression: {error}")
-        
+
         # Backup old rule
         if rule_name in self.rules:
             old_rule = self.rules[rule_name]
             old_metadata = self.rule_metadata.get(rule_name, {})
             # Rule backed up (in real implementation, save to backup storage)
-        
+
         # Update rule
         self.rules[rule_name] = new_expression
-        
+
         if metadata:
             self.rule_metadata[rule_name] = {
                 **self.rule_metadata.get(rule_name, {}),
                 **metadata,
                 "last_modified": datetime.now().isoformat()
             }
-        
+
         return True
-    
+
     def execute_rule(self, rule_name, context):
         """Execute a specific rule."""
         if rule_name not in self.rules:
             raise KeyError(f"Rule not found: {rule_name}")
-        
+
         rule_expression = self.rules[rule_name]
-        
+
         try:
-            return evaluate(rule_expression, context)
+            return evaluate(rule_expression, as_context(context))
         except Exception as e:
             raise RuntimeError(f"Error executing rule {rule_name}: {e}")
-    
+
     def get_rule_info(self, rule_name):
         """Get information about a rule."""
         if rule_name not in self.rules:
             return None
-        
+
         return {
             "name": rule_name,
             "expression": self.rules[rule_name],
@@ -701,7 +730,7 @@ rules_config = {
         "author": "business_team",
         "tags": ["customer", "segmentation"]
     },
-    
+
     "fraud_score": {
         "expression": """
             double(transaction.amount > double(customer.avg_transaction) * 5.0 ? 0.3 : 0.0) +
@@ -729,7 +758,7 @@ customer_data = {
     },
     "transaction": {
         "amount": 500,
-        "location": "NY", 
+        "location": "NY",
         "time_hour": 14
     }
 }
@@ -759,7 +788,7 @@ except ValueError as e:
 # Test rule validation with valid business rule expression
 # Provide validation context that matches the rule's expected variables
 validation_context = {"customer": {"annual_spend": 5000}}
-success = dynamic_engine.update_rule("test_rule", "customer.annual_spend > 1000", 
+success = dynamic_engine.update_rule("test_rule", "customer.annual_spend > 1000",
                                     validation_context=validation_context)
 # → True  # Rule validation passed: expression is syntactically correct and executes successfully
 assert success == True, "Should accept valid business rule"
@@ -800,42 +829,42 @@ print(f"✓ Customer tier calculation: bronze($500), gold($7500), platinum($1500
 ```python
 def transform_batch_with_filters(data_list, transformation_config):
     """Transform a batch of records with filtering and validation."""
-    
+
     def transform_record(record):
         context = Context()
-        context.add_variable("input", record)
-        context.add_variable("current_timestamp", datetime.now().isoformat())
-        
+        context.add_variable("input", cel.prepare(record))
+        context.add_variable("current_timestamp", cel.prepare(datetime.now().isoformat()))
+
         # Add transformation functions
         for func_name, func in transformation_config.get("functions", {}).items():
             context.add_function(func_name, func)
-        
+
         # Apply filters first
         for filter_expr in transformation_config.get("filters", []):
             try:
-                if not evaluate(filter_expr, context):
+                if not evaluate(filter_expr, as_context(context)):
                     return None  # Record filtered out
             except Exception:
                 return None  # Filter evaluation failed
-        
+
         # Apply transformations
         transformed = {}
         for field, expr in transformation_config.get("transformations", {}).items():
             try:
-                result = evaluate(expr, context)
+                result = evaluate(expr, as_context(context))
                 transformed[field] = result
             except Exception as e:
                 # Handle transformation failure gracefully
                 transformed[field] = None
-        
+
         return transformed
-    
+
     results = []
     for record in data_list:
         transformed = transform_record(record)
         if transformed is not None:
             results.append(transformed)
-    
+
     return results
 
 # Example batch transformation configuration

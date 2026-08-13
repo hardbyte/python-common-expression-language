@@ -4,37 +4,47 @@ from typing import Any, Dict, List, Optional
 
 import cel
 import pytest
+from conftest import evaluate
 
 
 class TestBuiltInCollectionFunctions:
-    """Test built-in collection functions that work in CEL."""
+    """Test built-in collection functions registered explicitly in a Context."""
+
+    @staticmethod
+    def function_context():
+        context = cel.Context()
+        context.add_function("min", min)
+        context.add_function("max", max)
+        return context
 
     def test_min_function_works(self):
         """Test that min() function works correctly."""
-        assert cel.evaluate("min([3, 1, 4, 1, 5])") == 1
-        assert cel.evaluate("min([1.5, 2.3, 0.8])") == 0.8
-        assert cel.evaluate("min(['banana', 'apple', 'cherry'])") == "apple"
+        context = self.function_context()
+        assert evaluate("min(3, 1, 4, 1, 5)", context) == 1
+        assert evaluate("min(1.5, 2.3, 0.8)", context) == 0.8
+        assert evaluate("min('banana', 'apple', 'cherry')", context) == "apple"
 
     def test_max_function_works(self):
         """Test that max() function works correctly."""
-        assert cel.evaluate("max([3, 1, 4, 1, 5])") == 5
-        assert cel.evaluate("max([1.5, 2.3, 0.8])") == 2.3
-        assert cel.evaluate("max(['banana', 'apple', 'cherry'])") == "cherry"
+        context = self.function_context()
+        assert evaluate("max(3, 1, 4, 1, 5)", context) == 5
+        assert evaluate("max(1.5, 2.3, 0.8)", context) == 2.3
+        assert evaluate("max('banana', 'apple', 'cherry')", context) == "cherry"
 
 
 def test_custom_function():
     def custom_function(a, b):
         return a + b
 
-    assert cel.evaluate("custom_function(1, 2)", {"custom_function": custom_function}) == 3
+    assert evaluate("custom_function(1, 2)", {"custom_function": custom_function}) == 3
 
 
 def test_readme_custom_function_example():
     def is_adult(age):
         return age > 21
 
-    assert not cel.evaluate("is_adult(age)", {"is_adult": is_adult, "age": 18})
-    assert cel.evaluate("is_adult(age)", {"is_adult": is_adult, "age": 32})
+    assert not evaluate("is_adult(age)", {"is_adult": is_adult, "age": 18})
+    assert evaluate("is_adult(age)", {"is_adult": is_adult, "age": 32})
 
 
 class TestPythonExceptionPropagation:
@@ -49,11 +59,11 @@ class TestPythonExceptionPropagation:
             return x * 2
 
         # Should work normally
-        assert cel.evaluate("double_positive(5)", {"double_positive": raise_value_error}) == 10
+        assert evaluate("double_positive(5)", {"double_positive": raise_value_error}) == 10
 
         # Should propagate ValueError as RuntimeError
         with pytest.raises(RuntimeError, match="Value must be non-negative"):
-            cel.evaluate("double_positive(-1)", {"double_positive": raise_value_error})
+            evaluate("double_positive(-1)", {"double_positive": raise_value_error})
 
     def test_type_error_propagation(self):
         """Test TypeError from custom function is propagated as RuntimeError."""
@@ -64,11 +74,11 @@ class TestPythonExceptionPropagation:
             return a + b
 
         # Should work normally
-        assert cel.evaluate("math(1, 2.5)", {"math": strict_math}) == 3.5
+        assert evaluate("math(1, 2.5)", {"math": strict_math}) == 3.5
 
         # Should propagate TypeError as RuntimeError
         with pytest.raises(RuntimeError, match="Arguments must be numeric"):
-            cel.evaluate(
+            evaluate(
                 "math('hello', 'world')", {"math": strict_math, "str1": "hello", "str2": "world"}
             )
 
@@ -85,13 +95,13 @@ class TestPythonExceptionPropagation:
 
         # Should work normally
         assert (
-            cel.evaluate("validate('test@example.com')", {"validate": validate_email})
+            evaluate("validate('test@example.com')", {"validate": validate_email})
             == "test@example.com"
         )
 
         # Should propagate custom exception as RuntimeError
         with pytest.raises(RuntimeError, match="Invalid email format"):
-            cel.evaluate("validate('invalid-email')", {"validate": validate_email})
+            evaluate("validate('invalid-email')", {"validate": validate_email})
 
     def test_zero_division_error_propagation(self):
         """Test ZeroDivisionError from custom function is propagated."""
@@ -102,11 +112,11 @@ class TestPythonExceptionPropagation:
             return a / b
 
         # Should work normally
-        assert cel.evaluate("divide(10, 2)", {"divide": safe_divide}) == 5.0
+        assert evaluate("divide(10, 2)", {"divide": safe_divide}) == 5.0
 
         # Should propagate ZeroDivisionError as RuntimeError
         with pytest.raises(RuntimeError, match="Cannot divide by zero"):
-            cel.evaluate("divide(10, 0)", {"divide": safe_divide})
+            evaluate("divide(10, 0)", {"divide": safe_divide})
 
 
 class TestFunctionSignatures:
@@ -119,8 +129,7 @@ class TestFunctionSignatures:
             return "2024-01-01T00:00:00Z"
 
         assert (
-            cel.evaluate("current_time()", {"current_time": get_current_time})
-            == "2024-01-01T00:00:00Z"
+            evaluate("current_time()", {"current_time": get_current_time}) == "2024-01-01T00:00:00Z"
         )
 
     def test_single_argument_function(self):
@@ -129,8 +138,8 @@ class TestFunctionSignatures:
         def square(x):
             return x * x
 
-        assert cel.evaluate("square(5)", {"square": square}) == 25
-        assert cel.evaluate("square(2.5)", {"square": square}) == 6.25
+        assert evaluate("square(5)", {"square": square}) == 25
+        assert evaluate("square(2.5)", {"square": square}) == 6.25
 
     def test_multiple_arguments_function(self):
         """Test function with multiple arguments."""
@@ -139,14 +148,14 @@ class TestFunctionSignatures:
             return length * width * height
 
         # Test with required arguments
-        assert cel.evaluate("area(5, 3)", {"area": calculate_area}) == 15
+        assert evaluate("area(5, 3)", {"area": calculate_area}) == 15
 
         # Note: CEL doesn't support default arguments directly,
         # so we test the Python function behavior when called from CEL
         def area_with_default(length, width):
             return calculate_area(length, width)  # Uses default height=1
 
-        assert cel.evaluate("area_2d(4, 6)", {"area_2d": area_with_default}) == 24
+        assert evaluate("area_2d(4, 6)", {"area_2d": area_with_default}) == 24
 
     def test_variadic_arguments_simulation(self):
         """Test function that handles variable number of arguments via list."""
@@ -158,10 +167,10 @@ class TestFunctionSignatures:
             return sum(numbers)
 
         # Single number
-        assert cel.evaluate("sum_numbers(42)", {"sum_numbers": sum_all}) == 42
+        assert evaluate("sum_numbers(42)", {"sum_numbers": sum_all}) == 42
 
         # List of numbers
-        assert cel.evaluate("sum_numbers([1, 2, 3, 4, 5])", {"sum_numbers": sum_all}) == 15
+        assert evaluate("sum_numbers([1, 2, 3, 4, 5])", {"sum_numbers": sum_all}) == 15
 
     def test_keyword_arguments_simulation(self):
         """Test function that handles keyword-like arguments via dict."""
@@ -178,13 +187,13 @@ class TestFunctionSignatures:
 
         # Test with different combinations
         basic_context = {"format": format_person, "person": {"name": "Alice", "age": 30}}
-        assert cel.evaluate("format(person)", basic_context) == "Alice (age 30)"
+        assert evaluate("format(person)", basic_context) == "Alice (age 30)"
 
         title_context = {
             "format": format_person,
             "person": {"name": "Bob", "age": 45, "title": "Dr."},
         }
-        assert cel.evaluate("format(person)", title_context) == "Dr. Bob (age 45)"
+        assert evaluate("format(person)", title_context) == "Dr. Bob (age 45)"
 
 
 class TestComplexTypeHandling:
@@ -205,12 +214,12 @@ class TestComplexTypeHandling:
 
         # Test list filtering
         context = {"filter_even": filter_even_numbers, "numbers": [1, 2, 3, 4, 5, 6]}
-        result = cel.evaluate("filter_even(numbers)", context)
+        result = evaluate("filter_even(numbers)", context)
         assert result == [2, 4, 6]
 
         # Test list statistics
         stats_context = {"stats": list_stats, "data": [1, 2, 3, 4, 5]}
-        result = cel.evaluate("stats(data)", stats_context)
+        result = evaluate("stats(data)", stats_context)
         assert result == {"count": 5, "sum": 15, "avg": 3.0}
 
     def test_dict_input_and_output(self):
@@ -228,7 +237,7 @@ class TestComplexTypeHandling:
 
         # Test dictionary merging
         merge_context = {"merge": merge_dicts, "dict1": {"a": 1, "b": 2}, "dict2": {"c": 3, "d": 4}}
-        result = cel.evaluate("merge(dict1, dict2)", merge_context)
+        result = evaluate("merge(dict1, dict2)", merge_context)
         assert result == {"a": 1, "b": 2, "c": 3, "d": 4}
 
         # Test key extraction
@@ -236,7 +245,7 @@ class TestComplexTypeHandling:
             "get_keys": extract_keys,
             "data": {"name": "Alice", "age": 30, "city": "NYC"},
         }
-        result = cel.evaluate("get_keys(data)", keys_context)
+        result = evaluate("get_keys(data)", keys_context)
         assert set(result) == {"name", "age", "city"}  # Order may vary
 
     def test_nested_data_structures(self):
@@ -264,7 +273,7 @@ class TestComplexTypeHandling:
             {"id": 3, "name": "Charlie", "role": "moderator"},
         ]
         find_context = {"find_user": find_user_by_id, "users": users_data}
-        result = cel.evaluate("find_user(users, 2)", find_context)
+        result = evaluate("find_user(users, 2)", find_context)
         assert result == {"id": 2, "name": "Bob", "role": "user"}
 
         # Test nested counting
@@ -274,7 +283,7 @@ class TestComplexTypeHandling:
             "clothes": {"items": ["shirt", "pants", "shoes", "hat"]},
         }
         count_context = {"count_items": count_nested_items, "inventory": nested_data}
-        result = cel.evaluate("count_items(inventory)", count_context)
+        result = evaluate("count_items(inventory)", count_context)
         assert result == 9
 
     def test_datetime_handling(self):
@@ -302,19 +311,19 @@ class TestComplexTypeHandling:
         # Test datetime formatting
         test_dt = datetime.datetime(2024, 1, 15, 14, 30, 0)
         format_context = {"format_dt": format_datetime, "dt": test_dt}
-        result = cel.evaluate("format_dt(dt)", format_context)
+        result = evaluate("format_dt(dt)", format_context)
         assert result == "2024-01-15 14:30:00"
 
         # Test datetime difference
         dt1 = datetime.datetime(2024, 1, 1)
         dt2 = datetime.datetime(2024, 1, 15)
         diff_context = {"days_between": datetime_diff_days, "start": dt1, "end": dt2}
-        result = cel.evaluate("days_between(start, end)", diff_context)
+        result = evaluate("days_between(start, end)", diff_context)
         assert result == 14
 
         # Test datetime creation
         create_context = {"parse_dt": create_datetime_from_string}
-        result = cel.evaluate("parse_dt('2024-01-01T12:00:00Z')", create_context)
+        result = evaluate("parse_dt('2024-01-01T12:00:00Z')", create_context)
         assert isinstance(result, datetime.datetime)
         assert result.year == 2024
         assert result.month == 1
@@ -341,17 +350,17 @@ class TestComplexTypeHandling:
 
         # Test string encoding
         encode_context = {"encode": encode_string}
-        result = cel.evaluate("encode('hello world')", encode_context)
+        result = evaluate("encode('hello world')", encode_context)
         assert result == b"hello world"
 
         # Test bytes decoding
         decode_context = {"decode": decode_bytes, "data": b"hello world"}
-        result = cel.evaluate("decode(data)", decode_context)
+        result = evaluate("decode(data)", decode_context)
         assert result == "hello world"
 
         # Test bytes length
         length_context = {"byte_len": bytes_length, "data": b"hello"}
-        result = cel.evaluate("byte_len(data)", length_context)
+        result = evaluate("byte_len(data)", length_context)
         assert result == 5
 
 
@@ -369,14 +378,14 @@ class TestFunctionPerformance:
 
         # Warm up
         for _ in range(100):
-            cel.evaluate(expression, context)
+            evaluate(expression, context)
 
         # Measure performance
         start_time = time.perf_counter()
         iterations = 10000
 
         for _ in range(iterations):
-            result = cel.evaluate(expression, context)
+            result = evaluate(expression, context)
             assert result == 3
 
         end_time = time.perf_counter()
@@ -408,14 +417,14 @@ class TestFunctionPerformance:
 
         # Warm up
         for _ in range(10):
-            cel.evaluate(expression, context)
+            evaluate(expression, context)
 
         # Measure performance
         start_time = time.perf_counter()
         iterations = 1000
 
         for _ in range(iterations):
-            result = cel.evaluate(expression, context)
+            result = evaluate(expression, context)
             assert result == 9900  # Sum of 0*2 + 1*2 + ... + 99*2
 
         end_time = time.perf_counter()
@@ -440,7 +449,7 @@ class TestFunctionPerformance:
 
         # Measure performance
         start_time = time.perf_counter()
-        result = cel.evaluate(expression, context)
+        result = evaluate(expression, context)
         end_time = time.perf_counter()
 
         # Verify correctness
@@ -465,10 +474,10 @@ class TestFunctionEdgeCases:
             return None
 
         # Test None return
-        assert cel.evaluate("get_value(false)", {"get_value": maybe_return_value}) is None
+        assert evaluate("get_value(false)", {"get_value": maybe_return_value}) is None
 
         # Test non-None return
-        assert cel.evaluate("get_value(true)", {"get_value": maybe_return_value}) == "value"
+        assert evaluate("get_value(true)", {"get_value": maybe_return_value}) == "value"
 
     def test_function_with_empty_collections(self):
         """Test function behavior with empty collections."""
@@ -479,10 +488,10 @@ class TestFunctionEdgeCases:
             return {"count": len(items), "first": items[0]}
 
         # Test empty list
-        assert cel.evaluate("process([])", {"process": process_collection}) == {"empty": True}
+        assert evaluate("process([])", {"process": process_collection}) == {"empty": True}
 
         # Test non-empty list
-        result = cel.evaluate("process([1, 2, 3])", {"process": process_collection})
+        result = evaluate("process([1, 2, 3])", {"process": process_collection})
         assert result == {"count": 3, "first": 1}
 
     def test_function_with_recursive_data(self):
@@ -507,13 +516,13 @@ class TestFunctionEdgeCases:
         # Test normal nested structure
         nested_data = {"level1": {"level2": {"level3": "value"}}}
         context = {"traverse": safe_traverse, "data": nested_data}
-        result = cel.evaluate("traverse(data)", context)
+        result = evaluate("traverse(data)", context)
         assert result == {"level1": {"level2": {"level3": "value"}}}
 
         # Test very deep structure (would hit depth limit)
         very_deep = {"a": {"b": {"c": {"d": {"e": {"f": {"g": "too_deep"}}}}}}}
         deep_context = {"traverse": safe_traverse, "data": very_deep}
-        result = cel.evaluate("traverse(data)", deep_context)
+        result = evaluate("traverse(data)", deep_context)
         # Should contain MAX_DEPTH_REACHED somewhere in the result
         assert "MAX_DEPTH_REACHED" in str(result)
 
@@ -534,11 +543,11 @@ class TestFunctionEdgeCases:
                 return f"normal:{value}"
 
         # Test None
-        assert cel.evaluate("handle(null)", {"handle": handle_special_values}) == "null"
+        assert evaluate("handle(null)", {"handle": handle_special_values}) == "null"
 
         # Test normal values
-        assert cel.evaluate("handle(42)", {"handle": handle_special_values}) == "normal:42"
-        assert cel.evaluate("handle('test')", {"handle": handle_special_values}) == "normal:test"
+        assert evaluate("handle(42)", {"handle": handle_special_values}) == "normal:42"
+        assert evaluate("handle('test')", {"handle": handle_special_values}) == "normal:test"
 
 
 class TestFunctionIntegrationWithCELFeatures:
@@ -556,13 +565,13 @@ class TestFunctionIntegrationWithCELFeatures:
         context = {"is_valid": is_valid_email, "domain": get_domain, "email": "user@example.com"}
 
         # Use function in conditional
-        result = cel.evaluate("is_valid(email) ? domain(email) : 'invalid'", context)
+        result = evaluate("is_valid(email) ? domain(email) : 'invalid'", context)
         assert result == "example.com"
 
         # Test with invalid email
         invalid_context = context.copy()
         invalid_context["email"] = "invalid-email"
-        result = cel.evaluate("is_valid(email) ? domain(email) : 'invalid'", invalid_context)
+        result = evaluate("is_valid(email) ? domain(email) : 'invalid'", invalid_context)
         assert result == "invalid"
 
     def test_function_with_list_operations(self):
@@ -574,16 +583,16 @@ class TestFunctionIntegrationWithCELFeatures:
         def is_even(x):
             return x % 2 == 0
 
-        context = {"double": multiply_by_two, "even": is_even, "numbers": [1, 2, 3, 4, 5]}
+        context = {"double_value": multiply_by_two, "even": is_even, "numbers": [1, 2, 3, 4, 5]}
 
         # Note: CEL's map() might not work directly with custom functions
         # due to type system limitations, but we can test other combinations
 
         # Test function with list filtering (conceptual - may need adaptation)
         # This tests the function itself, integration with CEL macros may vary
-        assert cel.evaluate("double(5)", context) == 10
-        assert cel.evaluate("even(4)", context)
-        assert not cel.evaluate("even(3)", context)
+        assert evaluate("double_value(5)", context) == 10
+        assert evaluate("even(4)", context)
+        assert not evaluate("even(3)", context)
 
     def test_function_with_map_operations(self):
         """Test custom functions with CEL map operations."""
@@ -605,9 +614,9 @@ class TestFunctionIntegrationWithCELFeatures:
         }
 
         # Test nested access
-        assert cel.evaluate("get(user, 'name')", context) == "Alice"
-        assert cel.evaluate("has_prop(user, 'profile')", context)
-        assert not cel.evaluate("has_prop(user, 'missing')", context)
+        assert evaluate("get(user, 'name')", context) == "Alice"
+        assert evaluate("has_prop(user, 'profile')", context)
+        assert not evaluate("has_prop(user, 'missing')", context)
 
     def test_function_chaining(self):
         """Test chaining multiple custom functions."""
@@ -629,7 +638,7 @@ class TestFunctionIntegrationWithCELFeatures:
         }
 
         # Test function chaining
-        result = cel.evaluate("length(upper(replace(text, 'world', 'CEL')))", context)
+        result = evaluate("length(upper(replace(text, 'world', 'CEL')))", context)
         assert result == len("HELLO CEL")
 
 
@@ -646,15 +655,15 @@ class TestContextIntegration:
             return f"Hello, {name}!"
 
         context = cel.Context()
-        context.add_variable("x", 5)
-        context.add_variable("y", 3)
+        context.add_variable("x", cel.prepare(5))
+        context.add_variable("y", cel.prepare(3))
         context.add_function("multiply", multiply)
         context.add_function("greet", greet)
-        context.add_variable("name", "Alice")
+        context.add_variable("name", cel.prepare("Alice"))
 
         # Test function calls with Context class
-        assert cel.evaluate("multiply(x, y)", context) == 15
-        assert cel.evaluate("greet(name)", context) == "Hello, Alice!"
+        assert evaluate("multiply(x, y)", context) == 15
+        assert evaluate("greet(name)", context) == "Hello, Alice!"
 
     def test_mixed_context_and_functions(self):
         """Test mixing variables and functions in context."""
@@ -666,11 +675,11 @@ class TestContextIntegration:
             return f"${amount:.2f}"
 
         context = cel.Context()
-        context.add_variable("price", 100.0)
-        context.add_variable("tax_rate", 0.08)
+        context.add_variable("price", cel.prepare(100.0))
+        context.add_variable("tax_rate", cel.prepare(0.08))
         context.add_function("calc_tax", calculate_tax)
         context.add_function("format", format_currency)
 
         # Test complex expression with functions and variables
-        result = cel.evaluate("format(price + calc_tax(price, tax_rate))", context)
+        result = evaluate("format(price + calc_tax(price, tax_rate))", context)
         assert result == "$108.00"

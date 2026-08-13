@@ -61,7 +61,7 @@ This implementation correctly follows the CEL specification where maps can have 
 ### ✅ Core Data Types
 - **Integers**: Full support for 64-bit signed integers (`int`)
 - **Unsigned Integers**: Support for 64-bit unsigned integers (`uint`) with `u` suffix
-- **Floats**: IEEE 64-bit double precision floating-point  
+- **Floats**: IEEE 64-bit double precision floating-point
 - **Booleans**: Standard true/false values
 - **Strings**: Unicode string support with concatenation
 - **Bytes**: Byte sequence support (no concatenation)
@@ -75,12 +75,12 @@ This implementation correctly follows the CEL specification where maps can have 
 
 #### Arithmetic Operators
 - `+` (addition) - Integers, floats, strings
-- `-` (subtraction) - Integers, floats  
+- `-` (subtraction) - Integers, floats
 - `*` (multiplication) - Integers, floats
 - `/` (division) - Integers, floats
 - `%` (remainder/modulo) - Integers only
 
-#### Comparison Operators  
+#### Comparison Operators
 - `==` (equal) - All types
 - `!=` (not equal) - All types
 - `<`, `>`, `<=`, `>=` - Numbers, strings (lexicographic)
@@ -157,7 +157,36 @@ This section focuses on what you need to know to use CEL effectively in your app
 This library provides Python implementations of missing CEL functions:
 
 ```python
-from cel import Context, evaluate
+import cel
+Context = cel.Context
+
+
+def add_variables(context, values):
+    for name, value in values.items():
+        if callable(value):
+            context.add_function(name, value)
+        else:
+            context.add_variable(name, cel.prepare(value))
+    return context
+
+
+def make_context(values=None):
+    context = cel.Context()
+    if values:
+        add_variables(context, values)
+    return context
+
+
+def as_context(value=None):
+    if isinstance(value, cel.Context):
+        return value
+    return make_context(value)
+
+
+def evaluate(expression, context=None):
+    return cel.evaluate(expression, as_context(context))
+
+# Context/evaluate are provided by the documentation adapter
 from cel.stdlib import add_stdlib_to_context
 
 # Add all standard library functions at once
@@ -165,8 +194,8 @@ context = Context()
 add_stdlib_to_context(context)
 
 # substring() is now available as a function (not a method)
-result = evaluate('substring("hello world", 0, 5)', context)  # → "hello"
-result = evaluate('substring("hello world", 6)', context)  # → "world"
+result = evaluate('substring("hello world", 0, 5)', as_context(context))  # → "hello"
+result = evaluate('substring("hello world", 6)', as_context(context))  # → "world"
 
 # Note: Use function syntax, not method syntax
 # ✅ substring("hello", 2, 4)  - correct
@@ -178,7 +207,7 @@ result = evaluate('substring("hello world", 6)', context)  # → "world"
 You can also add your own custom functions:
 
 ```python
-from cel import Context, evaluate
+# Context/evaluate are provided by the documentation adapter
 
 # Add custom functions for missing CEL features
 context = Context()
@@ -187,38 +216,38 @@ context.add_function("upper", str.upper)
 context.add_function("find", str.find)
 
 # Add variables to the context
-context.add_variable("name", "ALICE")
-context.add_variable("text", "hello world")
+context.add_variable("name", cel.prepare("ALICE"))
+context.add_variable("text", cel.prepare("hello world"))
 
 # Use Python functions in CEL expressions
-result = evaluate('lower(name)', context)  # → "alice"
-result = evaluate('find(text, "world")', context)  # → 6
+result = evaluate('lower(name)', as_context(context))  # → "alice"
+result = evaluate('find(text, "world")', as_context(context))  # → 6
 ```
 
 #### Type Safety Best Practices
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 # ✅ SAFE: Explicit type conversions for mixed arithmetic
-result = evaluate("int(value) + 1", {"value": "42"})  # → 43
+result = evaluate("int(value) + 1", as_context({"value": "42"}))  # → 43
 
 # ⚠️ RISKY: Mixed int/uint arithmetic - use explicit conversion
 # evaluate("1 + 2u")  # This will fail
-result = evaluate("1 + int(2u)")  # → 3 (safe alternative)
+result = evaluate("1 + int(2u)", cel.Context())  # → 3 (safe alternative)
 
 # ✅ SAFE: Use has() checks for optional fields
 safe_expr = 'has(user.profile) && user.profile.verified'
-result = evaluate(safe_expr, {"user": {}})  # → False (graceful handling)
+result = evaluate(safe_expr, as_context({"user": {}}))  # → False (graceful handling)
 ```
 
 #### Production-Safe Error Handling
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 def safe_evaluate(expression, context):
     """Wrapper for production CEL evaluation with proper error handling."""
     try:
-        return evaluate(expression, context)
+        return evaluate(expression, as_context(context))
     except ValueError as e:
         # Parse/syntax errors - log and return safe default
         print(f"CEL syntax error: {e}")
@@ -267,7 +296,7 @@ This section covers upstream work, detection strategies, and contribution opport
 - **Detection**: ✅ Comprehensive detection for all missing functions
 - **Missing functions**:
   - `lowerAscii()` - lowercase conversion
-  - `upperAscii()` - uppercase conversion  
+  - `upperAscii()` - uppercase conversion
   - `indexOf(substring)` - find position in strings
   - `lastIndexOf(substring)` - find last occurrence
   - `substring(start, end)` - extract substring
@@ -279,18 +308,18 @@ This section covers upstream work, detection strategies, and contribution opport
 ```cel
 // Should work but doesn't:
 "Hello".lowerAscii()               // case conversion
-"hello world".indexOf("world")    // substring search  
+"hello world".indexOf("world")    // substring search
 "hello,world".split(",")          // string splitting
 ```
 
 **Impact**: Medium - useful for string processing
 **Recommendation**: Contribute to cel crate upstream
 
-#### 2. Mixed Signed/Unsigned Integer Arithmetic  
-- **Status**: Partially supported  
+#### 2. Mixed Signed/Unsigned Integer Arithmetic
+- **Status**: Partially supported
 - **Detection**: ✅ Comprehensive detection for mixed operations
 - **CEL Spec**: Supports both `int` and `uint` types with `u` suffix (`1u`, `42u`)
-- **Our Implementation**: 
+- **Our Implementation**:
   - ✅ Unsigned literals work: `1u`, `42u` → Python `int`
   - ✅ Pure unsigned arithmetic: `1u + 2u` → `3`
   - ❌ Mixed arithmetic fails: `1 + 2u` throws "Unsupported binary operator"
@@ -334,19 +363,19 @@ This section covers upstream work, detection strategies, and contribution opport
 - **Detection**: ✅ Full detection with expected behavior tests
 **Missing features**:
 - `optional.of(value)` - create optional
-- `optional.orValue(default)` - unwrap with default  
+- `optional.orValue(default)` - unwrap with default
 - `?` suffix for optional chaining
 
 **Recent Progress**: Upstream has introduced optional type infrastructure, suggesting these features may be implemented in future releases.
 
-### ⚠️ Behavioral Differences  
+### ⚠️ Behavioral Differences
 
 #### 1. OR Operator Behavior (CRITICAL ISSUE)
 - **Detection**: ✅ We monitor for when this behavior gets fixed upstream
 - **Status**: JavaScript-like behavior instead of CEL spec compliance
 - **Upstream Priority**: **CRITICAL** - This affects specification conformance
 
-#### 2. Type Coercion in Logical Operations  
+#### 2. Type Coercion in Logical Operations
 - **Our Implementation**: Performs Python-like truthiness evaluation
 - **CEL Spec**: May have different rules for type coercion
 - **Example**: Empty strings, zero values treated as falsy
@@ -366,7 +395,7 @@ The underlying cel-rust implementation continues to evolve with improvements tha
 ### **Potential Future Features**
 ```cel
 // May be available in future releases
-type(42)          // → "int" 
+type(42)          // → "int"
 type("hello")     // → "string"
 type([1, 2, 3])   // → "list"
 
@@ -416,16 +445,16 @@ All malformed syntax is now handled gracefully with proper Python exceptions:
 
 **Examples of safe error handling:**
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 # All of these now raise clean ValueError exceptions:
 try:
-    evaluate("'unclosed quote", {})
+    evaluate("'unclosed quote", as_context({}))
 except ValueError as e:
     print(f"Parse error: {e}")
 
 try:
-    evaluate('"mixed quotes\'', {})
+    evaluate('"mixed quotes\'', as_context({}))
 except ValueError as e:
     print(f"Parse error: {e}")
 ```
@@ -465,13 +494,13 @@ Both the CLI tool and the core `evaluate()` function now handle all malformed in
    - Impact: **MEDIUM** - Widely used in string processing applications
    - Contribution path: cel crate standard library expansion
 
-2. **OR operator CEL spec compliance** - ✅ **Detection Ready**  
+2. **OR operator CEL spec compliance** - ✅ **Detection Ready**
    - Issue: Returns original values instead of booleans
    - Impact: **HIGH** - Breaks specification conformance
    - Contribution path: Core logical operation fixes
 
 3. **Type introspection function** - ✅ **Detection Ready** (`test_upstream_detection.py`)
-   - Function: `type()` for runtime type checking  
+   - Function: `type()` for runtime type checking
    - Impact: **MEDIUM** - Useful for dynamic expressions
    - Contribution path: Leverage existing type system infrastructure
 
@@ -497,16 +526,16 @@ Both the CLI tool and the core `evaluate()` function now handle all malformed in
    - Impact: **LOW** - Can be implemented via Python context
    - Contribution path: Standard library expansion
 
-8. **Optional value handling** - ✅ **Detection Ready** 
+8. **Optional value handling** - ✅ **Detection Ready**
    - Features: `optional.of()`, `.orValue()`, `?` chaining
    - Impact: **LOW** - Alternative patterns exist
    - Contribution path: Type system extensions
 
-### 🔧 Local Improvement Opportunities  
+### 🔧 Local Improvement Opportunities
 
 #### High Impact (Python Library)
 1. **Enhanced error handling** - Better Python exception mapping and messages
-2. **Performance benchmarking** - Systematic performance testing and optimization  
+2. **Performance benchmarking** - Systematic performance testing and optimization
 3. **Comprehensive testing** - Cover newly discovered working features
 
 #### Medium Impact (Documentation & Tooling)
@@ -517,7 +546,7 @@ Both the CLI tool and the core `evaluate()` function now handle all malformed in
 ### 🎬 Immediate Actions for Contributors
 
 1. ✅ **Monitoring system active** - All issues have upstream detection
-2. 🔄 **Priority: OR operator fix** - Most critical specification compliance issue  
+2. 🔄 **Priority: OR operator fix** - Most critical specification compliance issue
 3. 📝 **Priority: String utilities** - High-value, lower-risk contribution opportunity
 4. 🚀 **Engage upstream** - Discuss contribution strategy with cel crate maintainers
 
@@ -534,6 +563,6 @@ When adding new features or fixing compliance issues:
 ## Related Resources
 
 - **CEL Specification**: https://github.com/google/cel-spec
-- **cel crate**: https://crates.io/crates/cel  
+- **cel crate**: https://crates.io/crates/cel
 - **CEL Language Definition**: https://github.com/google/cel-spec/blob/master/doc/langdef.md
 - **CEL Homepage**: https://cel.dev/

@@ -7,29 +7,58 @@ Get up and running with Python CEL in under 5 minutes.
 The simplest way to use CEL is with the `evaluate` function:
 
 ```python
-from cel import evaluate
+import cel
+Context = cel.Context
+
+
+def add_variables(context, values):
+    for name, value in values.items():
+        if callable(value):
+            context.add_function(name, value)
+        else:
+            context.add_variable(name, cel.prepare(value))
+    return context
+
+
+def make_context(values=None):
+    context = cel.Context()
+    if values:
+        add_variables(context, values)
+    return context
+
+
+def as_context(value=None):
+    if isinstance(value, cel.Context):
+        return value
+    return make_context(value)
+
+
+def evaluate(expression, context=None):
+    return cel.evaluate(expression, as_context(context))
+
+# Context/evaluate are provided by the documentation adapter
 
 # Basic arithmetic
-result = evaluate("1 + 2")
+result = evaluate("1 + 2", cel.Context())
 assert result == 3  # → 3 (CEL handles math naturally)
 
 # String operations
-result = evaluate('"Hello " + "World"')
+result = evaluate('"Hello " + "World"', cel.Context())
 assert result == "Hello World"  # → "Hello World" (string concatenation works intuitively)
 
 # Boolean logic
-result = evaluate("5 > 3")
+result = evaluate("5 > 3", cel.Context())
 assert result == True  # → True (comparison operators return clear boolean values)
 
 # Conditional expressions
-result = evaluate('true ? "yes" : "no"')
+result = evaluate('true ? "yes" : "no"', cel.Context())
 assert result == "yes"  # → "yes" (ternary operator for clean conditional logic)
 
 # Lists and maps
-result = evaluate("[1, 2, 3]")
+result = evaluate("[1, 2, 3]", cel.Context())
 assert result == [1, 2, 3]  # → [1, 2, 3] (native Python list creation)
 
-result = evaluate('{"name": "Alice", "age": 30}')
+result = evaluate('{"name": "Alice", "age": 30}', cel.Context())
 assert result == {'name': 'Alice', 'age': 30}  # → {'name': 'Alice', 'age': 30} (native Python dict)
 
 print("✓ Basic expressions working correctly")
@@ -40,13 +69,13 @@ print("✓ Basic expressions working correctly")
 CEL expressions can use variables from context:
 
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 # Simple context variables
-result = evaluate("age >= 18", {"age": 25})
+result = evaluate("age >= 18", as_context({"age": 25}))
 assert result == True  # → True (age check with context variable)
 
-result = evaluate("name + ' is awesome!'", {"name": "CEL"})
+result = evaluate("name + ' is awesome!'", as_context({"name": "CEL"}))
 assert result == "CEL is awesome!"  # → "CEL is awesome!" (variable interpolation made easy)
 
 # Complex nested context
@@ -60,31 +89,31 @@ user = {
     }
 }
 
-# String concatenation with conditionals  
-adult_status = evaluate('user.age >= 18 ? "adult" : "minor"', {"user": user})
-result = evaluate('user.name + " is " + status', {"user": user, "status": adult_status})
+# String concatenation with conditionals
+adult_status = evaluate('user.age >= 18 ? "adult" : "minor"', as_context({"user": user}))
+result = evaluate('user.name + " is " + status', as_context({"user": user, "status": adult_status}))
 assert result == "Alice is adult"  # → "Alice is adult" (nested objects with conditional logic)
 
 # Working with lists
-result = evaluate('"admin" in user.roles', {"user": user})
+result = evaluate('"admin" in user.roles', as_context({"user": user}))
 assert result == True  # → True (membership testing in arrays)
 
 # Nested object access
-result = evaluate('user.profile.verified && user.profile.email.endsWith("@example.com")', {"user": user})
+result = evaluate('user.profile.verified && user.profile.email.endsWith("@example.com")', as_context({"user": user}))
 assert result == True  # → True (deep object navigation with string methods)
 
 # Type conversions - CEL enforces type safety
-result = evaluate('user.name + " is " + string(user.age) + " years old"', {"user": user})
+result = evaluate('user.name + " is " + string(user.age) + " years old"', as_context({"user": user}))
 assert result == "Alice is 30 years old"  # → "Alice is 30 years old" (explicit type conversion with string())
 
 # ❌ This would fail - no automatic type conversion between incompatible types:
 # evaluate('user.name + " is " + user.age')  # TypeError: can't add string + int
-# 
+#
 # ✅ Always use explicit conversion for mixed types:
 # string(), int(), float(), double() functions
 
 # Safe navigation with has()
-result = evaluate('has(user.profile.phone) ? user.profile.phone : "No phone"', {"user": user})
+result = evaluate('has(user.profile.phone) ? user.profile.phone : "No phone"', as_context({"user": user}))
 assert result == "No phone"  # → "No phone" (safe field checking prevents errors)
 
 print("✓ Context variables working correctly")
@@ -100,10 +129,10 @@ import cel
 # Compile once, execute many times
 program = cel.compile("price * quantity > threshold")
 
-result1 = program.execute({"price": 10, "quantity": 5, "threshold": 40})
+result1 = program.execute(as_context({"price": 10, "quantity": 5, "threshold": 40}))
 assert result1 == True  # → True (50 > 40)
 
-result2 = program.execute({"price": 5, "quantity": 3, "threshold": 20})
+result2 = program.execute(as_context({"price": 5, "quantity": 3, "threshold": 20}))
 assert result2 == False  # → False (15 > 20)
 
 print("Pre-compilation working correctly")
@@ -111,7 +140,7 @@ print("Pre-compilation working correctly")
 
 ## Ready for More?
 
-You've mastered the basics of CEL evaluation with dictionary context! For advanced features like custom Python functions, context objects, and production patterns, continue to the next guide.
+You've mastered the basics of CEL evaluation with prepared contexts! For advanced features like custom Python functions, context objects, and production patterns, continue to the next guide.
 
 ## CLI Quick Start
 
@@ -148,7 +177,7 @@ cel --interactive
 The REPL provides:
 
 - 🎨 **Syntax highlighting** as you type
-- 📝 **Auto-completion** for CEL functions and variables  
+- 📝 **Auto-completion** for CEL functions and variables
 - 📚 **Command history** with up/down arrows
 - 🔧 **Built-in commands**: `help`, `context`, `history`, `load`
 
@@ -157,7 +186,7 @@ The REPL provides:
 ### Configuration Validation
 
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 config = {
     "database": {
@@ -179,7 +208,7 @@ checks = [
 ]
 
 for expression, message in checks:
-    result = evaluate(expression, config)
+    result = evaluate(expression, as_context(config))
     assert result == True, f"Validation failed: {message}"  # → True (each validation passes)
 
 print("✓ Configuration validation working correctly")
@@ -188,7 +217,7 @@ print("✓ Configuration validation working correctly")
 ### Policy Evaluation
 
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 def check_access_policy(user, resource, action):
     policy = """
@@ -196,14 +225,14 @@ def check_access_policy(user, resource, action):
     (user.role == "owner" && resource.owner == user.id) ||
     (user.role == "member" && action == "read" && resource.public)
     """
-    
+
     context = {
         "user": user,
-        "resource": resource, 
+        "resource": resource,
         "action": action
     }
-    
-    return evaluate(policy, context)
+
+    return evaluate(policy, as_context(context))
 
 # Example usage
 user = {"id": "alice", "role": "member"}
@@ -212,7 +241,7 @@ resource = {"id": "doc1", "owner": "bob", "public": True}
 can_read = check_access_policy(user, resource, "read")
 assert can_read == True  # → True (member can read public resources)
 
-can_write = check_access_policy(user, resource, "write") 
+can_write = check_access_policy(user, resource, "write")
 assert can_write == False  # → False (member cannot write to others' resources)
 
 print("✓ Policy evaluation working correctly")
@@ -221,25 +250,25 @@ print("✓ Policy evaluation working correctly")
 ### Data Transformation
 
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 def transform_user_data(users):
     """Transform and filter user data using CEL expressions."""
-    
+
     # Filter active adult users
     active_adults = []
     for user in users:
-        if evaluate("user.active && user.age >= 18", {"user": user}):
+        if evaluate("user.active && user.age >= 18", as_context({"user": user})):
             active_adults.append(user)
-    
+
     # Generate display names
     for user in active_adults:
         display_name = evaluate(
             'user.first_name + " " + user.last_name + " (" + user.role + ")"',
-            {"user": user}
+            as_context({"user": user})
         )
         user["display_name"] = display_name
-    
+
     return active_adults
 
 # Example data
@@ -261,59 +290,59 @@ print("✓ Data transformation working correctly")
 CEL has a rich type system that maps naturally to Python:
 
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 from datetime import datetime, timedelta
 
 # Numbers with operations
-result = evaluate("42")
+result = evaluate("42", cel.Context())
 assert result == 42  # → 42 (integers work naturally)
 assert isinstance(result, int)
 
-result = evaluate("3.14 * double(2)")
+result = evaluate("3.14 * double(2)", cel.Context())
 assert result == 6.28  # → 6.28 (floating point arithmetic)
 assert isinstance(result, float)
 
-result = evaluate("1u + 5u")
+result = evaluate("1u + 5u", cel.Context())
 assert result == 6  # → 6 (unsigned integers convert to regular int)
 
 # Strings with methods
-result = evaluate('"hello world".size()')
+result = evaluate('"hello world".size()', cel.Context())
 assert result == 11  # → 11 (string length via size() method)
 
 # Note: String indexing like "hello"[1] is not supported in CEL
 # Use string methods instead: startsWith(), endsWith(), contains(), matches()
 
-result = evaluate('"test".startsWith("te")')
+result = evaluate('"test".startsWith("te")', cel.Context())
 assert result == True  # → True (rich string method support)
 
 # Bytes operations
-result = evaluate("b'binary data'")
+result = evaluate("b'binary data'", cel.Context())
 assert result == b'binary data'  # → b'binary data' (native bytes support)
 assert isinstance(result, bytes)
 
-result = evaluate("b'hello'.size()")
+result = evaluate("b'hello'.size()", cel.Context())
 assert result == 5  # → 5 (bytes also have size() method)
 
 # Collections with operations
-result = evaluate("[1, 2, 3] + [4, 5]")
+result = evaluate("[1, 2, 3] + [4, 5]", cel.Context())
 assert result == [1, 2, 3, 4, 5]  # → [1, 2, 3, 4, 5] (list concatenation)
 
-result = evaluate("[1, 2, 3].size()")
+result = evaluate("[1, 2, 3].size()", cel.Context())
 assert result == 3  # → 3 (list length)
 
-result = evaluate('{"name": "Alice", "age": 30}')
+result = evaluate('{"name": "Alice", "age": 30}', cel.Context())
 assert result == {'name': 'Alice', 'age': 30}  # → {'name': 'Alice', 'age': 30} (maps as dicts)
 assert isinstance(result, dict)
 
-result = evaluate('{"a": 1, "b": 2}.size()')
+result = evaluate('{"a": 1, "b": 2}.size()', cel.Context())
 assert result == 2  # → 2 (map size)
 
 # Special types with operations
-result = evaluate("null == null")
+result = evaluate("null == null", cel.Context())
 assert result == True  # → True (null handling works correctly)
 
 # Timestamps
-result = evaluate('timestamp("2024-01-01T12:00:00Z")')
+result = evaluate('timestamp("2024-01-01T12:00:00Z")', cel.Context())
 assert isinstance(result, datetime)  # → datetime object (RFC3339 string parsing)
 assert result.year == 2024
 assert result.month == 1
@@ -321,13 +350,13 @@ assert result.day == 1
 assert result.hour == 12
 
 # Durations
-result = evaluate('duration("1h30m")')
+result = evaluate('duration("1h30m")', cel.Context())
 assert isinstance(result, timedelta)  # → timedelta object (duration string parsing)
 assert result.total_seconds() == 5400.0  # → 5400.0 (1.5 hours in seconds)
 
 # Timestamp arithmetic
 context = {"now": datetime.now()}
-result = evaluate('now + duration("2h")', context)
+result = evaluate('now + duration("2h")', as_context(context))
 assert isinstance(result, datetime)  # → datetime object (time arithmetic works naturally)
 
 print("✓ Type system working correctly")
@@ -338,18 +367,18 @@ print("✓ Type system working correctly")
 CEL expressions can fail for various reasons. Always handle errors appropriately:
 
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 # Most idiomatic: Let exceptions bubble up naturally
 def evaluate_expression(expression: str, context: dict = None):
     """Evaluate expression with proper exception handling."""
-    return evaluate(expression, context or {})
+    return evaluate(expression, as_context(context or {}))
 
-# For cases where you need fallback values  
+# For cases where you need fallback values
 def evaluate_with_default(expression: str, context: dict = None, default = None):
     """Evaluate with fallback value on errors."""
     try:
-        return evaluate(expression, context or {})
+        return evaluate(expression, as_context(context or {}))
     except (ValueError, TypeError, RuntimeError):
         return default
 
@@ -357,11 +386,11 @@ def evaluate_with_default(expression: str, context: dict = None, default = None)
 def safe_evaluate(expression: str, context: dict = None):
     """
     Evaluate with detailed success/error information.
-    
+
     Returns: (success: bool, result: Any, error_message: str)
     """
     try:
-        result = evaluate(expression, context or {})
+        result = evaluate(expression, as_context(context or {}))
         return (True, result, "")
     except ValueError as e:
         return (False, None, f"Syntax error: {e}")
@@ -382,8 +411,8 @@ except (ValueError, TypeError, RuntimeError) as e:
 
 # Fallback pattern for non-critical features
 display_name = evaluate_with_default(
-    'user.display_name', 
-    {"user": {"first_name": "John"}}, 
+    'user.display_name',
+    {"user": {"first_name": "John"}},
     default="Unknown User"
 )
 assert display_name == "Unknown User"  # → "Unknown User" (missing field)
@@ -394,7 +423,7 @@ assert success == False
 assert result is None
 assert "Runtime error" in error
 
-success, result, error = safe_evaluate("age * 2", context)  
+success, result, error = safe_evaluate("age * 2", context)
 assert success == True
 assert result == 50
 assert error == ""
@@ -415,7 +444,7 @@ user = {"age": 25, "role": "member", "verified": True}
 business_rules = [
     "age >= 18",                    # Valid rule
     "role == 'admin'",              # Valid rule (false result)
-    "verified && age > 21",         # Valid rule  
+    "verified && age > 21",         # Valid rule
     "invalid_syntax + +",           # Invalid syntax
 ]
 
@@ -430,7 +459,7 @@ print("✓ Idiomatic error handling working correctly")
 
 ## What's Next?
 
-Congratulations! You've mastered basic CEL evaluation with dictionary context. Now choose your learning path:
+Congratulations! You've mastered basic CEL evaluation with prepared contexts. Now choose your learning path:
 
 **🚀 Start Building Real Applications (Recommended):**
 - **[Your First Integration](../tutorials/your-first-integration.md)** - Learn Context objects and custom Python functions through practical examples

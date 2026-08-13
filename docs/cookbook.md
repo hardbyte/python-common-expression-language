@@ -25,7 +25,7 @@ Build robust access control policies that are easy to understand and maintain.
 
 ### What You'll Learn
 - Role-based access control (RBAC) patterns
-- Attribute-based access control (ABAC) implementations  
+- Attribute-based access control (ABAC) implementations
 - Time-based access restrictions
 - Multi-tenant authorization
 - Audit logging for access decisions
@@ -34,15 +34,44 @@ Build robust access control policies that are easy to understand and maintain.
 
 **Role-based access:**
 ```python
-from cel import evaluate
+import cel
+Context = cel.Context
+
+
+def add_variables(context, values):
+    for name, value in values.items():
+        if callable(value):
+            context.add_function(name, value)
+        else:
+            context.add_variable(name, cel.prepare(value))
+    return context
+
+
+def make_context(values=None):
+    context = cel.Context()
+    if values:
+        add_variables(context, values)
+    return context
+
+
+def as_context(value=None):
+    if isinstance(value, cel.Context):
+        return value
+    return make_context(value)
+
+
+def evaluate(expression, context=None):
+    return cel.evaluate(expression, as_context(context))
+
+# Context/evaluate are provided by the documentation adapter
 
 expression = 'user.role in ["admin", "editor"] && resource.type == "document"'
 context = {
-    "user": {"role": "editor", "id": "user123"}, 
+    "user": {"role": "editor", "id": "user123"},
     "resource": {"type": "document", "owner": "user456"}
 }
 
-result = evaluate(expression, context)
+result = evaluate(expression, as_context(context))
 print(result)  # → True
 ```
 
@@ -54,7 +83,7 @@ context = {
     "user": {"permissions": ["read", "write"], "active": True}
 }
 
-result = evaluate(expression, context)
+result = evaluate(expression, as_context(context))
 print(result)  # → True (user has read permission and is active)
 ```
 
@@ -81,7 +110,7 @@ Transform and validate data with declarative expressions that business users can
 
 **User data transformation:**
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 # Transform user data into a structured format
 expression = '''{
@@ -92,14 +121,14 @@ expression = '''{
 
 context = {
     "user": {
-        "first_name": "Alice", 
+        "first_name": "Alice",
         "last_name": "Johnson",
         "age": 25,
         "spend": 1500
     }
 }
 
-result = evaluate(expression, context)
+result = evaluate(expression, as_context(context))
 print(result)  # → {'name': 'Alice Johnson', 'can_vote': True, 'tier': 'gold'}
 ```
 
@@ -108,7 +137,7 @@ print(result)  # → {'name': 'Alice Johnson', 'can_vote': True, 'tier': 'gold'}
 expression = 'email.matches(r"^[^@]+@[^@]+\\.[^@]+$") && size(email) <= 254'
 context = {"email": "user@company.com"}
 
-result = evaluate(expression, context)
+result = evaluate(expression, as_context(context))
 print(result)  # → True
 ```
 
@@ -133,7 +162,7 @@ Build flexible, secure query filters that adapt to user input while preventing i
 
 **Multi-field search:**
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 # Search across multiple fields safely
 expression = '(name.contains(query) || description.contains(query)) && status == "active"'
@@ -144,7 +173,7 @@ context = {
     "query": "Python"
 }
 
-result = evaluate(expression, context)
+result = evaluate(expression, as_context(context))
 print(result)  # → True (matches name field)
 ```
 
@@ -157,7 +186,7 @@ context = {
     "end_date": "2024-12-31T23:59:59Z"
 }
 
-result = evaluate(expression, context)
+result = evaluate(expression, as_context(context))
 print(result)  # → True (within date range)
 ```
 
@@ -184,19 +213,19 @@ Handle edge cases gracefully and provide meaningful error messages to users.
 
 **Safe property access:**
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 # Safely check nested properties
 expression = 'has(user.profile) && user.profile.verified'
 
 # Test with complete data
 context = {"user": {"profile": {"verified": True}}}
-result = evaluate(expression, context)
+result = evaluate(expression, as_context(context))
 print(result)  # → True
 
 # Test with missing profile (won't error)
 context = {"user": {"email": "test@example.com"}}
-result = evaluate(expression, context)
+result = evaluate(expression, as_context(context))
 print(result)  # → False (safe fallback)
 ```
 
@@ -210,7 +239,7 @@ context = {
     }
 }
 
-result = evaluate(expression, context)
+result = evaluate(expression, as_context(context))
 print(result)  # → "alice@company.com" (fallback to email)
 ```
 
@@ -285,17 +314,17 @@ Learn battle-tested patterns for building robust, secure, and performant CEL app
 
 **Context validation pattern:**
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 def safe_evaluate(expression, context):
     # Validate context structure before evaluation
     if not isinstance(context, dict):
         raise ValueError("Context must be a dictionary")
-    
+
     # Simple validation before evaluation
     if "user" not in context:
         return False
-    return evaluate(expression, context)
+    return evaluate(expression, as_context(context))
 
 # Example usage
 result = safe_evaluate('user.role == "admin"', {"user": {"role": "admin"}})
@@ -311,7 +340,7 @@ def get_cached_evaluation(expression, context_tuple):
     # Cache results for identical expression + context combinations
     # Convert tuple back to dict for evaluation
     context = dict(context_tuple)
-    return evaluate(expression, context)
+    return evaluate(expression, as_context(context))
 
 # Usage with hashable context
 context = {"user_role": "admin", "resource_type": "document"}
@@ -319,7 +348,7 @@ result = get_cached_evaluation('user_role == "admin"', tuple(context.items()))
 print(result)  # → True (cached on subsequent calls)
 ```
 
-> ⚠️ **Security Best Practices**: 
+> ⚠️ **Security Best Practices**:
 > - Always validate context data structure
 > - Use `has()` checks for optional fields
 > - Never trust user-provided expressions without sandboxing
@@ -343,7 +372,7 @@ print(result)  # → True (cached on subsequent calls)
 ## 💡 Can't Find What You're Looking For?
 
 - **Browse all tutorials**: [Learning CEL section](tutorials/thinking-in-cel.md)
-- **Check the API**: [Python API Reference](reference/python-api.md)  
+- **Check the API**: [Python API Reference](reference/python-api.md)
 - **File an issue**: [GitHub Issues](https://github.com/hardbyte/python-common-expression-language/issues)
 - **Join discussions**: [GitHub Discussions](https://github.com/hardbyte/python-common-expression-language/discussions)
 

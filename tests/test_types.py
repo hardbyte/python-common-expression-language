@@ -14,6 +14,7 @@ from collections.abc import Mapping
 
 import cel
 import pytest
+from conftest import evaluate
 
 
 class TestBasicTypeConversion:
@@ -22,65 +23,65 @@ class TestBasicTypeConversion:
     def test_none_values(self):
         """Test handling of None values in various contexts."""
         # None in basic context
-        result = cel.evaluate("value", {"value": None})
+        result = evaluate("value", {"value": None})
         assert result is None
 
         # None in comparison
-        result = cel.evaluate("value == null", {"value": None})
+        result = evaluate("value == null", {"value": None})
         assert result is True
 
         # None in list
-        result = cel.evaluate("items[0]", {"items": [None, 1, 2]})
+        result = evaluate("items[0]", {"items": [None, 1, 2]})
         assert result is None
 
     def test_boolean_conversion(self):
         """Test boolean type conversion and edge cases."""
         # Basic boolean values
-        assert cel.evaluate("value", {"value": True}) is True
-        assert cel.evaluate("value", {"value": False}) is False
+        assert evaluate("value", {"value": True}) is True
+        assert evaluate("value", {"value": False}) is False
 
         # Boolean in expressions
-        result = cel.evaluate("a && b", {"a": True, "b": False})
+        result = evaluate("a && b", {"a": True, "b": False})
         assert result is False  # CEL returns boolean values for logical ops
 
-        result = cel.evaluate("a || b", {"a": False, "b": True})
+        result = evaluate("a || b", {"a": False, "b": True})
         assert result is True
 
     def test_string_conversion(self):
         """Test string conversion with various edge cases."""
         # Empty string
-        result = cel.evaluate("value", {"value": ""})
+        result = evaluate("value", {"value": ""})
         assert result == ""
 
         # Very long string
         long_string = "a" * 10000
-        result = cel.evaluate("value", {"value": long_string})
+        result = evaluate("value", {"value": long_string})
         assert result == long_string
 
         # Unicode strings
         unicode_string = "Hello 世界 🌍 𝓤𝓷𝓲𝓬𝓸𝓭𝓮"
-        result = cel.evaluate("value", {"value": unicode_string})
+        result = evaluate("value", {"value": unicode_string})
         assert result == unicode_string
 
         # String with null bytes (should be handled gracefully)
         string_with_null = "Hello\x00World"
-        result = cel.evaluate("value", {"value": string_with_null})
+        result = evaluate("value", {"value": string_with_null})
         assert result == string_with_null
 
     def test_bytes_conversion(self):
         """Test bytes conversion with various edge cases."""
         # Empty bytes
-        result = cel.evaluate("value", {"value": b""})
+        result = evaluate("value", {"value": b""})
         assert result == b""
 
         # Bytes with null bytes
         bytes_with_null = b"Hello\x00World\xff"
-        result = cel.evaluate("value", {"value": bytes_with_null})
+        result = evaluate("value", {"value": bytes_with_null})
         assert result == bytes_with_null
 
         # Large bytes object
         large_bytes = b"x" * 10000
-        result = cel.evaluate("value", {"value": large_bytes})
+        result = evaluate("value", {"value": large_bytes})
         assert result == large_bytes
 
 
@@ -91,38 +92,38 @@ class TestNumericTypes:
         """Test edge cases with mixed numeric types."""
         # Very large integers
         large_int = 2**62
-        result = cel.evaluate("value", {"value": large_int})
+        result = evaluate("value", {"value": large_int})
         assert result == large_int
 
         # Very small integers
         small_int = -(2**62)
-        result = cel.evaluate("value", {"value": small_int})
+        result = evaluate("value", {"value": small_int})
         assert result == small_int
 
         # Very precise floats
         precise_float = 1.23456789012345678901234567890
-        result = cel.evaluate("value", {"value": precise_float})
+        result = evaluate("value", {"value": precise_float})
         assert isinstance(result, float)
         # Note: precision may be lost due to float64 limitations
 
     def test_special_float_values(self):
         """Test special float values (inf, -inf, nan)."""
         # Positive infinity
-        result = cel.evaluate("value", {"value": float("inf")})
+        result = evaluate("value", {"value": float("inf")})
         assert math.isinf(result) and result > 0
 
         # Negative infinity
-        result = cel.evaluate("value", {"value": float("-inf")})
+        result = evaluate("value", {"value": float("-inf")})
         assert math.isinf(result) and result < 0
 
         # NaN
-        result = cel.evaluate("value", {"value": float("nan")})
+        result = evaluate("value", {"value": float("nan")})
         assert math.isnan(result)
 
     def test_large_numbers(self):
         """Test handling of large numbers."""
         large_int = 2**50
-        result = cel.evaluate("x + 1", {"x": large_int})
+        result = evaluate("x + 1", {"x": large_int})
         assert result == large_int + 1
 
     def test_numeric_precision(self):
@@ -131,7 +132,7 @@ class TestNumericTypes:
         a = 0.1
         b = 0.2
         c = 0.3
-        result = cel.evaluate("a + b", {"a": a, "b": b})
+        result = evaluate("a + b", {"a": a, "b": b})
         # Due to floating point precision, this might not be exactly 0.3
         assert abs(result - c) < 1e-10
 
@@ -142,7 +143,7 @@ class TestCollectionTypes:
     def test_list_conversion_edge_cases(self):
         """Test list conversion with various edge cases."""
         # Empty list
-        result = cel.evaluate("value", {"value": []})
+        result = evaluate("value", {"value": []})
         assert result == []
 
         # List with mixed types including problematic ones
@@ -159,7 +160,7 @@ class TestCollectionTypes:
             [1, 2, 3],  # nested list
             {"key": "value"},  # nested dict
         ]
-        result = cel.evaluate("value", {"value": mixed_list})
+        result = evaluate("value", {"value": mixed_list})
         assert len(result) == len(mixed_list)
         assert result[0] == 1
         assert result[1] == 2.5
@@ -180,7 +181,7 @@ class TestCollectionTypes:
 
         # Note: Python dicts with True/False keys behave specially
         # True == 1 and False == 0 for dict key purposes
-        result = cel.evaluate("value", {"value": mixed_dict})
+        result = evaluate("value", {"value": mixed_dict})
 
         # Verify the dict structure is preserved
         assert isinstance(result, dict)
@@ -194,28 +195,28 @@ class TestCollectionTypes:
         context = {"test_dict": test_dict}
 
         # Access by string key
-        result = cel.evaluate("test_dict['str_key']", context)
+        result = evaluate("test_dict['str_key']", context)
         assert result == "string value"
 
         # Access by integer key
-        result = cel.evaluate("test_dict[123]", context)
+        result = evaluate("test_dict[123]", context)
         assert result == "int value"
 
     def test_empty_containers(self):
         """Test empty lists, dicts, and strings."""
-        assert cel.evaluate("size([])", {}) == 0
-        assert cel.evaluate("size({})", {}) == 0
-        assert cel.evaluate("size('')", {}) == 0
-        assert cel.evaluate("x", {"x": []}) == []
-        assert cel.evaluate("x", {"x": {}}) == {}
+        assert evaluate("size([])", {}) == 0
+        assert evaluate("size({})", {}) == 0
+        assert evaluate("size('')", {}) == 0
+        assert evaluate("x", {"x": []}) == []
+        assert evaluate("x", {"x": {}}) == {}
 
     def test_list_tuple_equivalence(self):
         """Test that tuples and lists are handled equivalently."""
         list_data = [1, 2, 3]
         tuple_data = (1, 2, 3)
 
-        list_result = cel.evaluate("data[1]", {"data": list_data})
-        tuple_result = cel.evaluate("data[1]", {"data": tuple_data})
+        list_result = evaluate("data[1]", {"data": list_data})
+        tuple_result = evaluate("data[1]", {"data": tuple_data})
 
         assert list_result == tuple_result == 2
 
@@ -233,11 +234,12 @@ class TestCollectionTypes:
                 return super().__getitem__(key)
 
         lazy = LazyDict()
-        assert cel.evaluate("data.key", {"data": lazy}) == "value"
+        assert evaluate("data.key", {"data": lazy}) == "value"
 
         lazy_ctx = LazyDict()
-        ctx = cel.Context(variables={"data": lazy_ctx})
-        assert cel.evaluate("data.key", ctx) == "value"
+        ctx = cel.Context()
+        ctx.add_variable("data", cel.prepare(lazy_ctx))
+        assert evaluate("data.key", ctx) == "value"
 
     def test_mapping_protocol_access(self):
         """Custom Mapping implementations should resolve member access."""
@@ -256,7 +258,7 @@ class TestCollectionTypes:
                 return len(self._data)
 
         mapping = CustomMapping({"key": "value"})
-        assert cel.evaluate("data.key", {"data": mapping}) == "value"
+        assert evaluate("data.key", {"data": mapping}) == "value"
 
 
 class TestComplexStructures:
@@ -277,10 +279,10 @@ class TestComplexStructures:
             }
         }
 
-        result = cel.evaluate("level1.level2.level3.level4.value", context)
+        result = evaluate("level1.level2.level3.level4.value", context)
         assert result == "deep_value"
 
-        result = cel.evaluate("level1.level2.level3.level4.list[2].nested_key", context)
+        result = evaluate("level1.level2.level3.level4.list[2].nested_key", context)
         assert result == "nested_value"
 
     def test_complex_nested_with_datetime(self):
@@ -301,15 +303,15 @@ class TestComplexStructures:
         }
 
         # Access nested datetime
-        result = cel.evaluate("data.level1.level2.level3.datetime", {"data": complex_data})
+        result = evaluate("data.level1.level2.level3.datetime", {"data": complex_data})
         assert result == complex_data["level1"]["level2"]["level3"]["datetime"]
 
         # Access nested numbers
-        result = cel.evaluate("data.level1.level2.level3.numbers[1]", {"data": complex_data})
+        result = evaluate("data.level1.level2.level3.numbers[1]", {"data": complex_data})
         assert result == 2.5
 
         # Access timedelta at root level
-        result = cel.evaluate("data.timedelta", {"data": complex_data})
+        result = evaluate("data.timedelta", {"data": complex_data})
         assert result == complex_data["timedelta"]
 
 
@@ -317,8 +319,8 @@ class TestTypeErrors:
     """Test error conditions and edge cases."""
 
     def test_invalid_context_key_type(self):
-        """Test that non-string keys in context raise appropriate errors."""
-        with pytest.raises(ValueError, match="Variable name must be strings"):
+        """Context construction does not accept variable mappings."""
+        with pytest.raises(TypeError):
             cel.Context({123: "value"})
 
     def test_function_with_error(self):
@@ -328,7 +330,7 @@ class TestTypeErrors:
             raise ValueError("Custom error")
 
         with pytest.raises(RuntimeError, match="Function 'error_function' error"):
-            cel.evaluate("error_function()", {"error_function": error_function})
+            evaluate("error_function()", {"error_function": error_function})
 
     def test_function_with_wrong_args(self):
         """Test that function argument mismatch is handled."""
@@ -337,7 +339,7 @@ class TestTypeErrors:
             return a + b
 
         with pytest.raises(RuntimeError, match="Function 'two_arg_function' error"):
-            cel.evaluate("two_arg_function(1)", {"two_arg_function": two_arg_function})
+            evaluate("two_arg_function(1)", {"two_arg_function": two_arg_function})
 
     def test_error_propagation_in_conversions(self):
         """Test that conversion errors are properly propagated."""
@@ -357,7 +359,7 @@ class TestTypeErrors:
         }
 
         for key, value in valid_data.items():
-            result = cel.evaluate("data." + key, {"data": valid_data})
+            result = evaluate("data." + key, {"data": valid_data})
             assert result == value
 
 
@@ -375,40 +377,38 @@ class TestCELKeywordHandling:
         }
 
         # These should work using bracket notation
-        result = cel.evaluate("data['null']", {"data": problematic_data})
+        result = evaluate("data['null']", {"data": problematic_data})
         assert result == "not_null_value"
 
-        result = cel.evaluate("data['true']", {"data": problematic_data})
+        result = evaluate("data['true']", {"data": problematic_data})
         assert result == "not_boolean_true"
 
-        result = cel.evaluate("data['false']", {"data": problematic_data})
+        result = evaluate("data['false']", {"data": problematic_data})
         assert result == "not_boolean_false"
 
-        result = cel.evaluate("data['size']", {"data": problematic_data})
+        result = evaluate("data['size']", {"data": problematic_data})
         assert result == "not_function_size"
 
 
 class TestContextHandling:
     """Test context object and variable handling."""
 
-    def test_context_update_overwrite(self):
-        """Test that context updates overwrite existing variables."""
-        context = cel.Context({"x": 1})
-        result = cel.evaluate("x", context)
-        assert result == 1
+    def test_context_variable_replacement(self):
+        """Prepared variable insertion overwrites an existing binding."""
+        context = cel.Context()
+        context.add_variable("x", cel.prepare(1))
+        assert evaluate("x", context) == 1
 
-        # Update context with new value
-        context.update({"x": 2})
-        result = cel.evaluate("x", context)
-        assert result == 2
+        context.add_variable("x", cel.prepare(2))
+        assert evaluate("x", context) == 2
 
     def test_unicode_strings(self):
         """Test Unicode string handling."""
         unicode_text = "Hello, 世界! 🌍"
-        result = cel.evaluate("text", {"text": unicode_text})
+        result = evaluate("text", {"text": unicode_text})
         assert result == unicode_text
 
-        result = cel.evaluate("text + ' suffix'", {"text": unicode_text})
+        result = evaluate("text + ' suffix'", {"text": unicode_text})
         assert result == unicode_text + " suffix"
 
 
@@ -423,9 +423,9 @@ class TestDatetimeIntegration:
         context = {"dt": dt, "delta": delta}
 
         # Test datetime arithmetic
-        result = cel.evaluate("dt + delta", context)
+        result = evaluate("dt + delta", context)
         assert isinstance(result, datetime.datetime)
 
         # Test datetime comparison
-        result = cel.evaluate("dt < (dt + delta)", context)
+        result = evaluate("dt < (dt + delta)", context)
         assert result is True

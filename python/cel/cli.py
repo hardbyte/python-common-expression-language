@@ -37,7 +37,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 # Import directly from relative modules to avoid circular imports
-from .cel import Context, evaluate
+from .cel import Context, evaluate, prepare
 from .stdlib import add_stdlib_to_context
 
 # Initialize Rich console
@@ -195,10 +195,9 @@ class CELEvaluator:
 
     def _update_cel_context(self):
         """Update the internal CEL context object."""
-        if self.context:
-            self._cel_context = Context(self.context)
-        else:
-            self._cel_context = Context()
+        self._cel_context = Context()
+        for name, value in self.context.items():
+            self._cel_context.add_variable(name, prepare(value))
 
         # Always add stdlib functions to the context
         add_stdlib_to_context(self._cel_context)

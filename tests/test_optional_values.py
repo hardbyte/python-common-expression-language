@@ -2,8 +2,12 @@ import cel
 import pytest
 
 
+def empty_context():
+    return cel.Context()
+
+
 def test_optional_of_wrapper():
-    opt = cel.evaluate("optional.of(42)")
+    opt = cel.evaluate("optional.of(42)", empty_context())
     assert isinstance(opt, cel.OptionalValue)
     assert opt.has_value() is True
     assert opt.value() == 42
@@ -12,7 +16,7 @@ def test_optional_of_wrapper():
 
 
 def test_optional_none_wrapper():
-    opt = cel.evaluate("optional.none()")
+    opt = cel.evaluate("optional.none()", empty_context())
     assert isinstance(opt, cel.OptionalValue)
     assert opt.has_value() is False
     assert opt.or_value("default") == "default"
@@ -22,7 +26,7 @@ def test_optional_none_wrapper():
 
 
 def test_optional_of_null_distinct():
-    opt = cel.evaluate("optional.of(null)")
+    opt = cel.evaluate("optional.of(null)", empty_context())
     assert isinstance(opt, cel.OptionalValue)
     assert opt.has_value() is True
     assert opt.value() is None
@@ -30,10 +34,13 @@ def test_optional_of_null_distinct():
 
 
 def test_optional_in_context():
+    context = cel.Context()
     opt = cel.OptionalValue.of(123)
-    assert cel.evaluate("opt.orValue(0)", {"opt": opt}) == 123
-    assert cel.evaluate("opt.hasValue()", {"opt": opt}) is True
+    context.add_variable("opt", cel.prepare(opt))
+    assert cel.evaluate("opt.orValue(0)", context) == 123
+    assert cel.evaluate("opt.hasValue()", context) is True
 
     none_opt = cel.OptionalValue.none()
-    assert cel.evaluate("opt.orValue(7)", {"opt": none_opt}) == 7
-    assert cel.evaluate("opt.hasValue()", {"opt": none_opt}) is False
+    context.add_variable("opt", cel.prepare(none_opt))
+    assert cel.evaluate("opt.orValue(7)", context) == 7
+    assert cel.evaluate("opt.hasValue()", context) is False

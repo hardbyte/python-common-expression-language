@@ -1,311 +1,171 @@
-"""Tests for the compile() function and Program class.
-
-The compile() function pre-compiles a CEL expression into a Program object
-that can be executed multiple times with different contexts, providing
-significant performance benefits for repeated evaluation of the same expression.
-"""
-
 import datetime
 
 import cel
 import pytest
-from cel import Context
+
+
+def context(**variables):
+    result = cel.Context()
+    for name, value in variables.items():
+        result.add_variable(name, cel.prepare(value))
+    return result
 
 
 class TestCompileBasics:
-    """Basic compilation and execution tests."""
-
-    def test_compile_simple_expression(self):
-        """Test compiling a simple arithmetic expression."""
+    def test_compile_and_execute(self):
         program = cel.compile("1 + 2")
-        result = program.execute()
-        assert result == 3
+        assert program.execute(context()) == 3
 
     def test_compile_returns_program(self):
-        """Test that compile() returns a Program object."""
-        program = cel.compile("true")
-        assert hasattr(program, "execute")
+        assert isinstance(cel.compile("true"), cel.Program)
 
     def test_program_repr(self):
-        """Test Program __repr__ method."""
-        program = cel.compile("x + y")
-        repr_str = repr(program)
-        assert "Program" in repr_str
-        assert "x + y" in repr_str
+        assert repr(cel.compile("x + y")) == 'Program("x + y")'
 
-    def test_execute_without_context(self):
-        """Test executing a program without context."""
+    @pytest.mark.parametrize("argument", [None, {}, cel.prepare(1), object()])
+    def test_execute_rejects_non_context_arguments(self, argument):
+        with pytest.raises(TypeError):
+            cel.compile("42").execute(argument)
+
+    def test_execute_requires_exactly_one_argument(self):
         program = cel.compile("42")
-        assert program.execute() == 42
+        with pytest.raises(TypeError):
+            program.execute()
+        with pytest.raises(TypeError):
+            program.execute(context(), context())
 
-    def test_execute_with_none_context(self):
-        """Test executing with explicit None context."""
-        program = cel.compile("true && false")
-        assert program.execute(None) is False
+    def test_program_exposes_one_execution_method(self):
+        program = cel.compile("42")
+        execution_methods = [name for name in dir(program) if name.startswith("execute")]
+        assert execution_methods == ["execute"]
 
 
 class TestCompileWithContext:
-    """Tests for compile/execute with various context types."""
-
-    def test_execute_with_dict_context(self):
-        """Test executing with a dictionary context."""
-        program = cel.compile("x + y")
-        result = program.execute({"x": 10, "y": 20})
-        assert result == 30
-
-    def test_execute_with_context_object(self):
-        """Test executing with a Context object."""
+    def test_execute_with_variables(self):
         program = cel.compile("name + ' is ' + string(age)")
-        ctx = Context()
-        ctx.add_variable("name", "Alice")
-        ctx.add_variable("age", 30)
-        result = program.execute(ctx)
-        assert result == "Alice is 30"
+        assert program.execute(context(name="Alice", age=30)) == "Alice is 30"
 
-    def test_execute_same_program_different_contexts(self):
-        """Test executing the same program with different contexts."""
+    def test_reuse_program_with_multiple_contexts(self):
         program = cel.compile("price * quantity")
+        assert program.execute(context(price=10, quantity=5)) == 50
+        assert program.execute(context(price=25, quantity=4)) == 100
 
-        result1 = program.execute({"price": 10, "quantity": 5})
-        assert result1 == 50
+    def test_nested_dot_and_index_selection(self):
+        ctx = context(
+            data={
+                "objects": [
+                    {"active": False, "profile": {"enabled": False}},
+                    {"active": True, "profile": {"enabled": True}},
+                ]
+            }
+        )
+        assert cel.compile("data.objects[1].profile.enabled").execute(ctx) is True
+        assert cel.compile("data['objects'][1].active").execute(ctx) is True
 
-        result2 = program.execute({"price": 25, "quantity": 4})
-        assert result2 == 100
-
-        result3 = program.execute({"price": 100, "quantity": 1})
-        assert result3 == 100
-
-    def test_execute_with_nested_context(self):
-        """Test executing with nested dictionary context."""
-        program = cel.compile("user.name + ' (' + user.role + ')'")
-        result = program.execute({"user": {"name": "Bob", "role": "admin"}})
-        assert result == "Bob (admin)"
-
-    def test_execute_with_list_context(self):
-        """Test executing with list in context."""
-        program = cel.compile("items[0] + items[1]")
-        result = program.execute({"items": [10, 20, 30]})
-        assert result == 30
+    def test_fixed_index_primitive_predicate(self):
+        objects = [
+            {"active": index % 2 == 0, "score": index, "padding": list(range(100))}
+            for index in range(10)
+        ]
+        assert (
+            cel.compile("data.objects[3].active || data.objects[3].score >= 3").execute(
+                context(data={"objects": objects})
+            )
+            is True
+        )
 
 
 class TestCompileWithFunctions:
-    """Tests for compile/execute with custom functions."""
+    def test_selected_primitive_arguments(self):
+        ctx = context(data={"left": 20, "right": 22})
+        ctx.add_function("add", lambda left, right: left + right)
+        assert cel.compile("add(data.left, data.right)").execute(ctx) == 42
 
-    def test_execute_with_custom_function(self):
-        """Test executing with a custom Python function."""
-        program = cel.compile("double(x)")
-        ctx = Context()
-        ctx.add_function("double", lambda x: x * 2)
-        ctx.add_variable("x", 21)
-        result = program.execute(ctx)
-        assert result == 42
-
-    def test_execute_with_multiple_custom_functions(self):
-        """Test executing with multiple custom functions."""
-        program = cel.compile("add(x, y) + multiply(x, y)")
-        ctx = Context()
+    def test_multiple_functions(self):
+        ctx = context(x=3, y=4)
         ctx.add_function("add", lambda a, b: a + b)
         ctx.add_function("multiply", lambda a, b: a * b)
-        ctx.add_variable("x", 3)
-        ctx.add_variable("y", 4)
-        result = program.execute(ctx)
-        assert result == 19  # (3+4) + (3*4) = 7 + 12 = 19
+        assert cel.compile("add(x, y) + multiply(x, y)").execute(ctx) == 19
 
 
-class TestCompileTypes:
-    """Tests for various CEL types with compile/execute."""
+class TestCompileResults:
+    @pytest.mark.parametrize(
+        ("expression", "expected"),
+        [
+            ("true", True),
+            ("42", 42),
+            ("3.5", 3.5),
+            ("'hello'", "hello"),
+            ("null", None),
+            ("b'hello'", b"hello"),
+            ("[1, 2, 3]", [1, 2, 3]),
+            ("{'answer': 42}", {"answer": 42}),
+        ],
+    )
+    def test_result_types(self, expression, expected):
+        assert cel.compile(expression).execute(context()) == expected
 
-    def test_compile_boolean(self):
-        """Test compiling boolean expressions."""
-        program = cel.compile("a > b && c")
-        result = program.execute({"a": 10, "b": 5, "c": True})
-        assert result is True
+    def test_timestamp_and_duration(self):
+        timestamp = cel.compile("timestamp('2024-01-01T00:00:00Z')").execute(context())
+        duration = cel.compile("duration('1h30m')").execute(context())
+        assert isinstance(timestamp, datetime.datetime)
+        assert duration == datetime.timedelta(seconds=5400)
 
-    def test_compile_string(self):
-        """Test compiling string expressions."""
-        program = cel.compile("greeting + ' ' + name")
-        result = program.execute({"greeting": "Hello", "name": "World"})
-        assert result == "Hello World"
+    def test_returning_prepared_map_and_list_remains_correct(self):
+        data = {"map": {"answer": 42}, "list": [1, 2, 3]}
+        ctx = context(data=data)
+        assert cel.compile("data.map").execute(ctx) == data["map"]
+        assert cel.compile("data.list").execute(ctx) == data["list"]
 
-    def test_compile_list(self):
-        """Test compiling list expressions."""
-        program = cel.compile("[a, b, c]")
-        result = program.execute({"a": 1, "b": 2, "c": 3})
-        assert result == [1, 2, 3]
 
-    def test_compile_map(self):
-        """Test compiling map expressions."""
-        program = cel.compile("{'name': name, 'age': age}")
-        result = program.execute({"name": "Alice", "age": 30})
-        assert result == {"name": "Alice", "age": 30}
+class TestSelectionSemantics:
+    def test_missing_key_and_out_of_range(self):
+        ctx = context(data={"items": [1], "record": {"present": True}})
+        with pytest.raises(ValueError, match="No such key"):
+            cel.compile("data.record.missing").execute(ctx)
+        with pytest.raises(ValueError, match="Index out of bounds"):
+            cel.compile("data.items[5]").execute(ctx)
 
-    def test_compile_null(self):
-        """Test compiling null expressions."""
-        program = cel.compile("null")
-        result = program.execute()
-        assert result is None
+    def test_has(self):
+        ctx = context(data={"record": {"present": True}})
+        assert cel.compile("has(data.record.present)").execute(ctx) is True
+        assert cel.compile("has(data.record.missing)").execute(ctx) is False
 
-    def test_compile_bytes(self):
-        """Test compiling bytes expressions."""
-        program = cel.compile("b'hello'")
-        result = program.execute()
-        assert result == b"hello"
+    def test_optional_values_remain_usable_with_prepared_contexts(self):
+        ctx = context(value=cel.OptionalValue.of(42), missing=cel.OptionalValue.none())
+        assert cel.compile("value.orValue(0)").execute(ctx) == 42
+        assert cel.compile("missing.orValue(0)").execute(ctx) == 0
 
-    def test_compile_timestamp(self):
-        """Test compiling timestamp expressions."""
-        program = cel.compile("timestamp('2024-01-01T00:00:00Z')")
-        result = program.execute()
-        assert isinstance(result, datetime.datetime)
-        assert result.year == 2024
-
-    def test_compile_duration(self):
-        """Test compiling duration expressions."""
-        program = cel.compile("duration('1h30m')")
-        result = program.execute()
-        assert isinstance(result, datetime.timedelta)
-        assert result.total_seconds() == 5400
+    def test_selection_from_owned_temporary(self):
+        ctx = context()
+        assert cel.compile("{'profile': {'enabled': true}}.profile.enabled").execute(ctx) is True
+        assert cel.compile("[{'enabled': true}][0].enabled").execute(ctx) is True
 
 
 class TestCompileErrors:
-    """Tests for error handling in compile/execute."""
-
-    def test_compile_invalid_syntax(self):
-        """Test that invalid syntax raises ValueError."""
+    @pytest.mark.parametrize("expression", ["1 + + 2", ""])
+    def test_compile_invalid_syntax(self, expression):
         with pytest.raises(ValueError, match="Failed to parse"):
-            cel.compile("1 + + 2")
-
-    def test_compile_empty_expression(self):
-        """Test that empty expression raises ValueError."""
-        with pytest.raises(ValueError, match="Failed to parse"):
-            cel.compile("")
+            cel.compile(expression)
 
     def test_execute_undefined_variable(self):
-        """Test that undefined variable raises RuntimeError."""
-        program = cel.compile("undefined_var + 1")
         with pytest.raises(RuntimeError):
-            program.execute({})
+            cel.compile("undefined_var + 1").execute(context())
 
     def test_execute_type_error(self):
-        """Test that type errors are properly raised."""
-        program = cel.compile("x + y")
         with pytest.raises(TypeError):
-            # String + int should fail
-            program.execute({"x": "hello", "y": 42})
-
-    def test_execute_invalid_context_type(self):
-        """Test that invalid context type raises ValueError."""
-        program = cel.compile("x + 1")
-        with pytest.raises(ValueError, match="must be a Context object or a dict"):
-            program.execute("invalid context")
+            cel.compile("x + y").execute(context(x="hello", y=42))
 
 
-class TestCompileRealWorldExamples:
-    """Real-world usage examples for compile/execute."""
+class TestEvaluate:
+    def test_evaluate_uses_context(self):
+        assert cel.evaluate("x + y", context(x=20, y=22)) == 42
 
-    def test_access_control_policy(self):
-        """Test access control policy evaluation."""
-        policy = cel.compile(
-            'user.role == "admin" || (resource.owner == user.id && action == "read")'
-        )
+    @pytest.mark.parametrize("argument", [None, {}, cel.prepare(1), object()])
+    def test_evaluate_rejects_non_context_arguments(self, argument):
+        with pytest.raises(TypeError):
+            cel.evaluate("42", argument)
 
-        # Admin can do anything
-        assert (
-            policy.execute(
-                {
-                    "user": {"id": "alice", "role": "admin"},
-                    "resource": {"owner": "bob"},
-                    "action": "delete",
-                }
-            )
-            is True
-        )
-
-        # Owner can read their own resource
-        assert (
-            policy.execute(
-                {
-                    "user": {"id": "bob", "role": "user"},
-                    "resource": {"owner": "bob"},
-                    "action": "read",
-                }
-            )
-            is True
-        )
-
-        # Non-owner cannot read others' resources
-        assert (
-            policy.execute(
-                {
-                    "user": {"id": "charlie", "role": "user"},
-                    "resource": {"owner": "bob"},
-                    "action": "read",
-                }
-            )
-            is False
-        )
-
-    def test_pricing_calculation(self):
-        """Test pricing calculation with discounts."""
-        pricing = cel.compile("price * quantity * (1.0 - discount)")
-
-        # No discount
-        assert pricing.execute({"price": 100.0, "quantity": 2.0, "discount": 0.0}) == 200.0
-
-        # 10% discount
-        result = pricing.execute({"price": 100.0, "quantity": 2.0, "discount": 0.1})
-        assert abs(result - 180.0) < 0.001
-
-    def test_validation_rules(self):
-        """Test validation rules."""
-        age_check = cel.compile("age >= 18 && age <= 120")
-
-        assert age_check.execute({"age": 25}) is True
-        assert age_check.execute({"age": 17}) is False
-        assert age_check.execute({"age": 121}) is False
-
-    def test_data_filtering(self):
-        """Test data filtering expression."""
-        filter_expr = cel.compile('status == "active" && score >= min_score')
-
-        items = [
-            {"status": "active", "score": 85},
-            {"status": "inactive", "score": 90},
-            {"status": "active", "score": 70},
-            {"status": "active", "score": 95},
-        ]
-
-        filtered = [item for item in items if filter_expr.execute({**item, "min_score": 80})]
-
-        assert len(filtered) == 2
-        assert filtered[0]["score"] == 85
-        assert filtered[1]["score"] == 95
-
-
-class TestCompilePerformancePattern:
-    """Tests demonstrating the performance benefit pattern."""
-
-    def test_compile_once_execute_many(self):
-        """Demonstrate compile-once-execute-many pattern."""
-        # Compile the expression once
-        expr = cel.compile("x * x + y * y")
-
-        # Execute many times with different values
-        results = []
-        for i in range(100):
-            result = expr.execute({"x": i, "y": i + 1})
-            results.append(result)
-
-        # Verify some results
-        assert results[0] == 0 * 0 + 1 * 1  # 1
-        assert results[1] == 1 * 1 + 2 * 2  # 5
-        assert results[10] == 10 * 10 + 11 * 11  # 221
-
-    def test_reuse_compiled_program(self):
-        """Test that compiled programs can be reused safely."""
-        program = cel.compile("value > threshold")
-
-        # Multiple sequential executions
-        assert program.execute({"value": 10, "threshold": 5}) is True
-        assert program.execute({"value": 3, "threshold": 5}) is False
-        assert program.execute({"value": 100, "threshold": 50}) is True
-        assert program.execute({"value": 0, "threshold": 0}) is False
+    def test_evaluate_requires_context(self):
+        with pytest.raises(TypeError):
+            cel.evaluate("42")

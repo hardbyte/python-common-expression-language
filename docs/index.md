@@ -13,19 +13,48 @@ providing fast and safe CEL expression evaluation with seamless Python integrati
 
     **Simple evaluation**
     ```python
-    from cel import evaluate
-    
-    result = evaluate("age > 21", {"age": 25})
+    import cel
+    Context = cel.Context
+
+
+    def add_variables(context, values):
+        for name, value in values.items():
+            if callable(value):
+                context.add_function(name, value)
+            else:
+                context.add_variable(name, cel.prepare(value))
+        return context
+
+
+    def make_context(values=None):
+        context = cel.Context()
+        if values:
+            add_variables(context, values)
+        return context
+
+
+    def as_context(value=None):
+        if isinstance(value, cel.Context):
+            return value
+        return make_context(value)
+
+
+    def evaluate(expression, context=None):
+        return cel.evaluate(expression, as_context(context))
+
+    # Context/evaluate are provided by the documentation adapter
+
+    result = evaluate("age > 21", as_context({"age": 25}))
     assert result == True  # → True (age check passes)
     ```
-    
+
     **Policy checks**
     ```python
     policy = "user.role == 'admin' || resource.public"
-    result = evaluate(policy, {"user": {"role": "guest"}, "resource": {"public": True}})
+    result = evaluate(policy, as_context({"user": {"role": "guest"}, "resource": {"public": True}}))
     assert result == True  # → True (public resource access allowed)
     ```
-    
+
     **Nested data**
     ```python
     user_data = {
@@ -34,15 +63,15 @@ providing fast and safe CEL expression evaluation with seamless Python integrati
             "profile": {"verified": True, "role": "admin"}
         }
     }
-    
+
     # Access nested fields and business logic
-    name_check = evaluate("user.name == 'Alice'", user_data)
+    name_check = evaluate("user.name == 'Alice'", as_context(user_data))
     assert name_check == True  # → True (name matches)
-    
+
     policy = "user.profile.verified && user.profile.role == 'admin'"
-    admin_access = evaluate(policy, user_data)
+    admin_access = evaluate(policy, as_context(user_data))
     assert admin_access == True  # → True (verified admin user)
-    
+
     print("✓ Basic CEL evaluation working correctly")  # → ✓ Basic CEL evaluation working correctly
     ```
 
@@ -53,10 +82,10 @@ providing fast and safe CEL expression evaluation with seamless Python integrati
     cel '1 + 2'                              # → 3
     cel '"Hello " + "World"'                 # → Hello World
     cel '[1, 2, 3].size()'                  # → 3
-    
+
     # With context
     cel 'age >= 21' --context '{"age": 25}'  # → true
-    
+
     # Interactive REPL
     cel --interactive
     ```
@@ -69,32 +98,32 @@ providing fast and safe CEL expression evaluation with seamless Python integrati
     "hello" + " " + "world"      // → "hello world"
     [1, 2, 3][1]                // → 2
     {"name": "Alice"}.name       // → "Alice"
-    
+
     // Conditionals and logic
     age >= 18 ? "adult" : "minor"
     has(user.email) && user.email.endsWith("@company.com")
-    
+
     // Collection operations
     users.filter(u, u.active).all(u, u.verified)
     emails.exists(e, e.endsWith("@company.com"))
-    
+
     // Built-in functions
     size([1, 2, 3])              // → 3
     timestamp("2024-01-01T00:00:00Z")
     duration("1h30m")
     ```
-    
+
     **[📖 Complete Syntax Reference →](tutorials/cel-language-basics.md)**
 
 ## Key Features
 
-✅ **80% CEL spec compliance**  
-✅ **200+ tests**  
-✅ **CLI + Python API**  
-✅ **Safe by design** (Rust core)  
-✅ **Ready for production**  
-✅ **No GIL-blocking, safe concurrent evaluation**  
-✅ **Strict type safety** (CEL-compliant type system)  
+✅ **80% CEL spec compliance**
+✅ **200+ tests**
+✅ **CLI + Python API**
+✅ **Safe by design** (Rust core)
+✅ **Ready for production**
+✅ **No GIL-blocking, safe concurrent evaluation**
+✅ **Strict type safety** (CEL-compliant type system)
 
 ## Why Python CEL?
 
@@ -131,28 +160,28 @@ graph LR
     A[Python Application] --> B[python-cel Package]
     B --> C[PyO3 Boundary]
     C --> D[cel Rust Crate]
-    
+
     subgraph PL ["Python Layer"]
         B
         E[evaluate function]
         F[Context class]
         G[Type conversion]
     end
-    
+
     subgraph RL ["Rust Layer"]
         D
         H[CEL Parser]
         I[Expression Evaluator]
         J[Type System]
     end
-    
+
     B --> E
     B --> F
     B --> G
     D --> H
     D --> I
     D --> J
-    
+
     style A fill:#3776ab,color:#fff
     style D fill:#ce422b,color:#fff
     style C fill:#f39c12,color:#fff
@@ -161,10 +190,10 @@ graph LR
 **Why This Architecture?**
 
 - **🚀 Speed**: Rust's zero-cost abstractions deliver microsecond-level performance
-- **🛡️ Safety**: Memory-safe Rust prevents crashes and security vulnerabilities  
+- **🛡️ Safety**: Memory-safe Rust prevents crashes and security vulnerabilities
 - **🔧 Ergonomics**: PyO3 provides seamless Python integration with automatic type conversion
-- **📦 Distribution**: Single wheel package with no external dependencies  
-- **⚡ Concurrency**: No GIL-blocking — safe concurrent evaluation across threads  
+- **📦 Distribution**: Single wheel package with no external dependencies
+- **⚡ Concurrency**: No GIL-blocking — safe concurrent evaluation across threads
 
 ## Installation
 
@@ -177,11 +206,11 @@ After installation, both the Python library and the `cel` command-line tool will
 ## Real-World Example: Access Control
 
 ```python
-from cel import evaluate
+# Context/evaluate are provided by the documentation adapter
 
 # Multi-factor access control policy
 policy = """
-    user.verified && 
+    user.verified &&
     (user.role == "admin" || resource.owner == user.id || resource.public)
 """
 
@@ -190,9 +219,9 @@ admin_user = {"user": {"role": "admin", "verified": True, "id": "admin1"}, "reso
 owner_user = {"user": {"role": "user", "verified": True, "id": "alice"}, "resource": {"owner": "alice", "public": False}}
 guest_user = {"user": {"role": "guest", "verified": True, "id": "guest1"}, "resource": {"owner": "bob", "public": True}}
 
-assert evaluate(policy, admin_user) == True   # → True (admin access granted)
-assert evaluate(policy, owner_user) == True   # → True (owner access granted)  
-assert evaluate(policy, guest_user) == True   # → True (public resource access)
+assert evaluate(policy, as_context(admin_user)) == True   # → True (admin access granted)
+assert evaluate(policy, as_context(owner_user)) == True   # → True (owner access granted)
+assert evaluate(policy, as_context(guest_user)) == True   # → True (public resource access)
 
 print("✓ Access control policies working correctly")  # → ✓ Access control policies working correctly
 ```

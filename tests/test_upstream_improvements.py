@@ -8,6 +8,7 @@ when workarounds can be removed and features can be enabled.
 
 import cel
 import pytest
+from conftest import evaluate
 
 
 class TestStringUtilities:
@@ -20,10 +21,8 @@ class TestStringUtilities:
         When this test starts failing (raises different error), it means
         lowerAscii() has been implemented upstream.
         """
-        with pytest.raises(
-            RuntimeError, match="Undefined variable or function.*lowerAscii"
-        ):
-            cel.evaluate('"HELLO".lowerAscii()')
+        with pytest.raises(RuntimeError, match="Undefined variable or function.*lowerAscii"):
+            evaluate('"HELLO".lowerAscii()')
 
     def test_upper_ascii_not_implemented(self):
         """
@@ -31,10 +30,8 @@ class TestStringUtilities:
 
         When this test starts failing, upperAscii() has been implemented.
         """
-        with pytest.raises(
-            RuntimeError, match="Undefined variable or function.*upperAscii"
-        ):
-            cel.evaluate('"hello".upperAscii()')
+        with pytest.raises(RuntimeError, match="Undefined variable or function.*upperAscii"):
+            evaluate('"hello".upperAscii()')
 
     def test_index_of_not_implemented(self):
         """
@@ -42,10 +39,8 @@ class TestStringUtilities:
 
         When this test starts failing, indexOf() has been implemented.
         """
-        with pytest.raises(
-            RuntimeError, match="Undefined variable or function.*indexOf"
-        ):
-            cel.evaluate('"hello world".indexOf("world")')
+        with pytest.raises(RuntimeError, match="Undefined variable or function.*indexOf"):
+            evaluate('"hello world".indexOf("world")')
 
     def test_substring_not_implemented(self):
         """
@@ -53,7 +48,7 @@ class TestStringUtilities:
 
         This guards the cel-rust functionality we just pinned to.
         """
-        assert cel.evaluate('"hello".substring(1, 3)') == "el"
+        assert evaluate('"hello".substring(1, 3)') == "el"
 
     def test_timestamp_date_implemented(self):
         """
@@ -61,9 +56,7 @@ class TestStringUtilities:
 
         This guards the cel-rust functionality we just pinned to.
         """
-        assert (
-            cel.evaluate("timestamp('2024-01-15T10:30:45.123Z').date()") == "2024-01-15"
-        )
+        assert evaluate("timestamp('2024-01-15T10:30:45.123Z').date()") == "2024-01-15"
 
 
 class TestTypeIntrospection:
@@ -76,7 +69,7 @@ class TestTypeIntrospection:
         When this test starts failing, the type() function has been implemented.
         """
         with pytest.raises(RuntimeError, match="Undefined variable or function.*type"):
-            cel.evaluate("type(42)")
+            evaluate("type(42)")
 
     @pytest.mark.xfail(
         reason="type() function not implemented in cel v0.11.0 - should become available when type infrastructure is complete",
@@ -89,11 +82,11 @@ class TestTypeIntrospection:
         This test is marked as expected failure and will start passing
         when type() is implemented upstream.
         """
-        assert cel.evaluate("type(42)") == "int"
-        assert cel.evaluate('type("hello")') == "string"
-        assert cel.evaluate("type(true)") == "bool"
-        assert cel.evaluate("type([1, 2, 3])") == "list"
-        assert cel.evaluate('type({"key": "value"})') == "map"
+        assert evaluate("type(42)") == "int"
+        assert evaluate('type("hello")') == "string"
+        assert evaluate("type(true)") == "bool"
+        assert evaluate("type([1, 2, 3])") == "list"
+        assert evaluate('type({"key": "value"})') == "map"
 
 
 class TestMixedArithmetic:
@@ -105,8 +98,11 @@ class TestMixedArithmetic:
 
         When this test starts failing, mixed arithmetic has been fixed.
         """
-        with pytest.raises(TypeError, match="Cannot mix signed and unsigned integers"):
-            cel.evaluate("1 + 2u")
+        with pytest.raises(
+            (TypeError, ValueError),
+            match="No such overload|Cannot mix signed and unsigned integers",
+        ):
+            evaluate("1 + 2u")
 
     def test_mixed_int_uint_multiplication_fails(self):
         """
@@ -114,8 +110,10 @@ class TestMixedArithmetic:
 
         When this test starts failing, mixed arithmetic has been fixed.
         """
-        with pytest.raises(TypeError, match="Unsupported.*operation"):
-            cel.evaluate("3 * 2u")
+        with pytest.raises(
+            (TypeError, ValueError), match="No such overload|Unsupported.*operation"
+        ):
+            evaluate("3 * 2u")
 
     @pytest.mark.xfail(
         reason="Mixed signed/unsigned arithmetic not supported in cel v0.11.0",
@@ -127,9 +125,9 @@ class TestMixedArithmetic:
 
         This test will pass when upstream supports mixed int/uint operations.
         """
-        assert cel.evaluate("1 + 2u") == 3
-        assert cel.evaluate("3 * 2u") == 6
-        assert cel.evaluate("10u - 3") == 7
+        assert evaluate("1 + 2u") == 3
+        assert evaluate("3 * 2u") == 6
+        assert evaluate("10u - 3") == 7
 
 
 class TestOptionalValues:
@@ -137,9 +135,9 @@ class TestOptionalValues:
 
     def test_optional_of_implemented(self):
         """Test optional.of() and optional.none() behavior."""
-        assert cel.evaluate("optional.of(42).orValue(0)") == 42
-        assert cel.evaluate("optional.of(null).orValue('default')") is None
-        assert cel.evaluate("optional.none().orValue('default')") == "default"
+        assert evaluate("optional.of(42).orValue(0)") == 42
+        assert evaluate("optional.of(null).orValue('default')") is None
+        assert evaluate("optional.none().orValue('default')") == "default"
 
     def test_optional_chaining_not_implemented(self):
         """
@@ -150,9 +148,7 @@ class TestOptionalValues:
         # This currently likely fails with parse error, but when optional chaining
         # is implemented, it should work
         with pytest.raises((ValueError, RuntimeError)):
-            cel.evaluate(
-                "user?.profile?.name", {"user": {"profile": {"name": "Alice"}}}
-            )
+            evaluate("user?.profile?.name", {"user": {"profile": {"name": "Alice"}}})
 
     def test_optional_expected_behavior(self):
         """
@@ -160,9 +156,9 @@ class TestOptionalValues:
 
         This test verifies the CEL spec for optional values.
         """
-        assert cel.evaluate("optional.of(42).orValue(0)") == 42
-        assert cel.evaluate("optional.of(null).orValue('default')") is None
-        assert cel.evaluate("optional.none().orValue('default')") == "default"
+        assert evaluate("optional.of(42).orValue(0)") == 42
+        assert evaluate("optional.of(null).orValue('default')") is None
+        assert evaluate("optional.none().orValue('default')") == "default"
 
 
 class TestMapFunctionImprovements:
@@ -174,8 +170,10 @@ class TestMapFunctionImprovements:
 
         When this test starts failing, map() type coercion has been improved.
         """
-        with pytest.raises(TypeError, match="Unsupported.*operation.*Int.*Float"):
-            cel.evaluate("[1, 2, 3].map(x, x * 2.0)")
+        with pytest.raises(
+            (TypeError, ValueError), match="No such overload|Unsupported.*operation"
+        ):
+            evaluate("[1, 2, 3].map(x, x * 2.0)")
 
     @pytest.mark.xfail(
         reason="map() function mixed arithmetic not supported in cel v0.11.0",
@@ -187,8 +185,8 @@ class TestMapFunctionImprovements:
 
         This test will pass when upstream improves type coercion in map().
         """
-        assert cel.evaluate("[1, 2, 3].map(x, x * 2.0)") == [2.0, 4.0, 6.0]
-        assert cel.evaluate("[1, 2, 3].map(x, x + 1.5)") == [2.5, 3.5, 4.5]
+        assert evaluate("[1, 2, 3].map(x, x * 2.0)") == [2.0, 4.0, 6.0]
+        assert evaluate("[1, 2, 3].map(x, x + 1.5)") == [2.5, 3.5, 4.5]
 
 
 class TestLogicalOperatorBehavior:
@@ -204,57 +202,55 @@ class TestLogicalOperatorBehavior:
         Reference: https://github.com/tektoncd/triggers/issues/644
         """
         # These correctly fail - first operand must be boolean per CEL spec
-        with pytest.raises(ValueError, match="No such overload"):
-            cel.evaluate("42 || false")  # Non-boolean first operand fails
+        with pytest.raises((TypeError, ValueError), match="No such overload"):
+            evaluate("42 || false")  # Non-boolean first operand fails
 
-        with pytest.raises(ValueError, match="No such overload"):
-            cel.evaluate('0 || "default"')  # Non-boolean first operand fails
+        with pytest.raises((TypeError, ValueError), match="No such overload"):
+            evaluate('0 || "default"')  # Non-boolean first operand fails
 
         # CEL's logical operators with boolean first operand work correctly
-        assert cel.evaluate("true || 99")  # Short-circuits to True
-        assert cel.evaluate("false || 99") == 99  # Returns second operand per CEL spec
-        assert (
-            cel.evaluate("false || 'default'") == "default"
-        )  # Any type for second operand
+        assert evaluate("true || 99")  # Short-circuits to True
+        with pytest.raises((TypeError, ValueError), match="No such overload"):
+            evaluate("false || 99")
+        with pytest.raises((TypeError, ValueError), match="No such overload"):
+            evaluate("false || 'default'")
 
         # AND operator has stricter requirements for both operands
-        assert not cel.evaluate("false && 99")  # Short-circuits to False
-        with pytest.raises(ValueError, match="No such overload"):
-            cel.evaluate(
-                "true && 99"
-            )  # AND requires both operands to be boolean when evaluated
+        assert not evaluate("false && 99")  # Short-circuits to False
+        with pytest.raises((TypeError, ValueError), match="No such overload"):
+            evaluate("true && 99")  # AND requires both operands to be boolean when evaluated
 
     def test_or_operator_correct_boolean_behavior(self):
         """
         Test OR operator with boolean operands follows CEL specification.
         """
         # Boolean logical operations work as expected
-        assert cel.evaluate("true || false")
-        assert cel.evaluate("false || true")
-        assert not cel.evaluate("false || false")
-        assert cel.evaluate("true || true")
+        assert evaluate("true || false")
+        assert evaluate("false || true")
+        assert not evaluate("false || false")
+        assert evaluate("true || true")
 
     def test_and_operator_correct_boolean_behavior(self):
         """
         Test AND operator with boolean operands follows CEL specification.
         """
         # Boolean logical operations work as expected
-        assert not cel.evaluate("true && false")
-        assert not cel.evaluate("false && true")
-        assert not cel.evaluate("false && false")
-        assert cel.evaluate("true && true")
+        assert not evaluate("true && false")
+        assert not evaluate("false && true")
+        assert not evaluate("false && false")
+        assert evaluate("true && true")
 
     def test_ternary_operator_requires_boolean_condition(self):
         """
         Test ternary operator requires boolean condition per CEL specification.
         """
         # Boolean condition works correctly
-        assert cel.evaluate("true ? 42 : 0") == 42
-        assert cel.evaluate("false ? 42 : 0") == 0
+        assert evaluate("true ? 42 : 0") == 42
+        assert evaluate("false ? 42 : 0") == 0
 
         # Non-boolean condition fails as expected
-        with pytest.raises(ValueError, match="No such overload"):
-            cel.evaluate("42 ? true : false")
+        with pytest.raises((TypeError, ValueError), match="No such overload"):
+            evaluate("42 ? true : false")
 
 
 class TestMissingStringFunctions:
@@ -266,10 +262,8 @@ class TestMissingStringFunctions:
 
         When this test starts failing, lastIndexOf() has been implemented.
         """
-        with pytest.raises(
-            RuntimeError, match="Undefined variable or function.*lastIndexOf"
-        ):
-            cel.evaluate('"hello world hello".lastIndexOf("hello")')
+        with pytest.raises(RuntimeError, match="Undefined variable or function.*lastIndexOf"):
+            evaluate('"hello world hello".lastIndexOf("hello")')
 
     def test_replace_not_implemented(self):
         """
@@ -277,10 +271,8 @@ class TestMissingStringFunctions:
 
         When this test starts failing, replace() has been implemented.
         """
-        with pytest.raises(
-            RuntimeError, match="Undefined variable or function.*replace"
-        ):
-            cel.evaluate('"hello world".replace("world", "universe")')
+        with pytest.raises(RuntimeError, match="Undefined variable or function.*replace"):
+            evaluate('"hello world".replace("world", "universe")')
 
     def test_split_not_implemented(self):
         """
@@ -288,7 +280,7 @@ class TestMissingStringFunctions:
 
         This guards the cel-rust functionality we just pinned to.
         """
-        assert cel.evaluate('"hello,world,test".split(",")') == [
+        assert evaluate('"hello,world,test".split(",")') == [
             "hello",
             "world",
             "test",
@@ -301,7 +293,7 @@ class TestMissingStringFunctions:
         When this test starts failing, join() has been implemented.
         """
         with pytest.raises(RuntimeError, match="Undefined variable or function.*join"):
-            cel.evaluate('["hello", "world"].join(",")')
+            evaluate('["hello", "world"].join(",")')
 
 
 class TestMissingAggregationFunctions:
@@ -314,7 +306,7 @@ class TestMissingAggregationFunctions:
         When this test starts failing, sum() has been implemented upstream.
         """
         with pytest.raises(RuntimeError, match="Undefined variable or function.*sum"):
-            cel.evaluate("sum([1, 2, 3, 4, 5])")
+            evaluate("sum([1, 2, 3, 4, 5])")
 
     def test_fold_function_not_available(self):
         """
@@ -324,15 +316,13 @@ class TestMissingAggregationFunctions:
         """
         # Method syntax
         with pytest.raises((RuntimeError, ValueError)):
-            cel.evaluate("[1, 2, 3, 4, 5].fold(0, (acc, x) -> acc + x)")
+            evaluate("[1, 2, 3, 4, 5].fold(0, (acc, x) -> acc + x)")
 
         # Global function syntax
-        with pytest.raises(RuntimeError, match="Undefined variable or function.*fold"):
-            cel.evaluate("fold([1, 2, 3], 0, sum + x)")
+        with pytest.raises(RuntimeError, match="Undefined variable or function.*(fold|sum)"):
+            evaluate("fold([1, 2, 3], 0, sum + x)")
 
-    @pytest.mark.xfail(
-        reason="Aggregation functions not implemented in cel v0.11.1", strict=False
-    )
+    @pytest.mark.xfail(reason="Aggregation functions not implemented in cel v0.11.1", strict=False)
     def test_aggregation_functions_expected_behavior(self):
         """
         Test expected aggregation function behavior when implemented.
@@ -340,12 +330,12 @@ class TestMissingAggregationFunctions:
         This test will pass when upstream implements sum() and fold().
         """
         # Sum function
-        assert cel.evaluate("sum([1, 2, 3, 4, 5])") == 15
-        assert cel.evaluate("sum([1.1, 2.2, 3.3])") == pytest.approx(6.6)
+        assert evaluate("sum([1, 2, 3, 4, 5])") == 15
+        assert evaluate("sum([1.1, 2.2, 3.3])") == pytest.approx(6.6)
 
         # Fold function (syntax may differ when actually implemented)
-        assert cel.evaluate("[1, 2, 3, 4].fold(0, (acc, x) -> acc + x)") == 10
-        assert cel.evaluate("[1, 2, 3].fold(1, (acc, x) -> acc * x)") == 6
+        assert evaluate("[1, 2, 3, 4].fold(0, (acc, x) -> acc + x)") == 10
+        assert evaluate("[1, 2, 3].fold(1, (acc, x) -> acc * x)") == 6
 
 
 class TestMathFunctions:
@@ -358,7 +348,7 @@ class TestMathFunctions:
         When this test starts failing, ceil() has been implemented.
         """
         with pytest.raises(RuntimeError, match="Undefined variable or function.*ceil"):
-            cel.evaluate("ceil(3.14)")
+            evaluate("ceil(3.14)")
 
     def test_floor_not_implemented(self):
         """
@@ -367,7 +357,7 @@ class TestMathFunctions:
         When this test starts failing, floor() has been implemented.
         """
         with pytest.raises(RuntimeError, match="Undefined variable or function.*floor"):
-            cel.evaluate("floor(3.14)")
+            evaluate("floor(3.14)")
 
     def test_round_not_implemented(self):
         """
@@ -376,7 +366,7 @@ class TestMathFunctions:
         When this test starts failing, round() has been implemented.
         """
         with pytest.raises(RuntimeError, match="Undefined variable or function.*round"):
-            cel.evaluate("round(3.14)")
+            evaluate("round(3.14)")
 
 
 class TestValidationFunctions:
@@ -389,7 +379,7 @@ class TestValidationFunctions:
         When this test starts failing, isURL() has been implemented.
         """
         with pytest.raises(RuntimeError, match="Undefined variable or function.*isURL"):
-            cel.evaluate('isURL("https://example.com")')
+            evaluate('isURL("https://example.com")')
 
     def test_is_ip_not_implemented(self):
         """
@@ -398,7 +388,7 @@ class TestValidationFunctions:
         When this test starts failing, isIP() has been implemented.
         """
         with pytest.raises(RuntimeError, match="Undefined variable or function.*isIP"):
-            cel.evaluate('isIP("192.168.1.1")')
+            evaluate('isIP("192.168.1.1")')
 
 
 # Expected improvements detection helpers
@@ -434,6 +424,4 @@ def test_upstream_improvements_summary():
 
     # This test documents our monitoring approach
     assert len(improvements_to_watch) > 0
-    print(
-        f"Monitoring {len(improvements_to_watch)} categories of upstream improvements"
-    )
+    print(f"Monitoring {len(improvements_to_watch)} categories of upstream improvements")

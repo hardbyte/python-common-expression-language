@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `cel.prepare(value)` and opaque immutable `PreparedValue` handles for one-time Python-to-CEL conversion.
+- Added direct reusable native contexts; prepared values can be shared across contexts and replaced with a cheap shared-handle insertion.
+
+### Changed
+
+- `Context()` now accepts no constructor arguments, and `Context.add_variable()` accepts only `PreparedValue`.
+- `Program.execute(context)` and `evaluate(expression, context)` now require a `Context` and borrow its native CEL environment directly.
+- Prepared values capture a snapshot of mutable Python inputs. Retain prepared objects used for hot-path replacement to avoid final-reference recursive destruction in the hot path.
+
+### Removed
+
+- Removed context constructor mappings, `Context.update()`, raw variable insertion, dictionary execution, and optional/omitted execution contexts.
+
 ## [0.5.6] - 2026-02-07
 
 ### Fixed

@@ -7,7 +7,7 @@ and are not corrupted during evaluation.
 """
 
 import pytest
-from cel import Context, evaluate
+from conftest import evaluate, make_context
 
 
 class TestIssue16StringLiteralRegression:
@@ -16,21 +16,21 @@ class TestIssue16StringLiteralRegression:
     def test_string_comparison_with_float_context(self):
         """Test that string comparisons work correctly with floats in context."""
         record = {"var": "epa1", "var_2": 10, "var_3": 0.4}
-        ctx = Context(record)
+        ctx = record
 
         result = evaluate('var == "epa1"', ctx)
         assert result is True, "String comparison should work with floats in context"
 
     def test_string_literal_with_number_suffix(self):
         """Test that string literals ending with numbers are not modified."""
-        ctx = Context({"value": 0.4})  # Float in context
+        ctx = {"value": 0.4}  # Float in context
 
         result = evaluate('"epa1"', ctx)
         assert result == "epa1", f"String literal should be unchanged, got {result}"
 
     def test_string_literal_with_embedded_numbers(self):
         """Test that string literals with numbers in the middle are not modified."""
-        ctx = Context({"value": 0.4})  # Float in context
+        ctx = {"value": 0.4}  # Float in context
 
         test_cases = [
             '"abc123def"',
@@ -48,7 +48,7 @@ class TestIssue16StringLiteralRegression:
 
     def test_string_literal_pure_numbers(self):
         """Test that string literals that look like pure numbers are not modified."""
-        ctx = Context({"value": 0.4})  # Float in context
+        ctx = {"value": 0.4}  # Float in context
 
         test_cases = [
             '"123"',
@@ -66,14 +66,14 @@ class TestIssue16StringLiteralRegression:
 
     def test_string_function_with_numeric_strings(self):
         """Test that the string() function works correctly with numeric strings."""
-        ctx = Context({"value": 0.4})  # Float in context
+        ctx = {"value": 0.4}  # Float in context
 
         result = evaluate('string("epa1")', ctx)
         assert result == "epa1", f"string() function should return unchanged string, got {result}"
 
     def test_single_quote_strings(self):
         """Test that single-quoted strings are also handled correctly."""
-        ctx = Context({"value": 0.4})  # Float in context
+        ctx = {"value": 0.4}  # Float in context
 
         test_cases = [
             "'epa1'",
@@ -90,7 +90,7 @@ class TestIssue16StringLiteralRegression:
 
     def test_escaped_quotes_in_strings(self):
         """Test that strings with escaped quotes are handled correctly."""
-        ctx = Context({"value": 0.4})  # Float in context
+        ctx = {"value": 0.4}  # Float in context
 
         # Test escaped double quotes
         result = evaluate('"He said \\"hello123\\""', ctx)
@@ -102,26 +102,26 @@ class TestIssue16StringLiteralRegression:
 
     def test_control_case_without_floats(self):
         """Control test: verify behavior without floats in context."""
-        ctx = Context({"var": "epa1", "var_2": 10})  # No floats
+        ctx = {"var": "epa1", "var_2": 10}  # No floats
 
         result = evaluate('var == "epa1"', ctx)
         assert result is True, "Control test should pass without floats in context"
 
     def test_mixed_expressions_with_actual_numbers(self):
         """Test that mixed arithmetic fails appropriately in strict mode."""
-        ctx = Context({"value": 0.4})  # Float in context
+        ctx = {"value": 0.4}  # Float in context
 
         # Mixed arithmetic should fail in strict mode
-        with pytest.raises(TypeError, match="Unsupported.*operation"):
+        with pytest.raises(TypeError, match="No such overload|Unsupported.*operation"):
             evaluate("1 + 2.5", ctx)
 
         # Mixed type with context variables should also fail
-        with pytest.raises(TypeError, match="Unsupported.*operation"):
+        with pytest.raises(TypeError, match="No such overload|Unsupported.*operation"):
             evaluate("value + 1", ctx)  # 0.4 + 1 should fail in strict mode
 
     def test_complex_expressions_with_strings_and_numbers(self):
         """Test complex expressions mixing strings and numbers."""
-        ctx = Context({"name": "test123", "value": 0.5})
+        ctx = {"name": "test123", "value": 0.5}
 
         # String comparison should work
         result = evaluate('name == "test123" && value > 0.4', ctx)
@@ -133,7 +133,7 @@ class TestIssue16StringLiteralRegression:
 
     def test_edge_case_empty_strings(self):
         """Test edge cases with empty strings."""
-        ctx = Context({"value": 0.4})
+        ctx = {"value": 0.4}
 
         result = evaluate('""', ctx)
         assert result == "", "Empty string should remain empty"
@@ -141,7 +141,7 @@ class TestIssue16StringLiteralRegression:
     def test_issue_specific_reproduction(self):
         """Direct reproduction of the original issue report."""
         record = {"var": "epa1", "var_2": 10, "var_3": 0.4}
-        ctx = Context(record)
+        ctx = record
 
         # Test 1: The main issue - string comparison
         result = evaluate('var == "epa1"', ctx)

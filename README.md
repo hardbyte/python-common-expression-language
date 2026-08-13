@@ -36,21 +36,26 @@ After installation, both the Python library and the `cel` command-line tool will
 
 ### Python API
 
+Python values are prepared explicitly and installed into a reusable native context:
+
 ```python
-from cel import evaluate
+import cel
 
-# Simple expressions
-result = evaluate("1 + 2")  # 3
-result = evaluate("'Hello ' + 'World'")  # "Hello World"
-result = evaluate("age >= 18", {"age": 25})  # True
+context = cel.Context()
+context.add_variable("age", cel.prepare(25))
+result = cel.evaluate("age >= 18", context)  # True
 
-# Complex expressions with context
-result = evaluate(
+context.add_variable(
+    "user",
+    cel.prepare({"role": "admin"}),
+)
+context.add_variable(
+    "permissions",
+    cel.prepare(["read", "write", "delete"]),
+)
+result = cel.evaluate(
     'user.role == "admin" && "write" in permissions',
-    {
-        "user": {"role": "admin"},
-        "permissions": ["read", "write", "delete"]
-    }
+    context,
 )  # True
 ```
 
@@ -67,24 +72,34 @@ cel 'age >= 18' --context '{"age": 25}'  # true
 cel --interactive
 ```
 
-### Pre-compilation for Performance
+### Prepared Values and Reusable Contexts
 
-When evaluating the same expression multiple times with different contexts, use `compile()` for better performance:
+Prepare large values outside the hot path. Prepared values are immutable snapshots and can be shared by multiple contexts. Installing a retained prepared value only clones a shared handle:
 
 ```python
 import cel
 
-# Compile once
-program = cel.compile("price * quantity > threshold")
+data = {
+    "objects": [
+        {"active": i % 2 == 0, "score": i, "profile": {"enabled": True}}
+        for i in range(500)
+    ]
+}
+prepared = cel.prepare(data)
+context = cel.Context()
+program = cel.compile("data.objects[3].profile.enabled")
 
-# Execute many times - much faster than repeated evaluate() calls
-result1 = program.execute({"price": 10, "quantity": 5, "threshold": 40})  # True
-result2 = program.execute({"price": 5, "quantity": 3, "threshold": 20})   # False
+for _ in range(100_000):
+    context.add_variable("data", prepared)
+    result = program.execute(context)
 ```
+
+Retain prepared objects used for frequent replacement. If a context owns the final reference to a large prepared value, replacing or dropping it may recursively free the value and therefore take time proportional to its size. Returning a large map/list or passing one to a Python callback is also proportional to that result or argument size.
 
 ### Custom Functions
 
 ```python
+import cel
 from cel import Context, evaluate
 
 def calculate_discount(price, rate):
@@ -92,7 +107,7 @@ def calculate_discount(price, rate):
 
 context = Context()
 context.add_function("calculate_discount", calculate_discount)
-context.add_variable("price", 100)
+context.add_variable("price", cel.prepare(100))
 
 result = evaluate("price - calculate_discount(price, 0.1)", context)  # 90.0
 ```
@@ -100,6 +115,7 @@ result = evaluate("price - calculate_discount(price, 0.1)", context)  # 90.0
 ### Real-World Example
 
 ```python
+import cel
 from cel import evaluate, Context
 
 # Access control policy
@@ -109,11 +125,9 @@ user.role == "admin" ||
 """
 
 context = Context()
-context.update({
-    "user": {"id": "alice", "role": "user"},
-    "resource": {"owner": "alice"},
-    "current_hour": 14  # 2 PM
-})
+context.add_variable("user", cel.prepare({"id": "alice", "role": "user"}))
+context.add_variable("resource", cel.prepare({"owner": "alice"}))
+context.add_variable("current_hour", cel.prepare(14))
 
 access_granted = evaluate(policy, context)  # True
 ```

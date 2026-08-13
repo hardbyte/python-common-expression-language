@@ -12,17 +12,17 @@ This comprehensive guide covers all CEL syntax, operators, and built-in function
 
 Python CEL implements a comprehensive subset of the CEL specification:
 
-✅ **Core CEL Types**: Integers (signed/unsigned), floats, booleans, strings, bytes, lists, maps, null  
-✅ **Arithmetic Operations**: `+`, `-`, `*`, `/`, `%` (strict type matching required)  
-✅ **Comparison Operations**: `==`, `!=`, `<`, `>`, `<=`, `>=`  
-✅ **Logical Operations**: `&&`, `||`, `!` with short-circuit evaluation  
-✅ **String Operations**: Concatenation, indexing, `startsWith()`, `endsWith()`, `contains()`, `size()`  
-✅ **Collection Operations**: List/map indexing, `size()`, `.all()`, `.exists()`, `.filter()`  
-✅ **Datetime Support**: `timestamp()` and `duration()` functions with arithmetic  
-✅ **Member Access**: Dot notation, bracket notation, safe access patterns  
-✅ **Ternary Operator**: `condition ? true_value : false_value`  
-✅ **Type Functions**: `has()`, conversion functions  
-✅ **Python Integration**: Custom functions, Python ↔ CEL type conversion  
+✅ **Core CEL Types**: Integers (signed/unsigned), floats, booleans, strings, bytes, lists, maps, null
+✅ **Arithmetic Operations**: `+`, `-`, `*`, `/`, `%` (strict type matching required)
+✅ **Comparison Operations**: `==`, `!=`, `<`, `>`, `<=`, `>=`
+✅ **Logical Operations**: `&&`, `||`, `!` with short-circuit evaluation
+✅ **String Operations**: Concatenation, indexing, `startsWith()`, `endsWith()`, `contains()`, `size()`
+✅ **Collection Operations**: List/map indexing, `size()`, `.all()`, `.exists()`, `.filter()`
+✅ **Datetime Support**: `timestamp()` and `duration()` functions with arithmetic
+✅ **Member Access**: Dot notation, bracket notation, safe access patterns
+✅ **Ternary Operator**: `condition ? true_value : false_value`
+✅ **Type Functions**: `has()`, conversion functions
+✅ **Python Integration**: Custom functions, Python ↔ CEL type conversion
 
 See [CEL Compliance](../reference/cel-compliance.md) for detailed feature status.
 
@@ -31,7 +31,7 @@ See [CEL Compliance](../reference/cel-compliance.md) for detailed feature status
 ### Numbers
 ```cel
 42          // Integer
-42u         // Unsigned integer  
+42u         // Unsigned integer
 3.14        // Double/float
 -17         // Negative numbers
 1e6         // Scientific notation (1,000,000)
@@ -157,7 +157,7 @@ has(obj.field)     // Field existence → true/false
 timestamp("2024-01-01T00:00:00Z")           // From ISO string
 timestamp("2024-01-01T00:00:00-05:00")      // With timezone
 
-// Create durations  
+// Create durations
 duration("1h")        // 1 hour
 duration("30m")       // 30 minutes
 duration("1h30m")     // 1 hour 30 minutes
@@ -174,7 +174,7 @@ timestamp("2024-01-01T14:00:00Z") - duration("1h")  // Subtract duration
 // Check all items meet condition
 [1, 2, 3].all(x, x > 0)           // → true
 
-// Check any item meets condition  
+// Check any item meets condition
 [1, 2, 3].exists(x, x == 2)       // → true
 
 // Filter items by condition
@@ -226,7 +226,7 @@ age >= 0 && age <= 120
 // Required field validation
 has(user.name) && user.name != ""
 
-// Numeric validation 
+// Numeric validation
 has(user.age) && user.age > 0
 ```
 
@@ -235,7 +235,7 @@ has(user.age) && user.age > 0
 // Role-based access
 user.role == "admin"
 
-// Multi-role access  
+// Multi-role access
 user.role in ["admin", "moderator"]
 
 // Permission-based access
@@ -266,7 +266,7 @@ hour >= 9 && hour <= 17  // Business hours
 users.filter(u, u.active)
 
 // Find admin users
-users.filter(u, u.role == "admin") 
+users.filter(u, u.role == "admin")
 
 // Complex filtering
 orders.filter(o, o.total > 100 && o.status == "paid")
@@ -290,7 +290,7 @@ email.contains("@") && email.endsWith(".com")
 {"status": active ? "enabled" : "disabled"}
 ```
 
-### List Construction  
+### List Construction
 ```cel
 // Dynamic lists from filtering
 users.filter(u, u.active).map(u, u.name)  // Names of active users
@@ -300,7 +300,7 @@ users.filter(u, u.active).map(u, u.name)  // Names of active users
 
 ### Supported Types
 - **int**: 64-bit signed integers
-- **uint**: 64-bit unsigned integers  
+- **uint**: 64-bit unsigned integers
 - **double**: 64-bit floating point
 - **string**: UTF-8 strings
 - **bool**: true/false

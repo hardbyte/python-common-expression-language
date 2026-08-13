@@ -8,6 +8,7 @@ import datetime
 import time
 
 import cel
+from conftest import evaluate
 
 
 def test_large_list_conversion_performance():
@@ -16,7 +17,7 @@ def test_large_list_conversion_performance():
     large_list = list(range(1000))
 
     start_time = time.time()
-    result = cel.evaluate("size(items)", {"items": large_list})
+    result = evaluate("size(items)", {"items": large_list})
     end_time = time.time()
 
     # Verify correctness
@@ -32,7 +33,7 @@ def test_large_dict_conversion_performance():
     large_dict = {f"key_{i}": i for i in range(100)}
 
     start_time = time.time()
-    result = cel.evaluate("size(data)", {"data": large_dict})
+    result = evaluate("size(data)", {"data": large_dict})
     end_time = time.time()
 
     # Verify correctness
@@ -58,7 +59,7 @@ def test_nested_structure_conversion_performance():
     }
 
     start_time = time.time()
-    result = cel.evaluate("size(data.level1.level2.level3.numbers)", {"data": nested_data})
+    result = evaluate("size(data.level1.level2.level3.numbers)", {"data": nested_data})
     end_time = time.time()
 
     # Verify correctness
@@ -80,7 +81,7 @@ def test_function_call_performance():
     # Test with multiple function calls
     start_time = time.time()
     for _i in range(50):  # 50 function calls
-        result = cel.evaluate("test_func(1, 2, 3, 4, 5)", context)
+        result = evaluate("test_func(1, 2, 3, 4, 5)", context)
         assert result == 15
     end_time = time.time()
 
@@ -101,12 +102,12 @@ def test_mixed_type_conversion_performance():
 
     start_time = time.time()
     # Test various operations on mixed data
-    result1 = cel.evaluate("size(data.integers)", {"data": mixed_data})
-    result2 = cel.evaluate("size(data.floats)", {"data": mixed_data})
-    result3 = cel.evaluate("size(data.strings)", {"data": mixed_data})
-    result4 = cel.evaluate("size(data.booleans)", {"data": mixed_data})
-    result5 = cel.evaluate("size(data.dates)", {"data": mixed_data})
-    result6 = cel.evaluate("size(data.bytes)", {"data": mixed_data})
+    result1 = evaluate("size(data.integers)", {"data": mixed_data})
+    result2 = evaluate("size(data.floats)", {"data": mixed_data})
+    result3 = evaluate("size(data.strings)", {"data": mixed_data})
+    result4 = evaluate("size(data.booleans)", {"data": mixed_data})
+    result5 = evaluate("size(data.dates)", {"data": mixed_data})
+    result6 = evaluate("size(data.bytes)", {"data": mixed_data})
     end_time = time.time()
 
     # Verify correctness
@@ -127,7 +128,7 @@ def test_string_processing_performance():
     long_string = "hello world " * 100
 
     start_time = time.time()
-    result = cel.evaluate("text + ' suffix'", {"text": long_string})
+    result = evaluate("text + ' suffix'", {"text": long_string})
     end_time = time.time()
 
     # Verify correctness

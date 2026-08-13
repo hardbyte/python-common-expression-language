@@ -23,12 +23,41 @@ Your application needs to build database queries dynamically based on user input
 Use CEL to build safe, dynamic filters that combine user criteria with security constraints:
 
 ```python
+import cel
+Context = cel.Context
+
+
+def add_variables(context, values):
+    for name, value in values.items():
+        if callable(value):
+            context.add_function(name, value)
+        else:
+            context.add_variable(name, cel.prepare(value))
+    return context
+
+
+def make_context(values=None):
+    context = cel.Context()
+    if values:
+        add_variables(context, values)
+    return context
+
+
+def as_context(value=None):
+    if isinstance(value, cel.Context):
+        return value
+    return make_context(value)
+
+
+def evaluate(expression, context=None):
+    return cel.evaluate(expression, as_context(context))
+
 import json
-from cel import evaluate, Context
+# Context/evaluate are provided by the documentation adapter
 
 class DynamicQueryBuilder:
     """Build database queries dynamically using CEL expressions."""
-    
+
     def __init__(self):
         self.base_security_filters = {
             "admin": "true",  # Admins see everything
@@ -36,7 +65,7 @@ class DynamicQueryBuilder:
             "user": "record.user_id == user.id",
             "guest": "record.public == true"
         }
-    
+
     def _format_value(self, value):
         """Format values correctly for CEL expressions."""
         if isinstance(value, str):
@@ -47,20 +76,20 @@ class DynamicQueryBuilder:
             return "null"
         else:
             return str(value)  # Numbers
-    
+
     def build_filter(self, user, user_filters):
         """Build a filter that combines security and user criteria."""
-        
+
         # Get base security filter for user's role
         security_filter = self.base_security_filters.get(user["role"], "false")
-        
+
         # Build user filter from criteria
         user_filter_parts = []
         for criterion in user_filters:
             field = criterion["field"]
             operator = criterion["operator"]
             value = criterion["value"]
-            
+
             # Build CEL expression based on operator
             if operator == "equals":
                 user_filter_parts.append(f'record.{field} == {self._format_value(value)}')
@@ -74,29 +103,29 @@ class DynamicQueryBuilder:
                 # value should be a list
                 value_list = ', '.join(self._format_value(v) for v in value)
                 user_filter_parts.append(f'record.{field} in [{value_list}]')
-        
+
         # Combine user filters with AND
         user_filter = " && ".join(user_filter_parts) if user_filter_parts else "true"
-        
+
         # Combine security filter with user filter
         combined_filter = f"({security_filter}) && ({user_filter})"
-        
+
         return combined_filter
-    
+
     def test_filter(self, filter_expression, user, sample_records):
         """Test filter against sample records."""
         context = Context()
-        context.add_variable("user", user)
-        
+        context.add_variable("user", cel.prepare(user))
+
         matching_records = []
         for record in sample_records:
-            context.add_variable("record", record)
+            context.add_variable("record", cel.prepare(record))
             try:
-                if evaluate(filter_expression, context):
+                if evaluate(filter_expression, as_context(context)):
                     matching_records.append(record)
             except Exception as e:
                 print(f"Error evaluating filter for record {record.get('id', 'unknown')}: {e}")
-        
+
         return matching_records
 
 # Example usage
@@ -139,7 +168,7 @@ print("User filter:", user_filter)
 
 # Test filters
 admin_results = query_builder.test_filter(admin_filter, admin_user, sample_records)
-# → [{'id': '1', 'user_id': 'user1', 'department': 'Sales', 'amount': 1500, 'status': 'active', 'public': False}, 
+# → [{'id': '1', 'user_id': 'user1', 'department': 'Sales', 'amount': 1500, 'status': 'active', 'public': False},
 #    {'id': '5', 'user_id': 'user4', 'department': 'Sales', 'amount': 1800, 'status': 'active', 'public': True}]
 
 manager_results = query_builder.test_filter(manager_filter, manager_user, sample_records)
@@ -158,12 +187,12 @@ print(f"User sees {len(user_results)} records")
 
 # Verify expected results
 assert len(admin_results) == 2  # Admin sees all matching records
-assert len(manager_results) == 2  # Manager sees Sales records  
+assert len(manager_results) == 2  # Manager sees Sales records
 assert len(user_results) == 1  # User sees only their own record
 assert user_results[0]["user_id"] == "user1"
 # → All assertions pass
 
-# Verify the filter expressions are constructed correctly  
+# Verify the filter expressions are constructed correctly
 assert "(true)" in admin_filter  # Admin has no restrictions
 assert "record.department == user.department" in manager_filter  # Manager restricted by department
 assert "record.user_id == user.id" in user_filter  # User restricted to own records
@@ -183,7 +212,7 @@ filter_expr = query_builder.build_filter(admin_user, mixed_filters)
 # → "(true) && (record.active == true && record.score > 85.5 && record.category in [\"urgent\", \"sales\"] && record.notes == null)"
 # Individual parts:
 # record.active == true
-# record.score > 85.5  
+# record.score > 85.5
 # record.category in ["urgent", "sales"]
 # record.notes == null
 
@@ -194,7 +223,7 @@ print("✓ Dynamic query filters working correctly")
 ## Why This Works
 
 - **Secure**: Security constraints are always applied regardless of user input
-- **Flexible**: Users can build complex queries within their permissions  
+- **Flexible**: Users can build complex queries within their permissions
 - **Safe**: CEL prevents injection attacks and ensures expressions terminate
 - **Testable**: Filters can be tested against sample data before deployment
 - **Maintainable**: Query logic is separated from application code

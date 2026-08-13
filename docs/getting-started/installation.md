@@ -21,7 +21,7 @@ Getting Python CEL up and running is quick and easy.
 === "uv tool (CLI only)"
 
     Install the CLI tool globally:
-    
+
     ```bash
     uv tool install common-expression-language
     # → Installed common-expression-language 0.11.0
@@ -45,7 +45,36 @@ After installation, you should have both the Python library and CLI tool availab
 
 ```python
 import cel
-result = cel.evaluate("1 + 2")
+Context = cel.Context
+
+
+def add_variables(context, values):
+    for name, value in values.items():
+        if callable(value):
+            context.add_function(name, value)
+        else:
+            context.add_variable(name, cel.prepare(value))
+    return context
+
+
+def make_context(values=None):
+    context = cel.Context()
+    if values:
+        add_variables(context, values)
+    return context
+
+
+def as_context(value=None):
+    if isinstance(value, cel.Context):
+        return value
+    return make_context(value)
+
+
+def evaluate(expression, context=None):
+    return cel.evaluate(expression, as_context(context))
+
+import cel
+result = evaluate("1 + 2", cel.Context())
 # → 3
 assert result == 3
 print("✓ Basic evaluation working correctly")

@@ -1,109 +1,141 @@
+import datetime
+
 import cel
 import pytest
 
 
-def test_create_empty_context():
-    cel.Context()
+def bind(context, name, value):
+    context.add_variable(name, cel.prepare(value))
 
 
-def test_context_vars_explicit():
-    context = cel.Context(variables={"a": 10})
-    assert cel.evaluate("a", context) == 10
-
-
-def test_context_vars_implicit():
-    context = cel.Context({"a": 10})
-    assert cel.evaluate("a", context) == 10
-
-
-def test_context_vars_none_value():
-    context = cel.Context({"a": None})
-    assert cel.evaluate("a", context) is None
-
-
-def test_adding_to_context():
+def test_context_is_empty_and_accepts_no_constructor_arguments():
     context = cel.Context()
+    assert repr(context) == "Context()"
 
-    with pytest.raises(
-        RuntimeError
-    ):  # Enhanced error handling now raises RuntimeError for undefined variables
-        assert cel.evaluate("a + 2", context) == 4
+    with pytest.raises(TypeError):
+        cel.Context({"a": 1})
+    with pytest.raises(TypeError):
+        cel.Context(variables={"a": 1})
+    with pytest.raises(TypeError):
+        cel.Context(functions={"f": lambda: None})
 
-    context.add_variable("a", 2)
-    assert cel.evaluate("a + 2", context) == 4
 
-
-def test_explicit_context():
+def test_context_exposes_only_narrow_mutation_api():
     context = cel.Context()
-    context.add_variable("a", 2)
-    assert cel.evaluate("a + 2", context) == 4
+    assert not hasattr(context, "variables")
+    assert not hasattr(context, "functions")
+    assert not hasattr(context, "update")
+    with pytest.raises(TypeError):
+        len(context)
 
 
-def test_custom_function_init_context():
-    def custom_function(a, b):
+def test_add_and_replace_prepared_variable():
+    context = cel.Context()
+    program = cel.compile("data.value")
+
+    bind(context, "data", {"value": 1})
+    assert program.execute(context) == 1
+
+    bind(context, "data", {"value": 2})
+    assert program.execute(context) == 2
+
+
+def test_repeated_and_alternating_prepared_bindings():
+    context = cel.Context()
+    one = cel.prepare({"value": 1})
+    two = cel.prepare({"value": 2})
+    program = cel.compile("data.value")
+
+    for prepared, expected in [(one, 1), (one, 1), (two, 2), (one, 1), (two, 2)]:
+        context.add_variable("data", prepared)
+        assert program.execute(context) == expected
+
+
+def test_replacing_one_variable_preserves_others():
+    context = cel.Context()
+    bind(context, "a", 1)
+    bind(context, "b", 2)
+    bind(context, "a", 40)
+    assert cel.compile("a + b").execute(context) == 42
+
+
+@pytest.mark.parametrize(
+    "raw_value",
+    [
+        1,
+        True,
+        1.5,
+        "value",
+        b"value",
+        [1],
+        (1,),
+        {"value": 1},
+        datetime.datetime.now(),
+        datetime.timedelta(seconds=1),
+        cel.OptionalValue.none(),
+    ],
+)
+def test_add_variable_rejects_raw_python_values(raw_value):
+    with pytest.raises(TypeError):
+        cel.Context().add_variable("value", raw_value)
+
+
+def test_undefined_variable_is_an_execution_error():
+    context = cel.Context()
+    with pytest.raises(RuntimeError, match="Undefined variable"):
+        cel.compile("missing").execute(context)
+
+
+def test_function_registration_and_repeated_execution():
+    calls = []
+
+    def add(a, b):
+        calls.append((a, b))
         return a + b
 
-    context = cel.Context(functions={"f": custom_function})
+    context = cel.Context()
+    context.add_function("add", add)
+    bind(context, "data", {"left": 20, "right": 22})
+    program = cel.compile("add(data.left, data.right)")
 
-    assert cel.evaluate("f(1, 2)", context) == 3
-
-
-def test_context_init_vars_and_funcs():
-    def custom_function(a, b):
-        return a + b
-
-    context = cel.Context({"a": 10}, functions={"f": custom_function})
-
-    assert cel.evaluate("f(a, 2)", context) == 12
+    assert program.execute(context) == 42
+    assert program.execute(context) == 42
+    assert calls == [(20, 22), (20, 22)]
 
 
-def test_custom_function_with_explicit_context():
-    def custom_function(a, b):
-        return a + b
+def test_function_must_be_callable():
+    with pytest.raises(TypeError, match="callable"):
+        cel.Context().add_function("not_callable", 42)
+
+
+def test_function_results_are_converted_to_cel():
+    context = cel.Context()
+    context.add_function("make", lambda: {"answer": [40, 42]})
+    assert cel.compile("make().answer[1]").execute(context) == 42
+
+
+def test_function_exceptions_become_execution_errors():
+    def fail():
+        raise ValueError("useful callback failure")
 
     context = cel.Context()
-    context.add_function("custom_function", custom_function)
-    assert cel.evaluate("custom_function(1, 2)", context) == 3
+    context.add_function("fail", fail)
+    with pytest.raises(RuntimeError, match="useful callback failure"):
+        cel.compile("fail()").execute(context)
 
 
-def test_updating_explicit_context():
-    def custom_function(a, b):
-        return a + b
-
+def test_nested_data_and_none():
     context = cel.Context()
-    context.update(
+    bind(
+        context,
+        "data",
         {
-            "custom_function": custom_function,
-            "a": 40,
-            "b": 2,
-        }
+            "spec": {"nameserver": None, "host": "github.com"},
+            "response": {"response-code": "NOERROR", "addresses": ["4.237.22.38"]},
+        },
     )
-    assert cel.evaluate("custom_function(a, b)", context) == 42
 
-
-def test_nested_context_none():
-    """Test that nested context with None values works correctly"""
-    context = {
-        "spec": {
-            "type": "dns",
-            "nameserver": None,
-            "host": "github.com",
-            "timeout": 30.0,
-        },
-        "data": {
-            "canonical_name": "github.com.",
-            "expiration": 1732097106.7902246,
-            "A": ["4.237.22.38"],
-            "response-code": "NOERROR",
-            "startTimestamp": "2024-11-20T10:04:59.789017+00:00",
-            "endTimestamp": "2024-11-20T10:04:59.790298+00:00",
-        },
-    }
-
-    cel_context = cel.Context(variables=context)
-
-    # Test that we can access nested values and None
-    assert cel.evaluate("spec.nameserver", cel_context) is None
-    assert cel.evaluate("spec.host", cel_context) == "github.com"
-    assert cel.evaluate("data['response-code']", cel_context) == "NOERROR"
-    assert cel.evaluate("size(data.A)", cel_context) == 1
+    assert cel.compile("data.spec.nameserver").execute(context) is None
+    assert cel.compile("data.spec.host").execute(context) == "github.com"
+    assert cel.compile("data.response['response-code']").execute(context) == "NOERROR"
+    assert cel.compile("size(data.response.addresses)").execute(context) == 1
