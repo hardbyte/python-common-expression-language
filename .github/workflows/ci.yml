@@ -244,6 +244,14 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             echo "Release $GITHUB_REF_NAME already exists; refreshing its assets."
             gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+            # `gh release create` with assets creates a draft, uploads, then publishes,
+            # and deletes the draft if an upload fails. A job that dies before that
+            # cleanup runs leaves a draft behind, so publish it rather than exiting
+            # with the release invisible.
+            if [ "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = "true" ]; then
+              echo "Release was left as a draft by an earlier run; publishing it."
+              gh release edit "$GITHUB_REF_NAME" --draft=false
+            fi
             exit 0
           fi
           version="${GITHUB_REF_NAME#v}"
