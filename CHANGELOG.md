@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Updated
+
+- Releases publish to PyPI with
+  [trusted publishing](https://docs.pypi.org/trusted-publishers/) instead of a
+  stored `PYPI_API_TOKEN`: the release job exchanges a short-lived GitHub OIDC
+  token for the upload credential, so no long-lived PyPI token is kept in repository
+  secrets. The job runs in a `pypi` environment, which the trusted publisher on
+  PyPI is configured against.
+- The release job now also creates the GitHub release for the pushed tag, using the
+  matching `CHANGELOG.md` section as the release notes and attaching the wheels and
+  sdist. Pushing a tag previously published to PyPI but left no GitHub release
+  behind.
+
 ## [0.8.0] - 2026-08-19
 
 Adds the `sum` aggregation to the extended standard library, refreshes the locked
