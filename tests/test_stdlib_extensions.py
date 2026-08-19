@@ -1,5 +1,7 @@
 """Tests for the extended standard library (cel.stdlib)."""
 
+from datetime import timedelta
+
 import cel
 import pytest
 from cel.stdlib import EXTENSIONS, STDLIB_FUNCTIONS, add_stdlib_to_context
@@ -92,6 +94,21 @@ class TestCore:
     def test_sum_composes_with_map(self, ctx):
         ctx.update({"items": [{"weight": 0.5}, {"weight": 0.25}, {"weight": 0.25}]})
         assert ev("items.map(i, i.weight).sum() == 1.0", ctx) is True
+
+    def test_sum_of_uints_returns_int(self, ctx):
+        # Python has one integer type, so unsignedness cannot survive the callback
+        # boundary; the sum is correct but comes back as an int, which means uint
+        # arithmetic on the result has no overload. Documented in cel.stdlib.
+        assert ev("sum([1u, 2u])", ctx) == 3
+        with pytest.raises(TypeError, match="No such overload"):
+            ev("sum([1u, 2u]) + 1u", ctx)
+
+    def test_sum_of_durations_is_microsecond_resolution(self, ctx):
+        # datetime.timedelta cannot hold nanoseconds, and the conversion happens
+        # before sum() runs: plain evaluate() truncates duration("1ns") too.
+        assert ev('duration("1ns")', ctx) == timedelta(0)
+        assert ev('sum([duration("1ns"), duration("1ns")]) == duration("2ns")', ctx) is False
+        assert ev('sum([duration("1500ns")])', ctx) == timedelta(microseconds=1)
 
     def test_sum_rejects_bools(self, ctx):
         # Python would count True/False as 1/0; CEL has no bool arithmetic.

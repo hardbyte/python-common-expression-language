@@ -54,6 +54,15 @@ Compatibility notes / known limitations versus cel-go:
   Python equality, which treats ``True == 1`` and ``False == 0``. Lists that
   mix booleans with the integers ``0``/``1`` may therefore behave differently
   from a spec-strict CEL implementation, which keeps the types distinct.
+* Every function here runs as a Python callback, so results are converted back
+  through Python's type system. Two CEL types survive that round trip lossily:
+  ``uint`` returns as ``int`` (Python has a single integer type), which means
+  ``sum([1u, 2u]) + 1u`` raises a no-such-overload ``TypeError`` where the native
+  ``[1u, 2u][0] + 1u`` succeeds; and ``duration`` is carried by
+  :class:`datetime.timedelta`, whose resolution is microseconds, so sub-microsecond
+  durations are rounded before a function ever sees them (plain
+  :func:`cel.evaluate` truncates ``duration("1ns")`` the same way). Keep uint
+  arithmetic and nanosecond durations inside native CEL expressions.
 * ``min``/``max``/``sum`` are aggregation helpers rather than spec functions:
   CEL itself has none, cel-go keeps only ``math.greatest``/``math.least``, and
   cel-rust 0.14 deliberately dropped ``min``/``max`` from its default overloads.
@@ -178,10 +187,15 @@ def max_(*args: Any) -> Any:
 def sum_(*args: Any) -> Any:
     """Return the sum of the arguments (or of a single list argument).
 
-    Follows the ``sum`` of Kubernetes' CEL list library: every numeric type is
-    supported, as is ``duration``. Summing an empty list yields ``0``. Booleans
-    are rejected rather than counted as ``1``/``0``, and numbers cannot be mixed
-    with durations, because CEL has no implicit conversion between those types.
+    Follows the ``sum`` of Kubernetes' CEL list library: ``int``, ``uint`` and
+    ``double`` are supported, as is ``duration``. Summing an empty list yields
+    ``0``. Booleans are rejected rather than counted as ``1``/``0``, and numbers
+    cannot be mixed with durations, because CEL has no implicit conversion
+    between those types.
+
+    Two consequences of running inside a Python callback apply here as they do to
+    every function in this module — see the module docstring: a sum of ``uint``
+    values comes back as an ``int``, and durations are microsecond-resolution.
     """
     items = _flatten_args(args)
     if not items:

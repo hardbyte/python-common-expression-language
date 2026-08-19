@@ -98,10 +98,21 @@ assert cel.evaluate('sum([duration("1h"), duration("30m")]) == duration("90m")',
     CEL has no aggregation functions of its own, cel-go provides only
     `math.greatest`/`math.least`, and cel-rust 0.14 dropped `min`/`max` from its
     default overloads. `min`, `max` and `sum` here follow Kubernetes' CEL list
-    library: `sum` covers every numeric type plus `duration`, and `min`/`max`
+    library: `sum` covers `int`, `uint`, `double` and `duration`, and `min`/`max`
     work on any comparable type. `sum` of an empty list is `0`; booleans are
     rejected instead of counting as `1`/`0`, and numbers cannot be mixed with
     durations.
+
+!!! warning "`uint` and nanosecond durations cross the Python boundary lossily"
+    These functions are Python callbacks, so their results come back through
+    Python's type system. A sum of `uint` values returns an `int` — Python has one
+    integer type — so `sum([1u, 2u]) + 1u` raises a no-such-overload `TypeError`
+    even though the native `[1u, 2u][0] + 1u` works. Durations are carried by
+    `datetime.timedelta`, which is microsecond-resolution, so sub-microsecond
+    durations are rounded before any function sees them (`cel.evaluate('duration("1ns")')`
+    already returns `timedelta(0)`). Keep `uint` arithmetic and nanosecond
+    durations in native CEL expressions. This applies to every function in
+    `cel.stdlib`, not just the aggregations.
 
 !!! warning "No `fold` or `reduce`"
     General folds cannot be expressed as CEL functions: a function receives its

@@ -12,9 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cel.stdlib`'s `core` library gains `sum`, completing the aggregation trio
   (`min`, `max`, `sum`) requested in
   [#14](https://github.com/hardbyte/python-common-expression-language/issues/14).
-  It follows Kubernetes' CEL list library: every numeric type is supported, as
-  is `duration`; `sum([])` is `0`; booleans are rejected rather than counted as
-  `1`/`0`; numbers and durations cannot be mixed. As with the rest of the
+  It follows Kubernetes' CEL list library: `int`, `uint`, `double` and `duration`
+  are supported; `sum([])` is `0`; booleans are rejected rather than counted as
+  `1`/`0`; numbers and durations cannot be mixed. As with every `cel.stdlib`
+  function, results cross the Python callback boundary, so a `uint` sum returns
+  an `int` and durations are microsecond-resolution — both now documented. As with the rest of the
   extended stdlib it works in both call forms — `sum([1, 2, 3])` and
   `items.map(i, i.weight).sum()`.
   `fold`/`reduce` remain unavailable: they need a parser-level comprehension
