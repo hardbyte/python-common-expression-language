@@ -311,7 +311,26 @@ uv run pytest --profile tests/test_performance.py
 
 ## Release Process
 
-1. **Version Bump** - Update version in `pyproject.toml`
-2. **Changelog** - Document changes in `CHANGELOG.md`
-3. **Release** - Create a release in GitHub to trigger publishing to PyPI
+1. **Version bump** - update `version` in `Cargo.toml`. `pyproject.toml` takes its
+   version from there via maturin, so `Cargo.toml` is the single source; run
+   `cargo check` afterwards so `Cargo.lock` picks up the new version.
+2. **Changelog** - turn the `Unreleased` section of `CHANGELOG.md` into a dated
+   `## [X.Y.Z] - YYYY-MM-DD` section. The release job uses that section verbatim as
+   the GitHub release notes, so it is worth writing well.
+3. **Tag** - merge those changes, then tag the merge commit and push the tag:
+
+   ```bash
+   git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
+   ```
+
+Pushing the tag runs the full test matrix, builds wheels for every supported
+platform plus the sdist, uploads them to PyPI, and creates the GitHub release for
+the tag with the changelog section as its notes and the built artifacts attached.
+Pushing the tag is the only manual step - there is no "draft a release" click.
+
+PyPI uploads use [trusted publishing](https://docs.pypi.org/trusted-publishers/):
+the `release` job mints a short-lived OIDC token from GitHub rather than using a
+stored API token. The publisher is registered on PyPI against this repository, the
+`ci.yml` workflow and the `pypi` environment, so renaming the workflow file or the
+environment means updating the trusted publisher on PyPI as well.
 
