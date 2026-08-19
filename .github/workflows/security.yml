@@ -42,9 +42,9 @@ jobs:
         run: uv sync --dev
       
       - name: Run Python security scan
-        run: |
-          uv add --dev safety
-          uv run safety check --ignore 70612
+        # `safety check` is retired in favour of `safety scan`; run it with uvx so
+        # the scanner is not added to this project's dev dependencies.
+        run: uvx safety scan --detailed-output
         continue-on-error: true  # Don't fail CI on security advisories, just report
 
   codeql:

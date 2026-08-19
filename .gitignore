@@ -8,9 +8,6 @@ htmlcov/
 # Rust
 target/
 
-# UV
-uv.lock
-
 # Project specific
 site/
 *.so

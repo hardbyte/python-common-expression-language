@@ -64,7 +64,10 @@ class TestTypeIntrospection:
             cel.evaluate("type(42)")
 
     @pytest.mark.xfail(
-        reason="type() function not implemented in cel v0.11.0 - should become available when type infrastructure is complete",
+        reason=(
+            "type() is still not a native function in cel 0.14.3; cel.stdlib provides a "
+            "string-returning type() as an opt-in extension"
+        ),
         strict=False,
     )
     def test_type_function_expected_behavior(self):
@@ -95,7 +98,11 @@ class TestMixedArithmetic:
             cel.evaluate("3 * 2u")
 
     @pytest.mark.xfail(
-        reason="Mixed signed/unsigned arithmetic not supported in cel v0.11.0", strict=False
+        reason=(
+            "Mixed signed/unsigned arithmetic still unsupported in cel 0.14.3, and CEL has "
+            "no implicit numeric coercion, so this may never change"
+        ),
+        strict=False,
     )
     def test_mixed_arithmetic_expected_behavior(self):
         """
@@ -148,7 +155,11 @@ class TestMapFunctionImprovements:
             cel.evaluate("[1, 2, 3].map(x, x * 2.0)")
 
     @pytest.mark.xfail(
-        reason="map() function mixed arithmetic not supported in cel v0.11.0", strict=False
+        reason=(
+            "map() with mixed int/double arithmetic still unsupported in cel 0.14.3; CEL "
+            "requires an explicit double(x)/int(x) conversion"
+        ),
+        strict=False,
     )
     def test_map_mixed_arithmetic_expected_behavior(self):
         """
@@ -313,20 +324,37 @@ class TestMissingAggregationFunctions:
         with pytest.raises((RuntimeError, ValueError)):
             cel.evaluate("[1, 2, 3].reduce(0, (acc, x) -> acc + x)")
 
-    @pytest.mark.xfail(reason="Aggregation functions not implemented in cel v0.11.1", strict=False)
-    def test_aggregation_functions_expected_behavior(self):
+    @pytest.mark.xfail(
+        reason=(
+            "fold()/reduce() need a parser-level comprehension macro. cel 0.14.3 expands "
+            "only has/all/exists/existsOne/map/filter, from a fixed table in "
+            "parser/macros.rs, and custom functions receive already-evaluated arguments, "
+            "so a fold has to land upstream: https://github.com/cel-rust/cel-rust"
+        ),
+        strict=False,
+    )
+    def test_fold_expected_behavior(self):
         """
-        Test expected aggregation function behavior when implemented.
+        Test expected fold/reduce behavior when implemented upstream.
 
-        This test will pass when upstream implements sum(), fold(), reduce().
+        The eventual syntax may differ; this test exists to notice the feature
+        arriving, not to pin its spelling.
         """
-        # Sum function
-        assert cel.evaluate("sum([1, 2, 3, 4, 5])") == 15
-        assert cel.evaluate("sum([1.1, 2.2, 3.3])") == pytest.approx(6.6)
-
-        # Fold/reduce functions (syntax may differ when actually implemented)
         assert cel.evaluate("[1, 2, 3, 4].fold(0, (acc, x) -> acc + x)") == 10
         assert cel.evaluate("[1, 2, 3].fold(1, (acc, x) -> acc * x)") == 6
+
+    @pytest.mark.xfail(
+        reason=(
+            "sum() is not a CEL builtin and cel 0.14.0 dropped min/max from its default "
+            "overloads, so a native sum() is unlikely. cel.stdlib provides sum/min/max "
+            "as opt-in extensions instead - see tests/test_stdlib_extensions.py"
+        ),
+        strict=False,
+    )
+    def test_native_aggregation_expected_behavior(self):
+        """Test expected sum() behavior if upstream ever ships one natively."""
+        assert cel.evaluate("sum([1, 2, 3, 4, 5])") == 15
+        assert cel.evaluate("sum([1.1, 2.2, 3.3])") == pytest.approx(6.6)
 
 
 class TestMathFunctions:
@@ -391,7 +419,7 @@ def test_upstream_improvements_summary():
     upstream improvements we're monitoring.
     """
     improvements_to_watch = {
-        "Missing aggregation functions": ["sum()", "fold()", "reduce()"],
+        "Missing aggregation functions": ["fold()", "reduce()"],  # sum() lives in cel.stdlib
         "String functions": [
             "lowerAscii",
             "upperAscii",
@@ -407,7 +435,7 @@ def test_upstream_improvements_summary():
         "Optional values": ["optional.of()", "optional chaining (?.)"],
         "Map improvements": ["Mixed type arithmetic in map()"],
         "Bytes operations": ["bytes concatenation with +"],
-        "Logical operators": ["CEL-compliant behavior verified in v0.11.1"],
+        "Logical operators": ["CEL-compliant behavior verified in cel 0.14.3"],
         "Math functions": ["ceil()", "floor()", "round()"],
         "Validation functions": ["isURL()", "isIP()"],
     }

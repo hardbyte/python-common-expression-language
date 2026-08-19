@@ -62,7 +62,7 @@ assert cel.evaluate('charAt("hello", 0)', ctx) == "h"
 
 ### core
 
-`bool`, `dyn`, `type`, `min`, `max`.
+`bool`, `dyn`, `type`, `min`, `max`, `sum`.
 
 ```python
 import cel
@@ -76,7 +76,52 @@ assert cel.evaluate("dyn(5)", ctx) == 5
 assert cel.evaluate("type(1) == type(2)", ctx) is True
 assert cel.evaluate("min(3, 1, 2)", ctx) == 1
 assert cel.evaluate("max([4, 9, 2])", ctx) == 9
+assert cel.evaluate("sum([1, 2, 3])", ctx) == 6
 ```
+
+`min`, `max` and `sum` accept either several arguments or a single list, so they
+compose with `map()` in the method position:
+
+```python
+import cel
+from cel.stdlib import add_stdlib_to_context
+
+ctx = cel.Context()
+add_stdlib_to_context(ctx)
+
+ctx.update({"items": [{"weight": 0.5}, {"weight": 0.25}, {"weight": 0.25}]})
+assert cel.evaluate("items.map(i, i.weight).sum() == 1.0", ctx) is True
+assert cel.evaluate('sum([duration("1h"), duration("30m")]) == duration("90m")', ctx) is True
+```
+
+!!! note "Aggregations are extensions, not spec functions"
+    CEL has no aggregation functions of its own, cel-go provides only
+    `math.greatest`/`math.least`, and cel-rust 0.14 dropped `min`/`max` from its
+    default overloads. `min`, `max` and `sum` here follow Kubernetes' CEL list
+    library: `sum` covers `int`, `uint`, `double` and `duration`, and `min`/`max`
+    work on any comparable type. `sum` of an empty list is `0`; booleans are
+    rejected instead of counting as `1`/`0`, and numbers cannot be mixed with
+    durations.
+
+!!! warning "`uint` and nanosecond durations cross the Python boundary lossily"
+    These functions are Python callbacks, so their results come back through
+    Python's type system. A sum of `uint` values returns an `int` — Python has one
+    integer type — so `sum([1u, 2u]) + 1u` raises a no-such-overload `TypeError`
+    even though the native `[1u, 2u][0] + 1u` works. Durations are carried by
+    `datetime.timedelta`, which is microsecond-resolution, so sub-microsecond
+    durations are rounded before any function sees them (`cel.evaluate('duration("1ns")')`
+    already returns `timedelta(0)`). Keep `uint` arithmetic and nanosecond
+    durations in native CEL expressions. This applies to every function in
+    `cel.stdlib`, not just the aggregations.
+
+!!! warning "No `fold` or `reduce`"
+    General folds cannot be expressed as CEL functions: a function receives its
+    arguments already evaluated, whereas a fold needs the accumulator expression
+    left unevaluated and re-bound for each element. In cel-rust the comprehension
+    macros (`all`, `exists`, `existsOne`, `map`, `filter`) are expanded by the
+    parser from a fixed table, so `fold`/`reduce` have to arrive
+    [upstream](https://github.com/cel-rust/cel-rust) rather than in this wrapper.
+    Most folds in practice are a `map()` plus `sum`/`min`/`max`, as above.
 
 !!! note "`type()` limitations"
     `type(x)` returns the CEL type *name* as a string (e.g. `"int"`), so
