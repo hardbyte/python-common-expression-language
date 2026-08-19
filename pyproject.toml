@@ -42,7 +42,7 @@ python-source = "python"
 dev-dependencies = [
     "pytest>=8.4.1",
     "maturin>=1.8.0",
-    "ruff>=0.12.7",
+    "ruff>=0.16.3,<0.17",
     "mypy>=1.17.1",
 ]
 
@@ -85,6 +85,9 @@ ignore = [
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+# Ruff 0.16 began formatting Python code blocks inside Markdown. Docs snippets
+# are laid out for readability, so leave them to the doc tests (tests/test_docs.py).
+exclude = ["*.md"]
 
 [tool.mypy]
 python_version = "3.11"
