@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `cel.stdlib`'s `core` library gains `sum`, completing the aggregation trio
+  (`min`, `max`, `sum`) requested in
+  [#14](https://github.com/hardbyte/python-common-expression-language/issues/14).
+  It follows Kubernetes' CEL list library: every numeric type is supported, as
+  is `duration`; `sum([])` is `0`; booleans are rejected rather than counted as
+  `1`/`0`; numbers and durations cannot be mixed. As with the rest of the
+  extended stdlib it works in both call forms — `sum([1, 2, 3])` and
+  `items.map(i, i.weight).sum()`.
+  `fold`/`reduce` remain unavailable: they need a parser-level comprehension
+  macro, which has to come from [cel-rust](https://github.com/cel-rust/cel-rust)
+  rather than this wrapper.
+
+### Updated
+
+- Refreshed the locked Rust dependencies within their existing ranges: cel
+  0.14.0 to 0.14.3, PyO3 0.29.0 to 0.29.2, plus transitive bumps (regex 1.13.1,
+  serde 1.0.229, serde_json 1.0.151, thiserror 2.0.20, uuid 1.24.1).
+- `uv.lock` is now committed so CI resolves the same Python dependencies as
+  local development; refresh it with `uv lock --upgrade`.
+- CI tests Python 3.13 and 3.14 in addition to 3.11 and 3.12.
+- Pinned ruff to the 0.16 line and excluded Markdown from `ruff format`, so
+  formatter releases no longer change what CI expects of the docs.
+- The security workflow runs `safety scan` via `uvx` (the retired `safety check`
+  command no longer works, and the scanner is no longer added to this project's
+  dev dependencies), and the Claude workflow uses
+  `anthropics/claude-code-action@v1` instead of the deprecated `@beta` tag.
+
 ## [0.7.0] - 2026-07-04
 
 Upgrades to cel-rust 0.14, ships an extended standard library that mirrors

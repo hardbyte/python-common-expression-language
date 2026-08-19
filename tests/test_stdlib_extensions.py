@@ -70,6 +70,42 @@ class TestCore:
         assert ev("min(3, 1, 2)", ctx) == 1
         assert ev("max(3, 1, 2)", ctx) == 3
 
+    def test_min_max_on_comparable_non_numbers(self, ctx):
+        assert ev('min(["b", "a", "c"])', ctx) == "a"
+        assert ev('max(["b", "a", "c"])', ctx) == "c"
+
+    def test_sum_list_and_varargs(self, ctx):
+        assert ev("sum([1, 2, 3])", ctx) == 6
+        assert ev("sum(1, 2, 3)", ctx) == 6
+        assert ev("[1, 2, 3].sum()", ctx) == 6
+
+    def test_sum_promotes_to_double(self, ctx):
+        assert ev("sum([1, 2.5])", ctx) == 3.5
+        assert ev("[1.5, 2.5].sum()", ctx) == 4.0
+
+    def test_sum_of_empty_list_is_zero(self, ctx):
+        assert ev("sum([])", ctx) == 0
+
+    def test_sum_of_durations(self, ctx):
+        assert ev('sum([duration("1h"), duration("30m")]) == duration("90m")', ctx) is True
+
+    def test_sum_composes_with_map(self, ctx):
+        ctx.update({"items": [{"weight": 0.5}, {"weight": 0.25}, {"weight": 0.25}]})
+        assert ev("items.map(i, i.weight).sum() == 1.0", ctx) is True
+
+    def test_sum_rejects_bools(self, ctx):
+        # Python would count True/False as 1/0; CEL has no bool arithmetic.
+        with pytest.raises(RuntimeError, match="bool"):
+            ev("sum([true, false])", ctx)
+
+    def test_sum_rejects_non_numbers(self, ctx):
+        with pytest.raises(RuntimeError, match="numbers or all durations"):
+            ev('sum(["a", "b"])', ctx)
+
+    def test_sum_rejects_mixed_numbers_and_durations(self, ctx):
+        with pytest.raises(RuntimeError, match="numbers or all durations"):
+            ev('sum([1, duration("1h")])', ctx)
+
 
 class TestStrings:
     def test_char_at(self, ctx):

@@ -15,7 +15,7 @@ ordinary CEL functions. They are grouped into libraries that mirror cel-go:
 ========== ================================================================
 Library    Functions
 ========== ================================================================
-core       ``bool``, ``dyn``, ``type``, ``min``, ``max``
+core       ``bool``, ``dyn``, ``type``, ``min``, ``max``, ``sum``
 strings    ``charAt``, ``indexOf``, ``lastIndexOf``, ``substring``,
            ``replace``, ``split``, ``join``, ``lowerAscii``, ``upperAscii``,
            ``trim``, ``reverse``, ``strings.quote``
@@ -54,6 +54,19 @@ Compatibility notes / known limitations versus cel-go:
   Python equality, which treats ``True == 1`` and ``False == 0``. Lists that
   mix booleans with the integers ``0``/``1`` may therefore behave differently
   from a spec-strict CEL implementation, which keeps the types distinct.
+* ``min``/``max``/``sum`` are aggregation helpers rather than spec functions:
+  CEL itself has none, cel-go keeps only ``math.greatest``/``math.least``, and
+  cel-rust 0.14 deliberately dropped ``min``/``max`` from its default overloads.
+  The spellings here follow Kubernetes' CEL list library instead.
+* ``fold``/``reduce`` are **not** provided. They cannot be implemented as CEL
+  functions, because a function receives evaluated arguments while a fold needs
+  its accumulator expression left unevaluated and re-bound per element. In
+  cel-rust the comprehension macros (``all``/``exists``/``map``/``filter``) are
+  expanded by the parser from a fixed table, so a ``fold`` macro has to be added
+  upstream: https://github.com/cel-rust/cel-rust
+* ``dyn`` is kept for callers that enable the ``core`` library on older builds;
+  cel-rust ships a native ``dyn()`` since 0.14.1, and the native one is used when
+  the extensions are not registered.
 """
 
 from __future__ import annotations
@@ -134,15 +147,19 @@ def type_(value: Any) -> str:
     return type(value).__name__
 
 
+def _flatten_args(args: tuple[Any, ...]) -> list[Any]:
+    """Accept either a single list argument or several scalar arguments."""
+    if len(args) == 1 and isinstance(args[0], (list, tuple)):
+        return list(args[0])
+    return list(args)
+
+
 def _collect_numbers(args: tuple[Any, ...]) -> list[Any]:
     """Normalise ``greatest``/``least``/``min``/``max`` arguments to a list.
 
     Accepts either a single list argument or several scalar arguments.
     """
-    if len(args) == 1 and isinstance(args[0], (list, tuple)):
-        items = list(args[0])
-    else:
-        items = list(args)
+    items = _flatten_args(args)
     if not items:
         raise ValueError("at least one argument is required")
     return items
@@ -156,6 +173,26 @@ def min_(*args: Any) -> Any:
 def max_(*args: Any) -> Any:
     """Return the largest of the arguments (or of a single list argument)."""
     return max(_collect_numbers(args))
+
+
+def sum_(*args: Any) -> Any:
+    """Return the sum of the arguments (or of a single list argument).
+
+    Follows the ``sum`` of Kubernetes' CEL list library: every numeric type is
+    supported, as is ``duration``. Summing an empty list yields ``0``. Booleans
+    are rejected rather than counted as ``1``/``0``, and numbers cannot be mixed
+    with durations, because CEL has no implicit conversion between those types.
+    """
+    items = _flatten_args(args)
+    if not items:
+        return 0
+    if any(isinstance(item, bool) for item in items):
+        raise TypeError("sum() is not defined for bool values")
+    if all(isinstance(item, timedelta) for item in items):
+        return sum(items, timedelta())
+    if not all(isinstance(item, (int, float)) for item in items):
+        raise TypeError("sum() requires either all numbers or all durations")
+    return sum(items)
 
 
 # ---------------------------------------------------------------------------
@@ -556,6 +593,7 @@ EXTENSIONS: dict[str, dict[str, Callable[..., Any]]] = {
         "type": type_,
         "min": min_,
         "max": max_,
+        "sum": sum_,
     },
     "strings": {
         "charAt": char_at,
