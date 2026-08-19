@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-19
+
+Adds the `sum` aggregation to the extended standard library, refreshes the locked
+Rust dependencies, and makes CI reproducible across Python 3.11 to 3.14.
+
 ### Added
 
 - `cel.stdlib`'s `core` library gains `sum`, completing the aggregation trio
@@ -14,14 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [#14](https://github.com/hardbyte/python-common-expression-language/issues/14).
   It follows Kubernetes' CEL list library: `int`, `uint`, `double` and `duration`
   are supported; `sum([])` is `0`; booleans are rejected rather than counted as
-  `1`/`0`; numbers and durations cannot be mixed. As with every `cel.stdlib`
-  function, results cross the Python callback boundary, so a `uint` sum returns
-  an `int` and durations are microsecond-resolution — both now documented. As with the rest of the
+  `1`/`0`; and numbers cannot be mixed with durations. Like the rest of the
   extended stdlib it works in both call forms — `sum([1, 2, 3])` and
   `items.map(i, i.weight).sum()`.
-  `fold`/`reduce` remain unavailable: they need a parser-level comprehension
-  macro, which has to come from [cel-rust](https://github.com/cel-rust/cel-rust)
-  rather than this wrapper.
+- `fold`/`reduce` remain unavailable, and the reason is now documented in
+  `cel.stdlib` and the standard-library reference: a CEL function receives
+  evaluated arguments, whereas a fold needs its accumulator expression left
+  unevaluated, and cel-rust expands its comprehension macros from a fixed table
+  in the parser. They have to arrive in
+  [cel-rust](https://github.com/cel-rust/cel-rust) rather than in this wrapper.
+
+### Documented
+
+- The two lossy conversions at the Python callback boundary, which apply to every
+  `cel.stdlib` function rather than just the aggregations: a `uint` result returns
+  as an `int` (Python has a single integer type), so `sum([1u, 2u]) + 1u` has no
+  overload where the native `[1u, 2u][0] + 1u` works; and `duration` is carried by
+  `datetime.timedelta`, whose resolution is microseconds, so sub-microsecond
+  durations are rounded before a function sees them. Both behaviours are pinned by
+  tests.
 
 ### Updated
 
