@@ -62,7 +62,7 @@ assert cel.evaluate('charAt("hello", 0)', ctx) == "h"
 
 ### core
 
-`bool`, `dyn`, `type`, `min`, `max`, `sum`.
+`bool`, `min`, `max`, `sum`.
 
 ```python
 import cel
@@ -72,8 +72,6 @@ ctx = cel.Context()
 add_stdlib_to_context(ctx)
 
 assert cel.evaluate('bool("true")', ctx) is True
-assert cel.evaluate("dyn(5)", ctx) == 5
-assert cel.evaluate("type(1) == type(2)", ctx) is True
 assert cel.evaluate("min(3, 1, 2)", ctx) == 1
 assert cel.evaluate("max([4, 9, 2])", ctx) == 9
 assert cel.evaluate("sum([1, 2, 3])", ctx) == 6
@@ -123,11 +121,12 @@ assert cel.evaluate('sum([duration("1h"), duration("30m")]) == duration("90m")',
     [upstream](https://github.com/cel-rust/cel-rust) rather than in this wrapper.
     Most folds in practice are a `map()` plus `sum`/`min`/`max`, as above.
 
-!!! note "`type()` limitations"
-    `type(x)` returns the CEL type *name* as a string (e.g. `"int"`), so
-    `type(x) == type(y)` works but comparing against a bare type identifier
-    (`type(x) == int`) does not. Because Python has a single integer type, a CEL
-    `uint` is reported as `"int"`.
+!!! note "`dyn()` and `type()` are native"
+    cel-rust provides `dyn()` (since 0.14.1) and `type()` (since 0.14.5) itself,
+    so neither is part of `cel.stdlib`. The native `type()` returns a first-class
+    CEL type value: `type(x) == int`, `type(1u) == uint` and
+    `type(null) == null_type` all work inside an expression. When a type value is
+    returned to Python it arrives as the type's name, e.g. `"int"` or `"uint"`.
 
 ### strings
 

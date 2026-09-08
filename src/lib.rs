@@ -687,6 +687,11 @@ fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
                 "A function was called without a required argument or method target.",
             )
         },
+        ExecutionError::FunctionError { function, message } if message.ends_with("overflow") => {
+            PyOverflowError::new_err(format!(
+                "Function '{function}' error: {message}. The value is outside the range of the target type."
+            ))
+        },
         ExecutionError::FunctionError { function, message } => {
             PyRuntimeError::new_err(format!(
                 "Function '{function}' error: {message}. Check function arguments and their types."

@@ -158,7 +158,6 @@ def test_lower_ascii_expected_behavior(self):
 | Category | Status | Impact |
 |----------|--------|---------|
 | **String Functions** (`lowerAscii`, `upperAscii`, `indexOf`, etc.) | 8 functions monitored | Medium - String processing |
-| **Type Introspection** (`type()` function) | Ready to detect | Medium - Dynamic typing |
 | **Mixed Arithmetic** (`int + uint` operations) | Comprehensive detection | Medium - Type safety |
 | **Optional Values** (`optional.of()`, `?.` chaining) | Future feature detection | Low - Advanced use cases |
 | **🚨 OR Operator** (CEL spec compliance) | **Critical behavioral difference** | **High - Logic errors** |

@@ -47,7 +47,7 @@ class TestStrictModeEvaluation:
     def test_string_comparisons_work_in_strict_mode(self):
         """Test that string comparisons work correctly in strict mode."""
         test_cases = [
-            ('var == "epa1"', {"var": "epa1", "value": 0.4}, True),
+            ('code == "epa1"', {"code": "epa1", "value": 0.4}, True),
             ('name == "test123"', {"name": "test123", "num": 3.14}, True),
             ('id == "42"', {"id": "42", "float_val": 1.5}, True),
             ('text != "abc123"', {"text": "xyz123", "other": 2.7}, True),
@@ -223,11 +223,11 @@ class TestStrictModeEvaluation:
         This is the core issue that was fixed - string literals should be preserved.
         """
         # The original issue report case
-        record = {"var": "epa1", "var_2": 10, "var_3": 0.4}
+        record = {"code": "epa1", "var_2": 10, "var_3": 0.4}
         ctx = Context(record)
 
         # Test 1: String comparison should work
-        result = evaluate('var == "epa1"', ctx)
+        result = evaluate('code == "epa1"', ctx)
         assert result is True, "String comparison should work in strict mode"
 
         # Test 2: String function should preserve string

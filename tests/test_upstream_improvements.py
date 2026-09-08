@@ -52,31 +52,16 @@ class TestStringUtilities:
 
 
 class TestTypeIntrospection:
-    """Test missing type introspection that should eventually be implemented."""
+    """type() arrived natively in cel 0.14.5; these pin the behaviour we rely on."""
 
-    def test_type_function_not_implemented(self):
-        """
-        Test that type() function is not implemented.
+    def test_type_function_is_native(self):
+        """type() no longer needs the cel.stdlib shim, which has been removed."""
+        assert cel.evaluate("type(42)") == "int"
+        assert cel.evaluate("type(42u)") == "uint"
+        assert cel.evaluate("type(null)") == "null_type"
 
-        When this test starts failing, the type() function has been implemented.
-        """
-        with pytest.raises(RuntimeError, match="Undefined variable or function.*type"):
-            cel.evaluate("type(42)")
-
-    @pytest.mark.xfail(
-        reason=(
-            "type() is still not a native function in cel 0.14.3; cel.stdlib provides a "
-            "string-returning type() as an opt-in extension"
-        ),
-        strict=False,
-    )
     def test_type_function_expected_behavior(self):
-        """
-        Test expected behavior of type() function when implemented.
-
-        This test is marked as expected failure and will start passing
-        when type() is implemented upstream.
-        """
+        """Behaviour previously tracked as an xfail; passes since cel 0.14.5."""
         assert cel.evaluate("type(42)") == "int"
         assert cel.evaluate('type("hello")') == "string"
         assert cel.evaluate("type(true)") == "bool"
@@ -99,7 +84,7 @@ class TestMixedArithmetic:
 
     @pytest.mark.xfail(
         reason=(
-            "Mixed signed/unsigned arithmetic still unsupported in cel 0.14.3, and CEL has "
+            "Mixed signed/unsigned arithmetic still unsupported in cel 0.14.5, and CEL has "
             "no implicit numeric coercion, so this may never change"
         ),
         strict=False,
@@ -156,7 +141,7 @@ class TestMapFunctionImprovements:
 
     @pytest.mark.xfail(
         reason=(
-            "map() with mixed int/double arithmetic still unsupported in cel 0.14.3; CEL "
+            "map() with mixed int/double arithmetic still unsupported in cel 0.14.5; CEL "
             "requires an explicit double(x)/int(x) conversion"
         ),
         strict=False,
@@ -326,7 +311,7 @@ class TestMissingAggregationFunctions:
 
     @pytest.mark.xfail(
         reason=(
-            "fold()/reduce() need a parser-level comprehension macro. cel 0.14.3 expands "
+            "fold()/reduce() need a parser-level comprehension macro. cel 0.14.5 expands "
             "only has/all/exists/existsOne/map/filter, from a fixed table in "
             "parser/macros.rs, and custom functions receive already-evaluated arguments, "
             "so a fold has to land upstream: https://github.com/cel-rust/cel-rust"
@@ -435,7 +420,7 @@ def test_upstream_improvements_summary():
         "Optional values": ["optional.of()", "optional chaining (?.)"],
         "Map improvements": ["Mixed type arithmetic in map()"],
         "Bytes operations": ["bytes concatenation with +"],
-        "Logical operators": ["CEL-compliant behavior verified in cel 0.14.3"],
+        "Logical operators": ["CEL-compliant behavior verified in cel 0.14.5"],
         "Math functions": ["ceil()", "floor()", "round()"],
         "Validation functions": ["isURL()", "isIP()"],
     }

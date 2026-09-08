@@ -103,13 +103,13 @@ class TestErrorMessageQuality:
         assert "lowerAscii" in error_msg
         assert "Undefined variable or function" in error_msg
 
-    def test_missing_type_function_helpful_message(self):
-        """Test that missing type() function provides helpful error message."""
+    def test_missing_function_helpful_message(self):
+        """Test that an undefined function provides a helpful error message."""
         with pytest.raises(RuntimeError) as exc_info:
-            cel.evaluate("type(42)", {})
+            cel.evaluate("typeName(42)", {})
 
         error_msg = str(exc_info.value)
-        assert "type" in error_msg
+        assert "typeName" in error_msg
         assert "Undefined variable or function" in error_msg
 
     def test_mixed_arithmetic_provides_conversion_examples(self):
