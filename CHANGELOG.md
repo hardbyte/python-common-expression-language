@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-09
+
+Upgrades to cel-rust 0.14.5, which brings native `type()`, range-checked
+`int()`/`uint()` conversions and, notably, rejection of CEL reserved words as
+identifiers. Also the first release published through PyPI trusted publishing,
+with the GitHub release created automatically from this section.
+
 ### Changed
 
 - **CEL reserved words are now rejected as identifiers.** cel-rust 0.14.4 enforces the
