@@ -687,7 +687,13 @@ fn map_execution_error_to_python(error: &ExecutionError) -> PyErr {
                 "A function was called without a required argument or method target.",
             )
         },
-        ExecutionError::FunctionError { function, message } if message.ends_with("overflow") => {
+        // cel-rust reports out-of-range int()/uint() conversions as a FunctionError with
+        // these exact messages. Match narrowly so a user callback whose own error text
+        // happens to end in "overflow" still surfaces as RuntimeError.
+        ExecutionError::FunctionError { function, message }
+            if (function == "int" && message == "integer overflow")
+                || (function == "uint" && message == "unsigned integer overflow") =>
+        {
             PyOverflowError::new_err(format!(
                 "Function '{function}' error: {message}. The value is outside the range of the target type."
             ))

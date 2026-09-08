@@ -207,6 +207,18 @@ class TestConversionRangeChecks:
         with pytest.raises(OverflowError, match="unsigned integer overflow"):
             cel.evaluate("uint(-1)")
 
+    def test_user_function_overflow_message_stays_runtime_error(self):
+        # Only the native conversions map to OverflowError; a Python callback whose
+        # error text ends in "overflow" is an ordinary function failure.
+        context = cel.Context()
+
+        def boom(_value):
+            raise RuntimeError("buffer overflow")
+
+        context.add_function("boom", boom)
+        with pytest.raises(RuntimeError, match="buffer overflow"):
+            cel.evaluate("boom(1)", context)
+
     def test_in_range_conversions_still_work(self):
         assert cel.evaluate("int(1.9)") == 1
         assert cel.evaluate("uint(3)") == 3
