@@ -23,7 +23,7 @@ jobs:
       issues: write
       checks: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Run Rust security audit
         uses: rustsec/audit-check@v2.0.0
@@ -31,7 +31,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "latest"
       
@@ -56,7 +56,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3

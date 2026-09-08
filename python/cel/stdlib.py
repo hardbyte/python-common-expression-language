@@ -15,7 +15,7 @@ ordinary CEL functions. They are grouped into libraries that mirror cel-go:
 ========== ================================================================
 Library    Functions
 ========== ================================================================
-core       ``bool``, ``dyn``, ``type``, ``min``, ``max``, ``sum``
+core       ``bool``, ``min``, ``max``, ``sum``
 strings    ``charAt``, ``indexOf``, ``lastIndexOf``, ``substring``,
            ``replace``, ``split``, ``join``, ``lowerAscii``, ``upperAscii``,
            ``trim``, ``reverse``, ``strings.quote``
@@ -42,11 +42,6 @@ them automatically) to make them available.
 
 Compatibility notes / known limitations versus cel-go:
 
-* ``type(x)`` returns the CEL type *name* as a string (e.g. ``"int"``) rather
-  than a first-class CEL type value, so ``type(x) == type(y)`` works but
-  comparing against a bare type identifier (``type(x) == int``) does not.
-  Because Python has a single ``int`` type, a CEL ``uint`` is reported as
-  ``"int"``.
 * The cel-go ``strings.format`` and ``strings.quote`` verbs are only partially
   covered: ``strings.quote`` performs CEL-style escaping but ``strings.format``
   is not implemented.
@@ -73,9 +68,11 @@ Compatibility notes / known limitations versus cel-go:
   cel-rust the comprehension macros (``all``/``exists``/``map``/``filter``) are
   expanded by the parser from a fixed table, so a ``fold`` macro has to be added
   upstream: https://github.com/cel-rust/cel-rust
-* ``dyn`` is kept for callers that enable the ``core`` library on older builds;
-  cel-rust ships a native ``dyn()`` since 0.14.1, and the native one is used when
-  the extensions are not registered.
+* ``dyn()`` and ``type()`` are not provided here because cel-rust ships both
+  natively (``dyn`` since 0.14.1, ``type`` since 0.14.5). The native ``type()``
+  returns a first-class CEL type value, so ``type(x) == int`` and
+  ``type(1u) == uint`` work inside an expression; the value reaches Python as
+  the type's name (``"int"``, ``"uint"``, ``"null_type"``, ...).
 """
 
 from __future__ import annotations
@@ -113,47 +110,6 @@ def bool_(value: Any) -> bool:
             return False
         raise ValueError(f"cannot convert string {value!r} to bool")
     raise ValueError(f"cannot convert {type(value).__name__} to bool")
-
-
-def dyn(value: Any) -> Any:
-    """Return the value unchanged.
-
-    CEL's ``dyn()`` erases static type information; at runtime it is the
-    identity function.
-    """
-    return value
-
-
-def type_(value: Any) -> str:
-    """Return the CEL type name of a value as a string.
-
-    See the module docstring for the limitations of this shim (notably that it
-    returns a string rather than a CEL type value, and cannot distinguish
-    ``uint`` from ``int``).
-    """
-    if value is None:
-        return "null"
-    if isinstance(value, OptionalValue):
-        return "optional_type"
-    if isinstance(value, bool):
-        return "bool"
-    if isinstance(value, int):
-        return "int"
-    if isinstance(value, float):
-        return "double"
-    if isinstance(value, str):
-        return "string"
-    if isinstance(value, (bytes, bytearray)):
-        return "bytes"
-    if isinstance(value, datetime):
-        return "timestamp"
-    if isinstance(value, timedelta):
-        return "duration"
-    if isinstance(value, (list, tuple)):
-        return "list"
-    if isinstance(value, dict):
-        return "map"
-    return type(value).__name__
 
 
 def _flatten_args(args: tuple[Any, ...]) -> list[Any]:
@@ -603,8 +559,6 @@ def lists_range(n: int) -> list[int]:
 EXTENSIONS: dict[str, dict[str, Callable[..., Any]]] = {
     "core": {
         "bool": bool_,
-        "dyn": dyn,
-        "type": type_,
         "min": min_,
         "max": max_,
         "sum": sum_,

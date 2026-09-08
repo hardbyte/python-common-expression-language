@@ -6,7 +6,7 @@
 
 **Fast, Safe, and Expressive evaluation of Google's Common Expression Language (CEL) in Python, powered by Rust.**
 
-The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, and safety. This Python package wraps the Rust implementation [cel](https://crates.io/crates/cel) v0.14.0, providing microsecond-level expression evaluation with seamless Python integration.
+The Common Expression Language (CEL) is a non-Turing complete language designed for simplicity, speed, and safety. This Python package wraps the Rust implementation [cel](https://crates.io/crates/cel) v0.14.5, providing microsecond-level expression evaluation with seamless Python integration.
 
 ## 🚀 Use Cases
 

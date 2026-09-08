@@ -15,10 +15,10 @@ class TestIssue16StringLiteralRegression:
 
     def test_string_comparison_with_float_context(self):
         """Test that string comparisons work correctly with floats in context."""
-        record = {"var": "epa1", "var_2": 10, "var_3": 0.4}
+        record = {"code": "epa1", "var_2": 10, "var_3": 0.4}
         ctx = Context(record)
 
-        result = evaluate('var == "epa1"', ctx)
+        result = evaluate('code == "epa1"', ctx)
         assert result is True, "String comparison should work with floats in context"
 
     def test_string_literal_with_number_suffix(self):
@@ -102,9 +102,9 @@ class TestIssue16StringLiteralRegression:
 
     def test_control_case_without_floats(self):
         """Control test: verify behavior without floats in context."""
-        ctx = Context({"var": "epa1", "var_2": 10})  # No floats
+        ctx = Context({"code": "epa1", "var_2": 10})  # No floats
 
-        result = evaluate('var == "epa1"', ctx)
+        result = evaluate('code == "epa1"', ctx)
         assert result is True, "Control test should pass without floats in context"
 
     def test_mixed_expressions_with_actual_numbers(self):
@@ -140,11 +140,11 @@ class TestIssue16StringLiteralRegression:
 
     def test_issue_specific_reproduction(self):
         """Direct reproduction of the original issue report."""
-        record = {"var": "epa1", "var_2": 10, "var_3": 0.4}
+        record = {"code": "epa1", "var_2": 10, "var_3": 0.4}
         ctx = Context(record)
 
         # Test 1: The main issue - string comparison
-        result = evaluate('var == "epa1"', ctx)
+        result = evaluate('code == "epa1"', ctx)
         assert result is True, "Original issue case should return True"
 
         # Test 2: String function behavior

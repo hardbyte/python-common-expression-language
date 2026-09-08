@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **CEL reserved words are now rejected as identifiers.** cel-rust 0.14.4 enforces the
+  specification's reserved word list (`as`, `break`, `const`, `continue`, `else`, `for`,
+  `function`, `if`, `import`, `let`, `loop`, `package`, `namespace`, `return`, `var`,
+  `void`, `while`), so an expression such as `var == "x"` now raises `ValueError` at
+  parse time even if the context defines `var`. Names that merely contain a reserved
+  word (`var_2`) and map keys (`{"var": 1}["var"]`) are unaffected. Rename such
+  variables before upgrading.
+- `type()` is now provided natively by cel-rust 0.14.5 and returns a first-class CEL
+  type value, so `type(x) == int`, `type(1u) == uint` and `type(null) == null_type`
+  work inside expressions. Returned to Python, a type value arrives as its name. The
+  string-returning `type()` shim and the identity `dyn()` shim have been removed from
+  `cel.stdlib`'s `core` library because the native functions take precedence anyway;
+  the only visible differences are that `uint` is now reported as `"uint"` rather than
+  `"int"` and `null` as `"null_type"` rather than `"null"`.
+- `int()` and `uint()` reject conversions that do not fit the target type (for example
+  `int(9223372036854775808u)`, `uint(-1)`, `int(1e300)` and `int(double("NaN"))`),
+  raising `OverflowError` instead of silently wrapping or saturating.
+- `duration` and `timestamp` values report their spec type names from `type()`:
+  `google.protobuf.Duration` and `google.protobuf.Timestamp`.
+
+### Fixed
+
+- Negative hexadecimal literals (`-0x10`) parse; stacked unary operators (`--1`,
+  `!!true`) cancel; `\u` escapes inside bytes literals are rejected per the spec;
+  and `optional.of(1) == optional.of(1)` compares by content (all from cel-rust
+  0.14.4/0.14.5).
+
+### Updated
+
+- cel-rust 0.14.3 to 0.14.5 (the minimum is now 0.14.5), plus in-range transitive
+  bumps (log 0.4.34, uuid 1.26.0, smallvec 1.16.0, cc 1.4.5, syn 3.0.5).
+- Python dev dependencies moved from the deprecated `tool.uv.dev-dependencies` to
+  `dependency-groups.dev`; `uv.lock` refreshed (ruff 0.16.6, typer 0.27.2,
+  maturin 1.15.0).
+- GitHub Actions: `actions/checkout` v7, `actions/setup-python` v7,
+  `actions/upload-artifact` v7, `actions/download-artifact` v8 (digest mismatches
+  now fail the job), `astral-sh/setup-uv` v10 (cache disabled on pull requests
+  from forks and on Dependabot rollups, to guard against cache poisoning).
 ### Updated
 
 - Releases publish to PyPI with
