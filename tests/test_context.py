@@ -109,6 +109,61 @@ def test_nested_context_none():
     assert cel.evaluate("size(data.A)", cel_context) == 1
 
 
+class TestContextAttributes:
+    """``Context.variables`` and ``Context.functions`` expose read-only snapshots."""
+
+    def test_variables_reads_back_python_values(self):
+        ctx = cel.Context({"n": 1, "s": "text", "items": (1, 2), "nested": {"k": None}})
+        ctx.add_variable("flag", True)
+        # A tuple goes through CEL's list type, so it reads back as a list.
+        assert ctx.variables == {
+            "n": 1,
+            "s": "text",
+            "items": [1, 2],
+            "nested": {"k": None},
+            "flag": True,
+        }
+
+    def test_functions_reads_back_the_registered_callables(self):
+        def f():
+            return 1
+
+        ctx = cel.Context(functions={"f": f})
+        ctx.add_function("g", len)
+        assert ctx.functions == {"f": f, "g": len}
+        assert ctx.functions["f"] is f
+
+    def test_update_sorts_callables_into_functions(self):
+        ctx = cel.Context()
+        ctx.update({"a": 1, "f": len})
+        assert ctx.variables == {"a": 1}
+        assert ctx.functions == {"f": len}
+
+    def test_empty_context(self):
+        ctx = cel.Context()
+        assert ctx.variables == {}
+        assert ctx.functions == {}
+
+    def test_returned_dicts_are_snapshots(self):
+        ctx = cel.Context({"a": 1})
+        snapshot = ctx.variables
+        snapshot["b"] = 2
+        assert ctx.variables == {"a": 1}
+        with pytest.raises(RuntimeError, match="Undefined variable"):
+            cel.evaluate("b", ctx)
+
+        funcs = ctx.functions
+        funcs["f"] = len
+        assert ctx.functions == {}
+
+    def test_attributes_are_read_only(self):
+        ctx = cel.Context()
+        with pytest.raises(AttributeError):
+            ctx.variables = {}
+        with pytest.raises(AttributeError):
+            ctx.functions = {}
+
+
 class TestVariableResolver:
     """Tests for lazy variable resolution via set_variable_resolver."""
 

@@ -1,28 +1,46 @@
 """
 Type stubs for the CEL Rust extension module.
+
+Parameter names match the runtime signatures exposed by PyO3 (see
+``cel.evaluate.__text_signature__``), so keyword calls that type-check also
+run, and vice versa.
 """
 
-from typing import Any, Callable, Dict, Literal, Optional, Union, overload
+from typing import Any, Callable, Dict, Optional, Union
 
 class Context:
     """CEL evaluation context for variables and functions."""
 
-    @overload
-    def __init__(self) -> None: ...
-    @overload
-    def __init__(self, variables: Dict[str, Any]) -> None: ...
-    @overload
     def __init__(
         self,
         variables: Optional[Dict[str, Any]] = None,
-        *,
         functions: Optional[Dict[str, Callable[..., Any]]] = None,
     ) -> None: ...
+    @property
+    def variables(self) -> Dict[str, Any]:
+        """The registered variables, as a new dict of Python values.
+
+        Values come back through the same CEL-to-Python conversion evaluation
+        results use, so a variable added as a tuple reads back as a list.
+        Mutating the returned dict does not change the context; use
+        ``add_variable()`` or ``update()``.
+        """
+        ...
+
+    @property
+    def functions(self) -> Dict[str, Callable[..., Any]]:
+        """The registered functions, as a new dict of name to callable.
+
+        Mutating the returned dict does not change the context; use
+        ``add_function()`` or ``update()``.
+        """
+        ...
+
     def add_variable(self, name: str, value: Any) -> None:
         """Add a variable to the context."""
         ...
 
-    def add_function(self, name: str, func: Callable[..., Any]) -> None:
+    def add_function(self, name: str, function: Callable[..., Any]) -> None:
         """Add a function to the context."""
         ...
 
@@ -35,7 +53,7 @@ class Context:
         ...
 
     def update(self, variables: Dict[str, Any]) -> None:
-        """Update context with variables from a dictionary."""
+        """Update context with variables (and callables, as functions) from a dictionary."""
         ...
 
 class Program:
@@ -88,15 +106,15 @@ class OptionalValue:
     def or_optional(self, other: OptionalValue) -> OptionalValue: ...
 
 def evaluate(
-    expression: str,
-    context: Optional[Union[Dict[str, Any], Context]] = None,
+    src: str,
+    evaluation_context: Optional[Union[Dict[str, Any], Context]] = None,
 ) -> Any:
     """
     Evaluate a CEL expression.
 
     Args:
-        expression: The CEL expression to evaluate
-        context: Optional context with variables and functions
+        src: The CEL expression to evaluate
+        evaluation_context: Optional context with variables and functions
 
     Returns:
         The result of evaluating the expression
