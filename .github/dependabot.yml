@@ -1,0 +1,30 @@
+# Dependabot keeps the three dependency surfaces current: the Rust crates
+# (Cargo.lock), the Python lockfile (uv.lock) and the Actions the workflows pin.
+# Minor and patch updates are grouped into one PR per ecosystem so a weekly
+# refresh is one review rather than a dozen; majors stay separate because they
+# tend to need a changelog entry (cel-rust majors change CEL behaviour).
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      rust-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
