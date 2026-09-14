@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- **A `cel.Context` now builds its CEL-side environment once and reuses it.**
+  Previously every `evaluate()` and `Program.execute()` call re-converted each
+  variable and re-wrapped each registered Python function into a fresh cel-rust
+  context, so the per-call cost grew with the size of the context: executing a
+  pre-compiled `1 + 2` against a `Context` carrying the 47 extended-stdlib
+  functions (what the `cel` CLI sets up) took about 9 µs, against about 0.2 µs
+  with no context. The environment is now cached on the `Context` and shared by
+  every evaluation until `add_variable`, `add_function` or `update` changes it,
+  bringing that case down to about 0.2 µs as well. `set_variable_resolver` does
+  not invalidate the cache: the resolver is bound per call in a child scope
+  (cel-rust's `Context::new_inner_scope`), with the same lookup order as before
+  (resolver, then registered variables). Dict contexts are still materialised on
+  every call, since a dict can change between calls without notice; for hot
+  loops, prefer a `Context`.
+- Behaviour that is unchanged and now pinned by tests: every mutator is visible on
+  the next evaluation; a Python function may modify, or evaluate against, the
+  `Context` it was registered on while an evaluation is in progress (the change
+  applies from the next evaluation); and one `Context` can be shared between
+  threads.
+
+### Changed
+
+- The `ValueError` raised when the interpreter panics during evaluation now reads
+  "Internal evaluation error" rather than "Internal parser error"; parse failures
+  were never what it reported.
+
 ## [0.9.0] - 2026-09-09
 
 Upgrades to cel-rust 0.14.5, which brings native `type()`, range-checked

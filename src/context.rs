@@ -1,9 +1,10 @@
 use ::cel::objects::TryIntoValue;
-use ::cel::Value;
+use ::cel::{Context as CelContext, Value};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex, PoisonError};
 
 #[pyo3::pyclass]
 /// Manages the evaluation environment for CEL expressions.
@@ -37,15 +38,63 @@ use std::collections::HashMap;
 ///     for concurrent use or implement your own synchronization.
 ///
 /// Performance Tips:
-///     - Reuse Context objects for multiple evaluations when possible
+///     - Reuse Context objects for multiple evaluations when possible: the
+///       CEL-side environment (converted variables and wrapped functions) is
+///       built on first use and reused until the context is modified
 ///     - Pre-populate Context with all needed variables and functions
-///     - Avoid frequent add_variable/add_function calls in hot code paths
+///     - Avoid frequent add_variable/add_function calls in hot code paths, as
+///       each one discards the cached environment
 pub struct Context {
     pub variables: HashMap<String, Value>,
     pub functions: HashMap<String, Py<PyAny>>,
     /// Optional Python callable for lazy variable resolution. Invoked with a
     /// variable name; returns the value (or None to fall through to `variables`).
     pub resolver: Option<Py<PyAny>>,
+    /// The cel environment built from `variables` and `functions`, created on
+    /// first use and shared by every evaluation until a mutator clears it.
+    ///
+    /// Building it boxes each variable and wraps each Python callable in a
+    /// closure. That used to happen on every `evaluate()`/`execute()` call and
+    /// dominated the cost of evaluating against a context with many functions
+    /// (the CLI registers the whole extended stdlib). The resolver is
+    /// deliberately not part of it: it is bound per call in a child scope, so
+    /// setting one does not invalidate the cache.
+    cel: Mutex<Option<Arc<CelContext<'static>>>>,
+}
+
+impl Context {
+    /// Materialises a fresh cel environment from the registered variables and
+    /// functions. Used for the cache and, on every call, for dict contexts.
+    pub(crate) fn build_cel_context(&self, py: Python<'_>) -> CelContext<'static> {
+        let mut environment = crate::new_environment();
+        for (name, value) in &self.variables {
+            environment.add_variable_from_value(name.clone(), value.clone());
+        }
+        for (name, function) in &self.functions {
+            crate::register_python_function(&mut environment, name, function.clone_ref(py));
+        }
+        environment
+    }
+
+    /// Returns the cached cel environment, building it on first use.
+    ///
+    /// The `Arc` lets a caller keep evaluating against a consistent snapshot
+    /// even if a Python callback mutates this `Context` mid-evaluation; the
+    /// mutation simply takes effect from the next evaluation.
+    pub(crate) fn cel_context(&self, py: Python<'_>) -> Arc<CelContext<'static>> {
+        let mut cached = self.cel.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(existing) = cached.as_ref() {
+            return Arc::clone(existing);
+        }
+        let built = Arc::new(self.build_cel_context(py));
+        *cached = Some(Arc::clone(&built));
+        built
+    }
+
+    /// Drops the cached environment so the next evaluation rebuilds it.
+    fn invalidate(&mut self) {
+        *self.cel.get_mut().unwrap_or_else(PoisonError::into_inner) = None;
+    }
 }
 
 #[pyo3::pymethods]
@@ -126,6 +175,7 @@ impl Context {
             variables: HashMap::new(),
             functions: HashMap::new(),
             resolver: None,
+            cel: Mutex::new(None),
         };
 
         if let Some(variables) = variables {
@@ -205,6 +255,7 @@ impl Context {
     ///     >>> # Note: This would need proper error handling in practice
     fn add_function(&mut self, name: String, function: Py<PyAny>) {
         self.functions.insert(name, function);
+        self.invalidate();
     }
 
     /// Registers a Python callable for lazy variable resolution.
@@ -318,6 +369,7 @@ impl Context {
             ))
         })?;
         self.variables.insert(name, value);
+        self.invalidate();
         Ok(())
     }
 
@@ -427,6 +479,7 @@ impl Context {
                 self.variables.insert(key, value);
             }
         }
+        self.invalidate();
 
         Ok(())
     }

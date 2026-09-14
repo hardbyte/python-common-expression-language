@@ -38,7 +38,7 @@ fn stdlib_env() -> Arc<Env> {
 }
 
 /// Builds a fresh execution environment backed by the shared standard library.
-fn new_environment() -> CelContext<'static> {
+pub(crate) fn new_environment() -> CelContext<'static> {
     CelContext::with_env(stdlib_env())
 }
 
@@ -251,7 +251,17 @@ impl PyOptionalValue {
 ///     30
 #[pyfunction]
 fn compile(expression: String) -> PyResult<PyProgram> {
-    let program = panic::catch_unwind(|| Program::compile(&expression))
+    let program = compile_program(&expression)?;
+    Ok(PyProgram {
+        program,
+        source: expression,
+    })
+}
+
+/// Parses `expression`, turning both parse errors and parser panics into
+/// `ValueError` so callers can rely on one exception type for a bad expression.
+fn compile_program(expression: &str) -> PyResult<Program> {
+    panic::catch_unwind(|| Program::compile(expression))
         .map_err(|_| {
             warn!("CEL parser panic for expression: '{}'", expression);
             PyValueError::new_err(format!(
@@ -260,12 +270,7 @@ fn compile(expression: String) -> PyResult<PyProgram> {
         })?
         .map_err(|e| {
             PyValueError::new_err(format!("Failed to parse expression '{expression}': {e}"))
-        })?;
-
-    Ok(PyProgram {
-        program,
-        source: expression,
-    })
+        })
 }
 
 #[derive(Debug)]
@@ -443,138 +448,176 @@ impl VariableResolver for PyVariableResolver {
     }
 }
 
-/// Build a CEL execution environment from an optional evaluation context.
+/// Registers a Python callable as the CEL function `function_name` on `environment`.
 ///
-/// This consolidates the shared logic used by `evaluate()` and `Program.execute()`
-/// to keep behavior consistent between the two entrypoints.
-fn build_environment<'r>(
-    evaluation_context: Option<&Bound<'_, PyAny>>,
-    environment: &mut CelContext<'r>,
-    resolver_out: &'r mut Option<PyVariableResolver>,
-) -> PyResult<()> {
-    let mut ctx = context::Context::new(None, None)?;
-
-    // Process the evaluation context if provided
-    if let Some(evaluation_context) = evaluation_context {
-        // Attempt to extract directly as a Context object
-        if let Ok(py_context_ref) = evaluation_context.extract::<PyRef<context::Context>>() {
-            // Clone variables and functions into our local Context
-            ctx.variables = py_context_ref.variables.clone();
-            ctx.functions = py_context_ref.functions.clone();
-            if let Some(cb) = py_context_ref.resolver.as_ref() {
-                *resolver_out = Some(PyVariableResolver {
-                    callback: Python::attach(|py| cb.clone_ref(py)),
-                });
+/// The wrapper takes the raw `FunctionContext` (rather than the `Arguments`
+/// extractor) so that method-call syntax works: when an expression calls
+/// `target.func(a, b)`, CEL puts `target` in `ftx.this` and `[a, b]` in
+/// `ftx.args`. Prepending `this` to the argument list means the Python function
+/// receives `(target, a, b)`, so a Python function `f(x, y)` can be invoked as
+/// either `f(x, y)` or `x.f(y)` — matching CEL's "receiver call is sugar for a
+/// function call with the receiver as the first argument" semantics and the way
+/// the standard library extensions (e.g. `list.contains(x)`, `"s".charAt(i)`)
+/// are written.
+pub(crate) fn register_python_function(
+    environment: &mut CelContext<'_>,
+    function_name: &str,
+    py_func: Py<PyAny>,
+) {
+    let func_name = function_name.to_string();
+    environment.add_function(
+        function_name,
+        move |ftx: &FunctionContext| -> Result<Value, ExecutionError> {
+            // Collect the CEL argument values: the method target (if this was a
+            // receiver-style call) first, then the explicit arguments.
+            let mut cel_args: Vec<Value> = Vec::with_capacity(ftx.args.len() + 1);
+            if let Some(this) = &ftx.this {
+                cel_args.push(this.as_ref().try_into()?);
             }
-        } else if let Ok(py_dict) = evaluation_context.cast::<PyDict>() {
-            // User passed in a dict - let's process variables and functions from the dict
-            ctx.update(py_dict)?;
-        } else {
-            return Err(PyValueError::new_err(
-                "evaluation_context must be a Context object or a dict",
-            ));
-        };
+            for arg in ftx.args.iter() {
+                cel_args.push(arg.as_ref().try_into()?);
+            }
 
-        // Add any variables from the processed context. The values are already
-        // `cel::Value`s, so `add_variable_from_value` (infallible, `Into<Value>`)
-        // is the right entry point — no conversion or error handling needed here.
-        for (name, value) in &ctx.variables {
-            environment.add_variable_from_value(name.clone(), value.clone());
-        }
+            Python::attach(|py| {
+                let mut py_args = Vec::with_capacity(cel_args.len());
+                for cel_value in cel_args {
+                    let py_arg = RustyCelType(cel_value)
+                        .into_pyobject(py)
+                        .map_err(|e| ExecutionError::FunctionError {
+                            function: func_name.clone(),
+                            message: format!("Failed to convert argument to Python: {e}"),
+                        })?
+                        .into_any()
+                        .unbind();
+                    py_args.push(py_arg);
+                }
 
-        // Register Python functions
-        for (function_name, py_function) in ctx.functions.iter() {
-            // Create a wrapper function
-            let py_func_clone = Python::attach(|py| py_function.clone_ref(py));
-            let func_name_clone = function_name.clone();
+                let py_args_tuple =
+                    PyTuple::new(py, py_args).map_err(|e| ExecutionError::FunctionError {
+                        function: func_name.clone(),
+                        message: format!("Failed to create arguments tuple: {e}"),
+                    })?;
 
-            // Register a wrapper that bridges the CEL call to the Python callable.
-            //
-            // We take the raw `FunctionContext` (rather than the `Arguments`
-            // extractor) so that method-call syntax works: when an expression
-            // calls `target.func(a, b)`, CEL puts `target` in `ftx.this` and
-            // `[a, b]` in `ftx.args`. We prepend `this` to the argument list so
-            // the Python function receives `(target, a, b)`. This means a Python
-            // function `f(x, y)` can be invoked as either `f(x, y)` or
-            // `x.f(y)` — matching CEL's "receiver call is sugar for a function
-            // call with the receiver as the first argument" semantics and the
-            // way the standard library extensions (e.g. `list.contains(x)`,
-            // `"s".charAt(i)`) are written.
-            environment.add_function(
-                function_name,
-                move |ftx: &FunctionContext| -> Result<Value, ExecutionError> {
-                    let py_func = py_func_clone.clone();
-                    let func_name = func_name_clone.clone();
-
-                    // Collect the CEL argument values: the method target (if
-                    // this was a receiver-style call) first, then the explicit
-                    // arguments.
-                    let mut cel_args: Vec<Value> = Vec::with_capacity(ftx.args.len() + 1);
-                    if let Some(this) = &ftx.this {
-                        cel_args.push(this.as_ref().try_into()?);
+                let py_result = py_func.call1(py, py_args_tuple).map_err(|e| {
+                    warn!("Python function '{}' failed: {}", func_name, e);
+                    ExecutionError::FunctionError {
+                        function: func_name.clone(),
+                        message: format!("Python function call failed: {e}"),
                     }
-                    for arg in ftx.args.iter() {
-                        cel_args.push(arg.as_ref().try_into()?);
-                    }
+                })?;
 
-                    Python::attach(|py| {
-                        // Convert CEL arguments to Python objects
-                        let mut py_args = Vec::with_capacity(cel_args.len());
-                        for cel_value in cel_args {
-                            let py_arg = RustyCelType(cel_value)
-                                .into_pyobject(py)
-                                .map_err(|e| ExecutionError::FunctionError {
-                                    function: func_name.clone(),
-                                    message: format!("Failed to convert argument to Python: {e}"),
-                                })?
-                                .into_any()
-                                .unbind();
-                            py_args.push(py_arg);
-                        }
-
-                        let py_args_tuple = PyTuple::new(py, py_args).map_err(|e| {
-                            ExecutionError::FunctionError {
-                                function: func_name.clone(),
-                                message: format!("Failed to create arguments tuple: {e}"),
-                            }
-                        })?;
-
-                        // Call the Python function
-                        let py_result = py_func.call1(py, py_args_tuple).map_err(|e| {
-                            warn!("Python function '{}' failed: {}", func_name, e);
-                            ExecutionError::FunctionError {
-                                function: func_name.clone(),
-                                message: format!("Python function call failed: {e}"),
-                            }
-                        })?;
-
-                        // Convert the result back to CEL Value
-                        let py_result_ref = py_result.bind(py);
-                        let cel_value =
-                            RustyPyType(py_result_ref).try_into_value().map_err(|e| {
-                                ExecutionError::FunctionError {
-                                    function: func_name.clone(),
-                                    message: format!(
-                                        "Failed to convert Python result to CEL value: {e}"
-                                    ),
-                                }
-                            })?;
-
-                        Ok(cel_value)
+                RustyPyType(py_result.bind(py))
+                    .try_into_value()
+                    .map_err(|e| ExecutionError::FunctionError {
+                        function: func_name.clone(),
+                        message: format!("Failed to convert Python result to CEL value: {e}"),
                     })
-                },
-            );
+            })
+        },
+    );
+}
+
+/// The cel environment an evaluation runs against.
+///
+/// A dict context is materialised afresh for each call, because a dict can
+/// change between calls without telling us. A [`context::Context`] instead
+/// hands out the environment it caches, shared through an `Arc` so a Python
+/// callback may mutate the `Context` during evaluation without disturbing the
+/// evaluation already in flight.
+enum Root {
+    Owned(CelContext<'static>),
+    Shared(Arc<CelContext<'static>>),
+}
+
+impl Root {
+    fn as_cel(&self) -> &CelContext<'static> {
+        match self {
+            Root::Owned(environment) => environment,
+            Root::Shared(environment) => environment,
         }
     }
+}
 
-    // Attach the lazy resolver if one was provided. The resolver lives in
-    // `*resolver_out` (caller-owned), and the cel::Context borrows it for
-    // its lifetime `'r`.
-    if let Some(resolver) = resolver_out.as_ref() {
-        environment.set_variable_resolver(resolver);
+/// Everything an evaluation needs from the Python-side context: the cel
+/// environment plus the lazy variable resolver, if one is registered.
+///
+/// The resolver is kept out of the root and bound per call in a child scope
+/// (see [`run_program`]), which is what lets the root be cached and shared.
+struct Environment {
+    root: Root,
+    resolver: Option<PyVariableResolver>,
+}
+
+/// Turns the `evaluation_context` argument of `evaluate()`/`Program.execute()`
+/// into an [`Environment`], so the two entry points behave identically.
+fn prepare_environment(evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<Environment> {
+    let Some(evaluation_context) = evaluation_context else {
+        return Ok(Environment {
+            root: Root::Owned(new_environment()),
+            resolver: None,
+        });
+    };
+    let py = evaluation_context.py();
+
+    if let Ok(py_context) = evaluation_context.extract::<PyRef<context::Context>>() {
+        // The borrow of the Python object ends when `py_context` drops at the end
+        // of this block, before any Python callback can run, so a callback that
+        // mutates the Context mid-evaluation does not hit a "borrowed" error.
+        let resolver = py_context
+            .resolver
+            .as_ref()
+            .map(|callback| PyVariableResolver {
+                callback: callback.clone_ref(py),
+            });
+        Ok(Environment {
+            root: Root::Shared(py_context.cel_context(py)),
+            resolver,
+        })
+    } else if let Ok(py_dict) = evaluation_context.cast::<PyDict>() {
+        // A dict mixes variables and functions; `Context::update` sorts them by
+        // callability exactly as it does for a Python `Context`.
+        let mut ctx = context::Context::new(None, None)?;
+        ctx.update(py_dict)?;
+        Ok(Environment {
+            root: Root::Owned(ctx.build_cel_context(py)),
+            resolver: None,
+        })
+    } else {
+        Err(PyValueError::new_err(
+            "evaluation_context must be a Context object or a dict",
+        ))
     }
+}
 
-    Ok(())
+/// Executes `program` against `environment`, mapping interpreter panics and
+/// execution errors to Python exceptions.
+///
+/// A registered resolver is attached to a child scope of the root rather than
+/// to the root itself. Lookups in the child consult the resolver first and then
+/// fall through to the parent's variables, which is the same order the resolver
+/// had when it lived on the root, and the root stays untouched and reusable.
+fn run_program(program: &Program, src: &str, environment: &Environment) -> PyResult<Value> {
+    let root = environment.root.as_cel();
+    let scoped;
+    let ctx: &CelContext<'_> = match &environment.resolver {
+        Some(resolver) => {
+            let mut scope = root.new_inner_scope();
+            scope.set_variable_resolver(resolver);
+            scoped = scope;
+            &scoped
+        }
+        None => root,
+    };
+
+    // AssertUnwindSafe is needed because the environment contains function closures.
+    let result = panic::catch_unwind(AssertUnwindSafe(|| program.execute(ctx))).map_err(|_| {
+        warn!("CEL execution panic for expression: '{}'", src);
+        PyValueError::new_err(format!(
+            "Failed to execute expression '{src}': Internal evaluation error"
+        ))
+    })?;
+
+    result.map_err(|error| map_execution_error_to_python(&error))
 }
 
 /// Human-readable CEL type name for a value (e.g. `int`, `uint`, `string`).
@@ -973,65 +1016,27 @@ impl TryIntoValue for RustyPyType<'_> {
 ///     - Python API Reference: For detailed API documentation
 #[pyfunction(signature = (src, evaluation_context=None))]
 fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<RustyCelType> {
-    let mut environment = new_environment();
-    let mut resolver_slot: Option<PyVariableResolver> = None;
-    build_environment(evaluation_context, &mut environment, &mut resolver_slot)?;
-
-    // Use panic::catch_unwind to handle parser panics gracefully
-    let program = panic::catch_unwind(|| Program::compile(&src))
-        .map_err(|_| {
-            warn!("CEL parser panic for expression: '{}'", src);
-            PyValueError::new_err(format!(
-                "Failed to parse expression '{src}': Invalid syntax or malformed string"
-            ))
-        })?
-        .map_err(|e| PyValueError::new_err(format!("Failed to parse expression '{src}': {e}")))?;
-
-    // Use panic::catch_unwind to handle execution panics gracefully
-    // AssertUnwindSafe is needed because the environment contains function closures
-    let result =
-        panic::catch_unwind(AssertUnwindSafe(|| program.execute(&environment))).map_err(|_| {
-            warn!("CEL execution panic for expression: '{}'", src);
-            PyValueError::new_err(format!(
-                "Failed to execute expression '{src}': Internal parser error"
-            ))
-        })?;
-
-    match result {
-        Err(error) => Err(map_execution_error_to_python(&error)),
-        Ok(value) => Ok(RustyCelType(value)),
-    }
+    // Validate the context before parsing so a bad context and a bad expression
+    // report in the same order they always have.
+    let environment = prepare_environment(evaluation_context)?;
+    let program = compile_program(&src)?;
+    run_program(&program, &src, &environment).map(RustyCelType)
 }
 
 /// Internal helper to execute a pre-compiled program with the given context.
-/// Used by both `evaluate()` (after compiling) and `PyProgram.execute()`.
+/// Used by `PyProgram.execute()`.
 fn execute_compiled_program(
     program: &Program,
     src: &str,
     evaluation_context: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyAny>> {
-    let mut environment = new_environment();
-    let mut resolver_slot: Option<PyVariableResolver> = None;
-    build_environment(evaluation_context, &mut environment, &mut resolver_slot)?;
-
-    // Use panic::catch_unwind to handle execution panics gracefully
-    // AssertUnwindSafe is needed because the environment contains function closures
-    let result =
-        panic::catch_unwind(AssertUnwindSafe(|| program.execute(&environment))).map_err(|_| {
-            warn!("CEL execution panic for expression: '{}'", src);
-            PyValueError::new_err(format!(
-                "Failed to execute expression '{src}': Internal parser error"
-            ))
-        })?;
-
-    match result {
-        Err(error) => Err(map_execution_error_to_python(&error)),
-        Ok(value) => Python::attach(|py| {
-            RustyCelType(value)
-                .into_pyobject(py)
-                .map(|obj| obj.unbind())
-        }),
-    }
+    let environment = prepare_environment(evaluation_context)?;
+    let value = run_program(program, src, &environment)?;
+    Python::attach(|py| {
+        RustyCelType(value)
+            .into_pyobject(py)
+            .map(|obj| obj.unbind())
+    })
 }
 
 #[pymodule]
