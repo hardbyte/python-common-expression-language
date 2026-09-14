@@ -53,6 +53,32 @@ class TestMutationsInvalidateTheCache:
         ctx.update({"a": 10, "b": 5, "add": lambda x, y: x + y})
         assert cel.evaluate("add(a, b)", ctx) == 15
 
+    def test_failed_update_does_not_leave_a_stale_cache(self):
+        """A mutator that raises part-way must still drop the cached environment.
+
+        ``update()`` applies entries in order and raises on the first bad one, so
+        ``x`` is already ``2`` when the unconvertible value is hit (pre-existing
+        behaviour). Evaluation must then agree with the context's state rather
+        than keep serving the snapshot taken before the failed call.
+        """
+        ctx = Context({"x": 1})
+        assert cel.evaluate("x", ctx) == 1
+
+        with pytest.raises(ValueError):
+            ctx.update({"x": 2, "bad": object()})
+
+        assert cel.evaluate("x", ctx) == 2
+
+    def test_failed_add_variable_does_not_leave_a_stale_cache(self):
+        ctx = Context({"x": 1})
+        assert cel.evaluate("x", ctx) == 1
+        with pytest.raises(ValueError):
+            ctx.add_variable("bad", object())
+        # Nothing changed, and the next evaluation is still correct.
+        assert cel.evaluate("x", ctx) == 1
+        ctx.add_variable("x", 3)
+        assert cel.evaluate("x", ctx) == 3
+
     def test_resolver_set_after_first_evaluation(self):
         ctx = Context({"static_var": 1})
         assert cel.evaluate("static_var", ctx) == 1

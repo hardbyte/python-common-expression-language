@@ -92,6 +92,12 @@ impl Context {
     }
 
     /// Drops the cached environment so the next evaluation rebuilds it.
+    ///
+    /// Every mutator calls this *before* touching `variables` or `functions`.
+    /// A mutator can fail part-way (`update()` rejects a later key after
+    /// inserting earlier ones), and invalidating up front means the cache can
+    /// never describe state the maps no longer hold. Nothing can repopulate it
+    /// while the mutator runs, because the mutator holds `&mut self`.
     fn invalidate(&mut self) {
         *self.cel.get_mut().unwrap_or_else(PoisonError::into_inner) = None;
     }
@@ -254,8 +260,8 @@ impl Context {
     ///     >>> context.add_function("regex_match", re.match)
     ///     >>> # Note: This would need proper error handling in practice
     fn add_function(&mut self, name: String, function: Py<PyAny>) {
-        self.functions.insert(name, function);
         self.invalidate();
+        self.functions.insert(name, function);
     }
 
     /// Registers a Python callable for lazy variable resolution.
@@ -363,13 +369,13 @@ impl Context {
     ///     >>> evaluate("counter", context)
     ///     2
     pub fn add_variable(&mut self, name: String, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.invalidate();
         let value = crate::RustyPyType(value).try_into_value().map_err(|e| {
             pyo3::exceptions::PyValueError::new_err(format!(
                 "Failed to convert variable '{name}': {e}"
             ))
         })?;
         self.variables.insert(name, value);
-        self.invalidate();
         Ok(())
     }
 
@@ -460,6 +466,9 @@ impl Context {
     ///     >>> evaluate('join(["user", name, string(age)])', context)
     ///     'user-Bob-30'
     pub fn update(&mut self, variables: &Bound<'_, PyDict>) -> PyResult<()> {
+        // Before the loop, not after: a bad key or value part-way through
+        // returns early with the earlier entries already applied.
+        self.invalidate();
         for (key, value) in variables {
             // Attempt to extract the key as a String
             let key = key
@@ -479,7 +488,6 @@ impl Context {
                 self.variables.insert(key, value);
             }
         }
-        self.invalidate();
 
         Ok(())
     }
