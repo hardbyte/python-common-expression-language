@@ -1,6 +1,6 @@
 site_name: Python CEL
 site_description: Common Expression Language for Python - Fast, Safe, and Simple
-site_url: https://python-cel.readthedocs.io
+site_url: https://python-common-expression-language.readthedocs.io
 repo_url: https://github.com/hardbyte/python-common-expression-language
 repo_name: hardbyte/python-common-expression-language
 

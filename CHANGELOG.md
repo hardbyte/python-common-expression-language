@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Context.variables` and `Context.functions` are now readable from Python, as the
+  class docstring has promised since the beginning. Each returns a fresh dict:
+  variables converted back to Python values (through the same conversion
+  evaluation results use) and functions as the registered callables. Mutating the
+  returned dict does not change the context.
+
+### Fixed
+
+- The type stubs (`cel.pyi`) now use the parameter names the runtime actually
+  accepts: `evaluate(src, evaluation_context)` rather than `(expression, context)`,
+  and `Context.add_function(name, function)` rather than `func`. A keyword call
+  that type-checked, such as `evaluate(expression=...)`, failed at runtime with
+  `TypeError`, and the working spelling failed to type-check. `Context(variables,
+  functions)` also accepts `functions` positionally at runtime, which the stub now
+  reflects.
+- The Python dependency scan in the security workflow had been failing on every
+  run since the switch to `safety scan`, which requires an interactive login
+  since Safety 3; `continue-on-error` hid that, so no Python advisories have been
+  checked since 0.8.0. The step now exports the locked dependency set with
+  `uv export` and audits it with `pip-audit`, which needs no account.
+
+### Removed
+
+- `cel.evaluation_modes.EvaluationMode`, left over from the evaluation-mode
+  feature removed in 0.5.2 and referenced by nothing.
+- `docs/requirements.txt`, superseded by the `docs` dependency group that Read the
+  Docs and the README both use.
+
+### Updated
+
+- Dependabot now watches the Cargo lockfile, `uv.lock` and the GitHub Actions
+  pins weekly, grouping minor and patch bumps into one pull request per
+  ecosystem.
+- CodeQL analysis uses `github/codeql-action` v4; v3 is deprecated in
+  December 2026.
+- Package metadata: Python 3.11 to 3.14 and `Typing :: Typed` trove classifiers;
+  the README's licence line names Apache-2.0 rather than deferring to the crate
+  this package once wrapped; `mkdocs.yml` points at the Read the Docs URL that
+  actually serves the documentation.
+
 ## [0.9.0] - 2026-09-09
 
 Upgrades to cel-rust 0.14.5, which brings native `type()`, range-checked
