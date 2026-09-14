@@ -3,6 +3,7 @@ use ::cel::Value;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use pyo3::IntoPyObjectExt;
 use std::collections::HashMap;
 
 #[pyo3::pyclass]
@@ -27,10 +28,13 @@ use std::collections::HashMap;
 /// - Optimize performance for applications with frequent CEL evaluations
 ///
 /// Attributes:
-///     variables (dict): A dictionary mapping variable names (str) to their
-///         values (automatically converted to appropriate CEL types).
-///     functions (dict): A dictionary mapping function names (str) to their
-///         corresponding Python callable objects.
+///     variables (dict): A read-only snapshot mapping variable names (str) to
+///         their values, converted back from CEL types to Python (so a tuple
+///         added as a variable reads back as a list). Modify the context with
+///         ``add_variable()`` or ``update()``, not by mutating this dict.
+///     functions (dict): A read-only snapshot mapping function names (str) to
+///         the registered Python callables. Modify the context with
+///         ``add_function()`` or ``update()``.
 ///
 /// Thread Safety:
 ///     Context objects are not thread-safe. Create separate Context instances
@@ -205,6 +209,36 @@ impl Context {
     ///     >>> # Note: This would need proper error handling in practice
     fn add_function(&mut self, name: String, function: Py<PyAny>) {
         self.functions.insert(name, function);
+    }
+
+    /// The registered variables, converted back to Python values.
+    ///
+    /// Returns a new dict on every access; mutating it does not affect the
+    /// context. Values go through the same conversion as evaluation results,
+    /// so CEL-only distinctions are lost (a `uint` reads back as `int`).
+    #[getter]
+    fn variables<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        for (name, value) in &self.variables {
+            dict.set_item(
+                name,
+                crate::RustyCelType(value.clone()).into_bound_py_any(py)?,
+            )?;
+        }
+        Ok(dict)
+    }
+
+    /// The registered functions, by name.
+    ///
+    /// Returns a new dict on every access; mutating it does not affect the
+    /// context.
+    #[getter]
+    fn functions<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        for (name, function) in &self.functions {
+            dict.set_item(name, function.bind(py))?;
+        }
+        Ok(dict)
     }
 
     /// Registers a Python callable for lazy variable resolution.

@@ -218,7 +218,7 @@ Contributions are welcome! Please see our [documentation](https://python-common-
 
 ## License
 
-This project is licensed under the same terms as the original cel-interpreter crate.
+This project is licensed under the [Apache License 2.0](LICENSE).
 
 ## Resources
 
