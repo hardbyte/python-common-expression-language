@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`import cel` failed in a clean install.** `cel.cli` imported `Annotated` from
+  `typing_extensions`, which is not one of this package's declared dependencies. It
+  used to arrive transitively through Typer, but Typer 0.21.2 (February 2026) dropped
+  that dependency, so `pip install common-expression-language` into an environment
+  with nothing else in it left `import cel` raising `ModuleNotFoundError`. The
+  development lockfile masked this because mypy still pulls `typing_extensions` in.
+  `Annotated` now comes from the standard library (`typing`), which has provided it
+  since Python 3.9. CI now installs the built wheel into an empty virtual environment
+  and imports the package and runs the `cel` command, so an undeclared runtime
+  dependency fails the build.
+
 ## [0.9.0] - 2026-09-09
 
 Upgrades to cel-rust 0.14.5, which brings native `type()`, range-checked
