@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '**/pyproject.toml'
+      - '**/uv.lock'
       - '**/Cargo.toml'
       - '**/Cargo.lock'
 
