@@ -16,7 +16,7 @@ import sys
 import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Annotated, Any, Dict, Optional, Tuple
 
 import typer
 
@@ -35,7 +35,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
-from typing_extensions import Annotated
 
 # Import directly from relative modules to avoid circular imports
 from .cel import Context, evaluate

@@ -100,6 +100,18 @@ jobs:
           uvx ty check test_types.py
           rm test_types.py
           echo "✅ Type checker integration working"
+
+      - name: Smoke test the wheel in an empty environment
+        # The dev environment carries packages the wheel does not declare (mypy pulls
+        # in typing_extensions, for example), so an undeclared runtime import only
+        # shows up in an install that has nothing but the wheel and its dependencies.
+        run: |
+          uv run maturin build --release --out smoke-dist
+          uv venv --no-project --python "$(uv run python -c 'import sys; print(sys.executable)')" smoke-venv
+          uv pip install --python smoke-venv/bin/python smoke-dist/*.whl
+          smoke-venv/bin/python -c "import cel; assert cel.evaluate('1 + 1') == 2"
+          smoke-venv/bin/cel '1 + 2'
+          smoke-venv/bin/cel --version
   linux:
     runs-on: ${{ matrix.platform.runner }}
     needs: [test, lint]
