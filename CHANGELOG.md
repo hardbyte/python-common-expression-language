@@ -9,50 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Free-threaded CPython is now supported deliberately rather than by accident.**
-  PyO3 0.28 made `gil_used = false` the default, so since 0.7.0 this module has
-  declared that it runs without the GIL, and 0.10.0 already published `cp314t` and
-  `cp315t` wheels for Linux because the manylinux images carry the free-threaded
-  interpreters. Nothing had ever tested that. CI now runs the whole test suite on
-  `python3.14t` with `PYTHON_GIL=0`; the declaration is explicit in the source;
-  free-threaded wheels are also built for macOS and Windows (x64); a test in a fresh
-  interpreter checks that importing `cel` does not make CPython re-enable the GIL;
-  and compile-time assertions pin the cel-rust `Program`, `Context`, `Value` and
-  `Env` types as `Send + Sync`, so an upstream change cannot silently reintroduce a
-  data race into a free-threaded wheel
+- **Free-threaded Python.** The test suite runs on the free-threaded build of
+  Python 3.14 (`python3.14t`), and free-threaded wheels ship for Linux, macOS and
+  Windows x64. Importing `cel` leaves the GIL disabled
   ([#45](https://github.com/hardbyte/python-common-expression-language/issues/45)).
 
 ### Changed
 
-- `Program` and `OptionalValue` are frozen classes, which is what they already
-  were in practice: they have no mutating methods, and now no attribute can be
-  assigned on them either. Sharing them between threads involves no borrow
-  tracking.
-- Concurrent use of one `Context` is documented and tested: evaluating from many
-  threads is safe and every evaluation sees a consistent snapshot; an evaluation
-  that starts while another thread is inside a mutator briefly waits for it; and
-  mutating from several threads at the same time raises `RuntimeError: Already
-  borrowed` on a free-threaded interpreter rather than corrupting state. Build a
-  context before sharing it, or guard mutation with a lock.
+- `Program` and `OptionalValue` are immutable; attributes can no longer be
+  assigned on them.
+- One `Context` may be evaluated against from many threads at once, and
+  evaluations see a consistent snapshot. An evaluation that starts during
+  `add_variable`, `add_function` or `update` waits for it. Mutating a `Context`
+  from two threads at once raises `RuntimeError` on a free-threaded interpreter;
+  build a context before sharing it, or guard mutation with a lock.
 
 ### Fixed
 
-- On a free-threaded interpreter, evaluating against a `Context` at the exact
-  moment another thread was mutating it raised a misleading
-  `ValueError: evaluation_context must be a Context object or a dict`, because the
-  failed borrow fell through to the type check. Found by the new free-threaded CI
-  leg. It now waits briefly for the mutation and, if the context is still held,
-  raises a `RuntimeError` that says so.
-- Initialising the extension module a second time in one process (a
-  sub-interpreter, for instance) no longer panics while installing the logger.
-- The lock guarding a `Context`'s cached environment is taken with PyO3's
-  `lock_py_attached`, so a thread waiting for it cannot stall a free-threaded
-  interpreter's stop-the-world pause.
+- On a free-threaded interpreter, evaluating against a `Context` while another
+  thread was mutating it raised `ValueError: evaluation_context must be a Context
+  object or a dict`. It now waits for the mutation to finish.
+- Loading the extension module a second time in one process (from a
+  sub-interpreter, for instance) no longer panics.
 
 ### Updated
 
-- Building from the sdist requires maturin 1.14 or later, the first release that
-  discovers free-threaded interpreters.
+- Building from the sdist requires maturin 1.14 or later.
 
 ## [0.10.0] - 2026-09-15
 
