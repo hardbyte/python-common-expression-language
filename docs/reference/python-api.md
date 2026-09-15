@@ -444,8 +444,20 @@ When passing Python objects as context:
 | `list` | `list(T)` | Element types preserved |
 | `dict` | `map(K, V)` | Key/value types preserved |
 | `bytes` | `bytes` | Direct mapping |
-| `datetime.datetime` | `timestamp` | Timezone info preserved |
+| `datetime.datetime` | `timestamp` | Aware datetimes keep their offset; **naive datetimes are read in the host's local time zone** (see below) |
 | `datetime.timedelta` | `duration` | Direct mapping |
+
+!!! warning "Use timezone-aware datetimes"
+    A CEL `timestamp` is an absolute instant, and every `timestamp("...")` literal
+    an expression builds is in UTC. A naive `datetime` has no offset, so the
+    binding interprets it in the **host's local time zone**: `datetime(2026, 1, 1, 12)`
+    is a different instant on a UTC server and on a laptop set to
+    `Pacific/Auckland`, and a comparison such as
+    `created > timestamp("2026-01-01T00:00:00Z")` silently depends on `TZ`. Always
+    attach a `tzinfo`, e.g. `datetime.now(timezone.utc)` rather than `datetime.now()`.
+    This matches Python's own convention for naive datetimes; a future major release
+    may reject naive values instead
+    ([#50](https://github.com/hardbyte/python-common-expression-language/issues/50)).
 
 ---
 

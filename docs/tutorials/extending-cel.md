@@ -237,7 +237,7 @@ Now let's see how to combine custom functions for a real-world application - a b
 ```python
 from cel import Context, evaluate
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 def validate_password(password):
     """Validate password strength."""
@@ -253,10 +253,8 @@ def days_until_expiry(expiry_date_str):
     """Calculate days until expiry."""
     try:
         expiry = datetime.fromisoformat(expiry_date_str.replace('Z', '+00:00'))
-        now = datetime.now()
-        # Remove timezone info for comparison
-        expiry_naive = expiry.replace(tzinfo=None)
-        delta = expiry_naive - now
+        now = datetime.now(timezone.utc)
+        delta = expiry - now
         return max(0, delta.days)
     except:
         return 0
@@ -432,7 +430,7 @@ These patterns provide the foundation for production-ready systems:
 **Complete PolicyContext Implementation**
 ```python
 from cel import Context, evaluate
-from datetime import datetime
+from datetime import datetime, timezone
 
 class PolicyContext:
     """Reusable context builder for policy evaluation."""
@@ -444,11 +442,12 @@ class PolicyContext:
     def _setup_common_functions(self):
         """Set up commonly used functions."""
         def current_time():
-            return datetime.now()
+            # Timezone-aware, so the CEL timestamp is the same instant on every host.
+            return datetime.now(timezone.utc)
         
         def is_business_hours():
             # For testing purposes, always return True
-            # In production, use: datetime.now().hour to check 9 <= hour <= 17
+            # In production, use: datetime.now(timezone.utc).hour to check 9 <= hour <= 17
             return True
         
         def contains_any(text, keywords):
@@ -488,7 +487,7 @@ class PolicyContext:
             "method": method,
             "path": path,
             "ip": ip_address,
-            "time": datetime.now().isoformat()
+            "time": datetime.now(timezone.utc).isoformat()
         })
         return self
     
