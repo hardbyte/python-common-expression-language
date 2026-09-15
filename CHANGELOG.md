@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- **Parsing releases the GIL.** `compile()`, and the parse step inside
+  `evaluate()`, now run the CEL parser with the GIL released for any expression of
+  32 bytes or more, so Python threads that parse expressions concurrently scale
+  with cores instead of serialising on the interpreter. Parsing is pure Rust and is
+  the expensive half of `evaluate()` (about 8 µs for a one-token expression, 70 µs
+  for a policy-sized one, and milliseconds for large literals), against a
+  detach/attach round trip of well under 100 ns, so single-threaded cost is
+  unchanged within measurement noise. On a 4-core machine, `evaluate()` of a
+  policy-sized expression from 4 threads went from 0.96× to about 2.6× of
+  single-thread throughput. Expressions shorter than 32 bytes keep the GIL: their
+  parse is close to the cost of re-acquiring a contended GIL, and measured from 4
+  threads `evaluate("x + y")` lost 25% when released, so the bound sits where the
+  gain is unambiguous with a margin for busier machines. Execution of a compiled
+  program still holds the GIL: a sub-microsecond evaluation loses badly to the
+  cost of re-acquiring a contended GIL, and the work-aware gate that makes
+  releasing it safe is tracked in
+  [#45](https://github.com/hardbyte/python-common-expression-language/issues/45).
+  If you evaluate many short expressions from many threads, `compile()` once and
+  `execute()` many times remains the fast path.
+
 ## [0.10.0] - 2026-09-15
 
 Fixes `import cel` in a clean install, which has been broken since 0.6.0 for

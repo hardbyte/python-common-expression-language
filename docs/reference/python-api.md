@@ -41,6 +41,12 @@ assert result2 == 30  # → 30
 - Use `evaluate()` for one-time evaluation or interactive/REPL usage
 - Use `compile()` + `execute()` when evaluating the same expression with many different contexts or in performance-critical loops
 
+Parsing (`compile()`, and the parse inside `evaluate()`) runs with the GIL
+released for expressions of 32 bytes or more, so threads that parse concurrently
+run in parallel. Shorter expressions parse in a few microseconds, which is less
+than the cost of re-acquiring a contended GIL, so they keep it. Executing a
+compiled program also holds the GIL: evaluations are usually sub-microsecond.
+
 ## Classes
 
 ### Program
