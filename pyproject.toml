@@ -42,7 +42,8 @@ Homepage = "https://github.com/hardbyte/python-common-expression-language"
 Repository = "https://github.com/hardbyte/python-common-expression-language"
 
 [build-system]
-requires = ["maturin>=1.8,<2.0"]
+# 1.14 is the first maturin that discovers free-threaded (3.14t+) interpreters.
+requires = ["maturin>=1.14,<2.0"]
 build-backend = "maturin"
 
 

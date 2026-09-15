@@ -219,6 +219,16 @@ reuses that work for every subsequent `evaluate()` or `Program.execute()` call
 until the context is modified. A dict passed as the context is converted afresh
 on every call, because it can change between calls without notice.
 
+**Threads.** A `Program` is immutable and safe to share between threads. A
+`Context` is safe to evaluate against from many threads at once: each evaluation
+runs against a consistent snapshot, and a change made from another thread applies
+from the next evaluation (an evaluation that starts while another thread is
+mid-mutation briefly waits for it). Mutating one `Context` from several threads at the same
+time is not supported; on a free-threaded interpreter (`python3.14t`) it raises
+`RuntimeError: Already borrowed` rather than corrupting state. Build a context
+before sharing it, or guard mutation with your own lock. Free-threaded wheels
+(`cp314t`) are published and the module declares that it does not need the GIL.
+
 ```python
 from cel import evaluate, Context
 
