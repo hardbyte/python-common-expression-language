@@ -169,7 +169,7 @@ class TestThreads:
     def test_shared_context_across_threads(self):
         ctx = Context({"x": 3, "y": 4})
         ctx.add_function("hyp", lambda a, b: (a * a + b * b) ** 0.5)
-        program = cel.compile("hyp(x, y) + double(x)")
+        program = cel.compile("hyp(x, y) + hyp(0, x)")
 
         def work(_):
             return [program.execute(ctx) for _ in range(100)]
