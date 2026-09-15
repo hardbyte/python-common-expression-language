@@ -390,8 +390,8 @@ impl Context {
     ///
     ///     Adding datetime objects:
     ///
-    ///     >>> from datetime import datetime, timedelta
-    ///     >>> context.add_variable("now", datetime.now())
+    ///     >>> from datetime import datetime, timedelta, timezone
+    ///     >>> context.add_variable("now", datetime.now(timezone.utc))
     ///     >>> context.add_variable("one_hour", timedelta(hours=1))
     ///
     ///     Overwriting existing variables:

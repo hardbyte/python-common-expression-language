@@ -45,6 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`import cel` failed in a clean install.** `cel.cli` imported `Annotated` from
+  `typing_extensions`, which is not one of this package's declared dependencies. It
+  used to arrive transitively through Typer, but Typer 0.21.2 (February 2026) dropped
+  that dependency, so `pip install common-expression-language` into an environment
+  with nothing else in it left `import cel` raising `ModuleNotFoundError`. The
+  development lockfile masked this because mypy still pulls `typing_extensions` in.
+  `Annotated` now comes from the standard library (`typing`), which has provided it
+  since Python 3.9. CI now installs the built wheel into an empty virtual environment
+  and imports the package and runs the `cel` command, so an undeclared runtime
+  dependency fails the build.
 - The type stubs (`cel.pyi`) now use the parameter names the runtime actually
   accepts: `evaluate(src, evaluation_context)` rather than `(expression, context)`,
   and `Context.add_function(name, function)` rather than `func`. A keyword call
@@ -76,6 +86,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the README's licence line names Apache-2.0 rather than deferring to the crate
   this package once wrapped; `mkdocs.yml` points at the Read the Docs URL that
   actually serves the documentation.
+
+### Documented
+
+- Naive `datetime` values are interpreted in the host's local time zone when converted
+  to a CEL `timestamp`, so the same value can mean a different instant on different
+  machines ([#50](https://github.com/hardbyte/python-common-expression-language/issues/50)).
+  The Python API reference now carries a warning, and the quick start, tutorials and
+  `Context.add_variable` docstring use timezone-aware `datetime.now(timezone.utc)`
+  instead of naive `datetime.now()`.
 
 ## [0.9.0] - 2026-09-09
 

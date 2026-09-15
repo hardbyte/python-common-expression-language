@@ -262,7 +262,7 @@ CEL has a rich type system that maps naturally to Python:
 
 ```python
 from cel import evaluate
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Numbers with operations
 result = evaluate("42")
@@ -325,8 +325,10 @@ result = evaluate('duration("1h30m")')
 assert isinstance(result, timedelta)  # → timedelta object (duration string parsing)
 assert result.total_seconds() == 5400.0  # → 5400.0 (1.5 hours in seconds)
 
-# Timestamp arithmetic
-context = {"now": datetime.now()}
+# Timestamp arithmetic. Pass timezone-aware datetimes: a naive datetime is read
+# in the host's local time zone, so the same value means a different instant on
+# different machines.
+context = {"now": datetime.now(timezone.utc)}
 result = evaluate('now + duration("2h")', context)
 assert isinstance(result, datetime)  # → datetime object (time arithmetic works naturally)
 
