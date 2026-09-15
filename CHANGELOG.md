@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Free-threaded Python.** The test suite runs on the free-threaded build of
+  Python 3.14 (`python3.14t`), and free-threaded wheels ship for Linux, macOS and
+  Windows x64. Importing `cel` leaves the GIL disabled
+  ([#45](https://github.com/hardbyte/python-common-expression-language/issues/45)).
+
+### Changed
+
+- `Program` and `OptionalValue` are immutable; attributes can no longer be
+  assigned on them.
+- One `Context` may be evaluated against from many threads at once, and
+  evaluations see a consistent snapshot. An evaluation that starts during
+  `add_variable`, `add_function` or `update` waits for it. Mutating a `Context`
+  from two threads at once raises `RuntimeError` on a free-threaded interpreter;
+  build a context before sharing it, or guard mutation with a lock.
+
+### Fixed
+
+- On a free-threaded interpreter, evaluating against a `Context` while another
+  thread was mutating it raised `ValueError: evaluation_context must be a Context
+  object or a dict`. It now waits for the mutation to finish.
+- Loading the extension module a second time in one process (from a
+  sub-interpreter, for instance) no longer panics.
+
+### Updated
+
+- Building from the sdist requires maturin 1.14 or later.
+
 ## [0.10.0] - 2026-09-15
 
 Fixes `import cel` in a clean install, which has been broken since 0.6.0 for
