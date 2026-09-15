@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-15
+
+Fixes `import cel` in a clean install, which has been broken since 0.6.0 for
+environments without `typing_extensions`; makes evaluation against a `cel.Context`
+cost the same regardless of how many variables and functions it carries; and
+repairs the Python security scan that had been silently failing since 0.8.0.
+
 ### Added
 
 - `Context.variables` and `Context.functions` are now readable from Python, as the
