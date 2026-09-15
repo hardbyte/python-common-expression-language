@@ -2,6 +2,7 @@ use ::cel::objects::TryIntoValue;
 use ::cel::{Context as CelContext, Value};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::sync::MutexExt;
 use pyo3::types::PyDict;
 use pyo3::IntoPyObjectExt;
 use std::collections::HashMap;
@@ -38,8 +39,13 @@ use std::sync::{Arc, Mutex, PoisonError};
 ///         ``add_function()`` or ``update()``.
 ///
 /// Thread Safety:
-///     Context objects are not thread-safe. Create separate Context instances
-///     for concurrent use or implement your own synchronization.
+///     Evaluating against one Context from several threads at once is safe:
+///     each evaluation uses a consistent snapshot of the variables and
+///     functions, and a change made from another thread applies from the next
+///     evaluation. Mutating one Context from several threads at the same time
+///     is not supported; on a free-threaded interpreter it raises
+///     ``RuntimeError: Already borrowed`` rather than corrupting state. Build
+///     the context before sharing it, or guard mutation with your own lock.
 ///
 /// Performance Tips:
 ///     - Reuse Context objects for multiple evaluations when possible: the
@@ -86,7 +92,14 @@ impl Context {
     /// even if a Python callback mutates this `Context` mid-evaluation; the
     /// mutation simply takes effect from the next evaluation.
     pub(crate) fn cel_context(&self, py: Python<'_>) -> Arc<CelContext<'static>> {
-        let mut cached = self.cel.lock().unwrap_or_else(PoisonError::into_inner);
+        // `lock_py_attached` rather than `lock`: Python API runs under this lock
+        // (`clone_ref` in `build_cel_context`), and on a free-threaded
+        // interpreter a thread that blocks on a plain mutex while attached can
+        // stall a stop-the-world pause that the lock holder is waiting for.
+        let mut cached = self
+            .cel
+            .lock_py_attached(py)
+            .unwrap_or_else(PoisonError::into_inner);
         if let Some(existing) = cached.as_ref() {
             return Arc::clone(existing);
         }

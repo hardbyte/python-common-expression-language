@@ -24,7 +24,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        # "3.14t" is the free-threaded build. The module declares that it runs
+        # without the GIL and free-threaded wheels are published, so the suite
+        # has to pass there too.
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.14t"]
+    env:
+      # Pin uv to the interpreter this job installs. The runner also carries
+      # system Pythons, and for the free-threaded entry uv would otherwise
+      # prefer a GIL build of the same version.
+      UV_PYTHON: ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@v7
       
@@ -48,8 +56,19 @@ jobs:
       
       - name: Run Rust tests
         run: cargo test --verbose
-      
+
       - name: Run Python tests
+        if: ${{ !endsWith(matrix.python-version, 't') }}
+        run: uv run pytest --verbose --tb=short
+
+      - name: Run Python tests (free-threaded, GIL disabled)
+        if: ${{ endsWith(matrix.python-version, 't') }}
+        # PYTHON_GIL=0 keeps the GIL off even if some dependency has not declared
+        # free-threading support, so the suite exercises the free-threaded path
+        # rather than a silently re-enabled GIL. tests/test_free_threading.py
+        # separately checks that importing this module alone does not re-enable it.
+        env:
+          PYTHON_GIL: "0"
         run: uv run pytest --verbose --tb=short
 
   lint:
@@ -156,8 +175,10 @@ jobs:
         platform:
           - runner: windows-latest
             target: x64
+            free-threaded: true
           - runner: windows-latest
             target: x86
+            free-threaded: false
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -169,6 +190,25 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter
+          sccache: 'true'
+      # The manylinux images used by the Linux jobs carry python3.14t, so
+      # --find-interpreter builds the free-threaded wheel there on its own. This
+      # runner does not, so install the interpreter and build that wheel
+      # explicitly. Installed after the first build so --find-interpreter above
+      # does not also pick it up.
+      - name: Set up free-threaded Python
+        if: ${{ matrix.platform.free-threaded }}
+        id: free-threaded
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14t'
+          architecture: ${{ matrix.platform.target }}
+      - name: Build free-threaded wheel
+        if: ${{ matrix.platform.free-threaded }}
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist -i ${{ steps.free-threaded.outputs.python-path }}
           sccache: 'true'
       - name: Upload wheels
         uses: actions/upload-artifact@v7
@@ -196,6 +236,19 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter
+          sccache: 'true'
+      # See the Windows job: this runner has no python3.14t, so the free-threaded
+      # wheel needs the interpreter installed and an explicit build.
+      - name: Set up free-threaded Python
+        id: free-threaded
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14t'
+      - name: Build free-threaded wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist -i ${{ steps.free-threaded.outputs.python-path }}
           sccache: 'true'
       - name: Upload wheels
         uses: actions/upload-artifact@v7

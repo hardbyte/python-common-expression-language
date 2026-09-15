@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Free-threaded CPython is now supported deliberately rather than by accident.**
+  PyO3 0.28 made `gil_used = false` the default, so since 0.7.0 this module has
+  declared that it runs without the GIL, and 0.10.0 already published `cp314t` and
+  `cp315t` wheels for Linux because the manylinux images carry the free-threaded
+  interpreters. Nothing had ever tested that. CI now runs the whole test suite on
+  `python3.14t` with `PYTHON_GIL=0`; the declaration is explicit in the source;
+  free-threaded wheels are also built for macOS and Windows (x64); a test in a fresh
+  interpreter checks that importing `cel` does not make CPython re-enable the GIL;
+  and compile-time assertions pin the cel-rust `Program`, `Context`, `Value` and
+  `Env` types as `Send + Sync`, so an upstream change cannot silently reintroduce a
+  data race into a free-threaded wheel
+  ([#45](https://github.com/hardbyte/python-common-expression-language/issues/45)).
+
+### Changed
+
+- `Program` and `OptionalValue` are frozen classes, which is what they already
+  were in practice: they have no mutating methods, and now no attribute can be
+  assigned on them either. Sharing them between threads involves no borrow
+  tracking.
+- Concurrent use of one `Context` is documented and tested: evaluating from many
+  threads is safe and every evaluation sees a consistent snapshot; mutating from
+  several threads at the same time raises `RuntimeError: Already borrowed` on a
+  free-threaded interpreter rather than corrupting state. Build a context before
+  sharing it, or guard mutation with a lock.
+
+### Fixed
+
+- Initialising the extension module a second time in one process (a
+  sub-interpreter, for instance) no longer panics while installing the logger.
+- The lock guarding a `Context`'s cached environment is taken with PyO3's
+  `lock_py_attached`, so a thread waiting for it cannot stall a free-threaded
+  interpreter's stop-the-world pause.
+
+### Updated
+
+- Building from the sdist requires maturin 1.14 or later, the first release that
+  discovers free-threaded interpreters.
+
 ## [0.10.0] - 2026-09-15
 
 Fixes `import cel` in a clean install, which has been broken since 0.6.0 for

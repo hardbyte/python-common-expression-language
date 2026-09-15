@@ -42,6 +42,21 @@ pub(crate) fn new_environment() -> CelContext<'static> {
     CelContext::with_env(stdlib_env())
 }
 
+/// Compile-time proof that the cel-rust types this module shares between threads
+/// are `Send + Sync`. Free-threaded Python loads this module without a GIL (see the
+/// `gil_used` declaration on the module), so a `Context` cached in an `Arc` and a
+/// `Program` held by several threads must be sound to share. cel-rust guarantees
+/// this today (`Val`, `Function` and `VariableResolver` all require it); if an
+/// upstream release drops the bound, this fails to build instead of letting a data
+/// race into a `cp314t` wheel.
+const _: fn() = || {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<Program>();
+    assert_send_sync::<CelContext<'static>>();
+    assert_send_sync::<Value>();
+    assert_send_sync::<Env>();
+};
+
 /// A compiled CEL program that can be executed multiple times with different contexts.
 ///
 /// This is useful when you need to evaluate the same expression many times with different
@@ -60,7 +75,9 @@ pub(crate) fn new_environment() -> CelContext<'static> {
 /// result1 = program.execute({"price": 10, "quantity": 20})  # True
 /// result2 = program.execute({"price": 5, "quantity": 10})   # False
 /// ```
-#[pyclass(name = "Program")]
+// `frozen`: a compiled program never changes after construction, so Python may share
+// it between threads without PyO3's per-access borrow tracking.
+#[pyclass(name = "Program", frozen)]
 struct PyProgram {
     program: Program,
     source: String,
@@ -152,7 +169,7 @@ impl PyProgram {
 }
 
 /// A CEL optional value wrapper for Python.
-#[pyclass(name = "OptionalValue")]
+#[pyclass(name = "OptionalValue", frozen)]
 struct PyOptionalValue {
     value: Option<Value>,
 }
@@ -1039,9 +1056,18 @@ fn execute_compiled_program(
     })
 }
 
-#[pymodule]
+// `gil_used = false` has been PyO3's default since 0.28; spelling it out records the
+// decision. Every pyclass here is `Send + Sync` (PyO3 asserts that at compile time),
+// the shared standard-library `Env` is immutable behind a `LazyLock`, and the
+// `Context` environment cache sits behind a `Mutex`, so a free-threaded interpreter
+// may load this module without re-enabling the GIL. CI runs the test suite on
+// `python3.14t` with `PYTHON_GIL=0` to keep that true.
+#[pymodule(gil_used = false)]
 fn cel(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    pyo3_log::init();
+    // The module can be initialised more than once in one process (a
+    // sub-interpreter, for instance). `init()` panics when a logger is already
+    // installed; a second installation failing is harmless, so tolerate it.
+    let _ = pyo3_log::try_init();
 
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
     m.add_function(wrap_pyfunction!(compile, m)?)?;
