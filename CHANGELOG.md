@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Windows x64. Importing `cel` leaves the GIL disabled
   ([#45](https://github.com/hardbyte/python-common-expression-language/issues/45)).
 
+### Performance
+
+- **Parsing no longer holds the GIL.** `compile()`, and the parse inside
+  `evaluate()`, release the GIL for expressions of 32 bytes or more, so threads
+  that parse concurrently run in parallel: about 3× the throughput from 4 threads
+  on a 4-core machine, with single-threaded cost unchanged. Executing a compiled
+  program still holds the GIL
+  ([#45](https://github.com/hardbyte/python-common-expression-language/issues/45)).
+
 ### Changed
 
 - `Program` and `OptionalValue` are immutable; attributes can no longer be

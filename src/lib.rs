@@ -267,18 +267,37 @@ impl PyOptionalValue {
 ///     >>> program.execute({"x": 10, "y": 20})
 ///     30
 #[pyfunction]
-fn compile(expression: String) -> PyResult<PyProgram> {
-    let program = compile_program(&expression)?;
+fn compile(py: Python<'_>, expression: String) -> PyResult<PyProgram> {
+    let program = compile_program(py, &expression)?;
     Ok(PyProgram {
         program,
         source: expression,
     })
 }
 
+/// Expressions shorter than this (in bytes) are parsed with the GIL held.
+///
+/// A short parse costs about as much as re-acquiring a contended GIL, so
+/// releasing it for one is a net loss under contention. Parse time grows with
+/// expression length, which makes length a safe gate: erring long only forgoes a
+/// speedup. Benchmarks behind the bound are in issue #45.
+const PARSE_DETACH_MIN_LEN: usize = 32;
+
 /// Parses `expression`, turning both parse errors and parser panics into
 /// `ValueError` so callers can rely on one exception type for a bad expression.
-fn compile_program(expression: &str) -> PyResult<Program> {
-    panic::catch_unwind(|| Program::compile(expression))
+///
+/// The parse is pure Rust and cannot call back into Python, so it runs with the
+/// GIL released unless the expression is too short for that to pay off.
+/// `catch_unwind` sits inside the detached region so a parser panic is caught
+/// before control crosses back through PyO3's re-attach guard.
+fn compile_program(py: Python<'_>, expression: &str) -> PyResult<Program> {
+    let parse = || panic::catch_unwind(|| Program::compile(expression));
+    let parsed = if expression.len() >= PARSE_DETACH_MIN_LEN {
+        py.detach(parse)
+    } else {
+        parse()
+    };
+    parsed
         .map_err(|_| {
             warn!("CEL parser panic for expression: '{}'", expression);
             PyValueError::new_err(format!(
@@ -1058,11 +1077,15 @@ impl TryIntoValue for RustyPyType<'_> {
 ///     - CEL Language Guide: For comprehensive language documentation
 ///     - Python API Reference: For detailed API documentation
 #[pyfunction(signature = (src, evaluation_context=None))]
-fn evaluate(src: String, evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<RustyCelType> {
+fn evaluate(
+    py: Python<'_>,
+    src: String,
+    evaluation_context: Option<&Bound<'_, PyAny>>,
+) -> PyResult<RustyCelType> {
     // Validate the context before parsing so a bad context and a bad expression
     // report in the same order they always have.
     let environment = prepare_environment(evaluation_context)?;
-    let program = compile_program(&src)?;
+    let program = compile_program(py, &src)?;
     run_program(&program, &src, &environment).map(RustyCelType)
 }
 
