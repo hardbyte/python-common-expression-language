@@ -565,6 +565,31 @@ struct Environment {
     resolver: Option<PyVariableResolver>,
 }
 
+/// Takes the shared borrow of a `Context` that an evaluation needs.
+///
+/// On a free-threaded interpreter another thread may be inside a mutator
+/// (`add_variable`, `update`, ...) at this moment, holding the exclusive borrow.
+/// A mutator holds it only for the duration of one call, so yield a few times
+/// before giving up, which lets readers ride out a concurrent update. If it
+/// still cannot be borrowed, report that rather than the misleading "must be a
+/// Context or a dict" that a failed `extract` would otherwise fall through to.
+fn borrow_context<'py>(
+    bound: &Bound<'py, context::Context>,
+) -> PyResult<PyRef<'py, context::Context>> {
+    const ATTEMPTS: usize = 64;
+    for _ in 0..ATTEMPTS {
+        match bound.try_borrow() {
+            Ok(context) => return Ok(context),
+            Err(_) => std::thread::yield_now(),
+        }
+    }
+    Err(PyRuntimeError::new_err(
+        "Context is being modified by another thread (already mutably borrowed). \
+         Finish building a Context before sharing it between threads, or guard \
+         mutation with a lock.",
+    ))
+}
+
 /// Turns the `evaluation_context` argument of `evaluate()`/`Program.execute()`
 /// into an [`Environment`], so the two entry points behave identically.
 fn prepare_environment(evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResult<Environment> {
@@ -576,10 +601,11 @@ fn prepare_environment(evaluation_context: Option<&Bound<'_, PyAny>>) -> PyResul
     };
     let py = evaluation_context.py();
 
-    if let Ok(py_context) = evaluation_context.extract::<PyRef<context::Context>>() {
+    if let Ok(bound_context) = evaluation_context.cast::<context::Context>() {
         // The borrow of the Python object ends when `py_context` drops at the end
         // of this block, before any Python callback can run, so a callback that
         // mutates the Context mid-evaluation does not hit a "borrowed" error.
+        let py_context = borrow_context(bound_context)?;
         let resolver = py_context
             .resolver
             .as_ref()

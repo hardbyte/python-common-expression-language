@@ -42,8 +42,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 ///     Evaluating against one Context from several threads at once is safe:
 ///     each evaluation uses a consistent snapshot of the variables and
 ///     functions, and a change made from another thread applies from the next
-///     evaluation. Mutating one Context from several threads at the same time
-///     is not supported; on a free-threaded interpreter it raises
+///     evaluation (an evaluation that starts mid-mutation briefly waits for
+///     it). Mutating one Context from several threads at the same time is not
+///     supported; on a free-threaded interpreter it raises
 ///     ``RuntimeError: Already borrowed`` rather than corrupting state. Build
 ///     the context before sharing it, or guard mutation with your own lock.
 ///

@@ -71,10 +71,12 @@ def test_optional_value_is_immutable():
 def test_concurrent_mutation_raises_rather_than_races():
     """Mutating one ``Context`` from several threads is unsupported but never unsafe.
 
-    Readers see a consistent snapshot on every evaluation. A writer that collides
-    with another borrow of the same ``Context`` gets PyO3's ``RuntimeError: Already
-    borrowed`` (only reachable on a free-threaded build); it never corrupts the
-    context. Whatever interleaving happens, every value observed must be one that
+    Readers see a consistent snapshot on every evaluation and briefly wait out a
+    writer that is mid-mutation. A writer that collides with another borrow of the
+    same ``Context`` gets PyO3's ``RuntimeError: Already borrowed`` (only reachable
+    on a free-threaded build); a reader that cannot get the borrow at all gets a
+    ``RuntimeError`` naming the concurrent modification. Neither ever corrupts the
+    context: whatever interleaving happens, every value observed must be one that
     some writer actually stored.
     """
     ctx = cel.Context({"v": 0})

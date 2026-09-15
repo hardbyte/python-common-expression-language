@@ -29,13 +29,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   assigned on them either. Sharing them between threads involves no borrow
   tracking.
 - Concurrent use of one `Context` is documented and tested: evaluating from many
-  threads is safe and every evaluation sees a consistent snapshot; mutating from
-  several threads at the same time raises `RuntimeError: Already borrowed` on a
-  free-threaded interpreter rather than corrupting state. Build a context before
-  sharing it, or guard mutation with a lock.
+  threads is safe and every evaluation sees a consistent snapshot; an evaluation
+  that starts while another thread is inside a mutator briefly waits for it; and
+  mutating from several threads at the same time raises `RuntimeError: Already
+  borrowed` on a free-threaded interpreter rather than corrupting state. Build a
+  context before sharing it, or guard mutation with a lock.
 
 ### Fixed
 
+- On a free-threaded interpreter, evaluating against a `Context` at the exact
+  moment another thread was mutating it raised a misleading
+  `ValueError: evaluation_context must be a Context object or a dict`, because the
+  failed borrow fell through to the type check. Found by the new free-threaded CI
+  leg. It now waits briefly for the mutation and, if the context is still held,
+  raises a `RuntimeError` that says so.
 - Initialising the extension module a second time in one process (a
   sub-interpreter, for instance) no longer panics while installing the logger.
 - The lock guarding a `Context`'s cached environment is taken with PyO3's
