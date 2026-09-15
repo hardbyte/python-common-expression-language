@@ -207,6 +207,12 @@ The Context class provides more control over the evaluation environment than sim
 - Register custom Python functions  
 - Manage complex evaluation scenarios
 
+It is also the fast path for repeated evaluation. A `Context` converts its
+variables and wraps its functions for the CEL engine once, on first use, and
+reuses that work for every subsequent `evaluate()` or `Program.execute()` call
+until the context is modified. A dict passed as the context is converted afresh
+on every call, because it can change between calls without notice.
+
 ```python
 from cel import evaluate, Context
 
