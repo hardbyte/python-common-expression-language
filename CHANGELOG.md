@@ -49,6 +49,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   this package once wrapped; `mkdocs.yml` points at the Read the Docs URL that
   actually serves the documentation.
 
+### Documented
+
+- Naive `datetime` values are interpreted in the host's local time zone when converted
+  to a CEL `timestamp`, so the same value can mean a different instant on different
+  machines ([#50](https://github.com/hardbyte/python-common-expression-language/issues/50)).
+  The Python API reference now carries a warning, and the quick start, tutorials and
+  `Context.add_variable` docstring use timezone-aware `datetime.now(timezone.utc)`
+  instead of naive `datetime.now()`.
+
 ## [0.9.0] - 2026-09-09
 
 Upgrades to cel-rust 0.14.5, which brings native `type()`, range-checked
