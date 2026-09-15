@@ -107,7 +107,7 @@ jobs:
         # shows up in an install that has nothing but the wheel and its dependencies.
         run: |
           uv run maturin build --release --out smoke-dist
-          uv venv --no-project smoke-venv
+          uv venv --no-project --python "$(uv run python -c 'import sys; print(sys.executable)')" smoke-venv
           uv pip install --python smoke-venv/bin/python smoke-dist/*.whl
           smoke-venv/bin/python -c "import cel; assert cel.evaluate('1 + 1') == 2"
           smoke-venv/bin/cel '1 + 2'
