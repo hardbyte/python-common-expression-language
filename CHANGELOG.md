@@ -9,15 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
-- **Parsing releases the GIL.** `compile()`, and the parse step inside
-  `evaluate()`, now run the CEL parser with the GIL released for expressions of
-  32 bytes or more, so threads that parse concurrently scale with cores. On a
-  4-core machine, `evaluate()` of a policy-sized expression from 4 threads went
-  from 0.96× to about 3× of single-thread throughput; single-threaded cost is
-  unchanged. Shorter expressions keep the GIL, as their parse costs about as much
-  as re-acquiring it under contention. Executing a compiled program still holds
-  the GIL; releasing it there is tracked in
-  [#45](https://github.com/hardbyte/python-common-expression-language/issues/45).
+- **Parsing no longer holds the GIL.** `compile()`, and the parse inside
+  `evaluate()`, release the GIL for expressions of 32 bytes or more, so threads
+  that parse concurrently run in parallel: about 3× the throughput from 4 threads
+  on a 4-core machine, with single-threaded cost unchanged. Executing a compiled
+  program still holds the GIL
+  ([#45](https://github.com/hardbyte/python-common-expression-language/issues/45)).
 
 ## [0.10.0] - 2026-09-15
 
