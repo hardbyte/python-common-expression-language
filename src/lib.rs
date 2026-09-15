@@ -260,31 +260,19 @@ fn compile(py: Python<'_>, expression: String) -> PyResult<PyProgram> {
 
 /// Expressions shorter than this (in bytes) are parsed with the GIL held.
 ///
-/// Releasing the GIL only pays when the released work outweighs the cost of
-/// re-acquiring a contended GIL, which a thread pays whenever another thread
-/// took the GIL in the meantime: about 14 µs with four threads competing on a
-/// 4-core machine, and more on a busier one. Parse time grows with expression
-/// length, from about 8 µs for one token through 13 µs for `x + y` to 45 µs at
-/// this length and 70 µs for a policy-sized rule, so length is a faithful proxy
-/// for the work being released. Measured on 4 cores, detaching a 13 µs parse
-/// gained 1.6x on two threads but lost 25% on four; detaching a 45 µs parse
-/// gains about 3x. The bound sits where the gain is unambiguous and leaves a
-/// margin for machines whose re-acquire is slower than the one this was tuned
-/// on. Its failure mode is only a missed speedup for short expressions, never a
-/// regression.
+/// A short parse costs about as much as re-acquiring a contended GIL, so
+/// releasing it for one is a net loss under contention. Parse time grows with
+/// expression length, which makes length a safe gate: erring long only forgoes a
+/// speedup. Benchmarks behind the bound are in issue #45.
 const PARSE_DETACH_MIN_LEN: usize = 32;
 
 /// Parses `expression`, turning both parse errors and parser panics into
 /// `ValueError` so callers can rely on one exception type for a bad expression.
 ///
-/// The parse of anything but a very short expression runs with the GIL released.
-/// It is pure Rust (nothing in `Program::compile` can call back into Python) and
-/// it is the expensive half of `evaluate()`: about 8 µs for a one-token
-/// expression, 70 µs for a policy-sized one and milliseconds for large literals,
-/// against a detach/attach round trip of well under 100 ns. Threads that parse
-/// concurrently therefore scale with cores instead of serialising on the
-/// interpreter. `catch_unwind` sits inside the detached region so a parser panic
-/// is caught before control crosses back through PyO3's re-attach guard.
+/// The parse is pure Rust and cannot call back into Python, so it runs with the
+/// GIL released unless the expression is too short for that to pay off.
+/// `catch_unwind` sits inside the detached region so a parser panic is caught
+/// before control crosses back through PyO3's re-attach guard.
 fn compile_program(py: Python<'_>, expression: &str) -> PyResult<Program> {
     let parse = || panic::catch_unwind(|| Program::compile(expression));
     let parsed = if expression.len() >= PARSE_DETACH_MIN_LEN {
