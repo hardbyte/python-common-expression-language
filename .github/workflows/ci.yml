@@ -224,11 +224,15 @@ jobs:
         platform:
           - runner: macos-latest
             target: x86_64
-          - runner: macos-14
+          - runner: macos-15
             target: aarch64
     steps:
       - uses: actions/checkout@v7
+      - name: Set ARM64 deployment target
+        if: matrix.platform.target == 'aarch64'
+        run: echo 'MACOSX_DEPLOYMENT_TARGET=11.0' >> "$GITHUB_ENV"
       - uses: actions/setup-python@v7
+        id: python
         with:
           python-version: '3.11'
       - name: Build wheels
@@ -250,6 +254,56 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: --release --out dist -i ${{ steps.free-threaded.outputs.python-path }}
           sccache: 'true'
+      - name: Check ARM64 wheel compatibility
+        if: matrix.platform.target == 'aarch64'
+        run: |
+          test "$(uname -m)" = arm64
+          python - <<'PY'
+          import re
+          import subprocess
+          import tempfile
+          import zipfile
+          from pathlib import Path
+
+          wheels = sorted(Path("dist").glob("*.whl"))
+          assert wheels, "No ARM64 wheels built"
+          tags = set()
+          for wheel in wheels:
+              python_tag, abi, platform_tag = wheel.stem.rsplit("-", 3)[1:]
+              assert platform_tag == "macosx_11_0_arm64", wheel
+              tags.add((python_tag, abi))
+              with zipfile.ZipFile(wheel) as archive, tempfile.TemporaryDirectory() as tmp:
+                  metadata = next(name for name in archive.namelist() if name.endswith(".dist-info/WHEEL"))
+                  assert f"Tag: {python_tag}-{abi}-{platform_tag}" in archive.read(metadata).decode().splitlines()
+                  libraries = [name for name in archive.namelist() if name.endswith((".so", ".dylib"))]
+                  assert libraries, wheel
+                  for name in libraries:
+                      library = archive.extract(name, tmp)
+                      arch = subprocess.check_output(["lipo", "-archs", library], text=True).strip()
+                      assert arch == "arm64", (wheel, name, arch)
+                      commands = subprocess.check_output(["otool", "-l", library], text=True)
+                      versions = re.findall(r"^\s*minos ([\d.]+)$", commands, re.MULTILINE)
+                      assert versions, (wheel, name, "Missing Mach-O deployment target")
+                      assert all(tuple(map(int, version.split("."))) <= (11, 0, 0) for version in versions), (wheel, name, versions)
+                      print(f"{wheel.name}: {name}: {arch}, minos={versions}")
+          assert {("cp311", "cp311"), ("cp314", "cp314t")} <= tags, tags
+          PY
+      - name: Smoke test ARM64 wheels in clean environments
+        if: matrix.platform.target == 'aarch64'
+        env:
+          PYTHON_NORMAL: ${{ steps.python.outputs.python-path }}
+          PYTHON_FREE_THREADED: ${{ steps.free-threaded.outputs.python-path }}
+        run: |
+          for abi in cp311 cp314t; do
+            interpreter="$PYTHON_NORMAL"
+            if [ "$abi" = cp314t ]; then interpreter="$PYTHON_FREE_THREADED"; fi
+            venv="$RUNNER_TEMP/wheel-smoke-$abi"
+            "$interpreter" -m venv "$venv"
+            "$venv/bin/python" -m pip install --only-binary=:all: dist/*-"$abi"-macosx_11_0_arm64.whl
+            "$venv/bin/python" -I -W error -c "import sys, sysconfig; import cel; assert cel.evaluate('1 + 1') == 2; assert bool(sysconfig.get_config_var('Py_GIL_DISABLED')) == (sys.argv[1] == 'cp314t'); assert sys.argv[1] != 'cp314t' or not sys._is_gil_enabled(); print(sys.version, cel.__file__)" "$abi"
+            test "$("$venv/bin/cel" '1 + 2')" = 3
+            "$venv/bin/cel" --version
+          done
       - name: Upload wheels
         uses: actions/upload-artifact@v7
         with:
